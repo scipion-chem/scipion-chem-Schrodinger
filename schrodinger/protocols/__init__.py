@@ -25,3 +25,4 @@
 # **************************************************************************
 
 from .protocol_preparation_wizard import ProtSchrodingerPrepWizard
+from .protocol_prime import ProtSchrodingerPrime

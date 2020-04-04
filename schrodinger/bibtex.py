@@ -23,4 +23,31 @@
 # *
 # **************************************************************************
 _bibtexStr = """
+@Article{Sastry2013,
+   Author="Sastry, G. M. and Adzhigirey, M. and Day, T. and Annabhimoju, R. and Sherman, W.",
+   Title="{Protein and ligand preparation: Parameters, protocols, and influence on virtual screening enrichments}",
+   Journal="J. Comput. Aid. Mol. Des.",
+   Year="2013",
+   Volume="27",
+   Number="3",
+   Pages="221-234",
+}
+
+@Article{Jacobson2002
+   Author="Jacobson, M. P. and Friesner, R.A. and Xiang, Z. and Honig, B.",
+   Title="{On the Role of Crystal Packing Forces in Determining Protein Sidechain Conformations}",
+   Journal="J. Mol. Biol.",
+   Year="2002",
+   Volume="320",
+   Pages="597-608",
+}
+
+@Article{Jacobson2004
+   Author="Jacobson, M. P. and Pincus, D. L. and Rapp, C. S. and Day, T. J. F. and Honig, B. and Shaw, D. E. and Friesner, R. A.",
+   Title="{A Hierarchical Approach to All-Atom Protein Loop Prediction}",
+   Journal="Proteins: Structure, Function and Bioinformatics",
+   Year="2004",
+   Volume="55",
+   Pages="351-367",
+}
 """

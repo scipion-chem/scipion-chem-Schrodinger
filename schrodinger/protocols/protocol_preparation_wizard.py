@@ -190,14 +190,17 @@ class ProtSchrodingerPrepWizard(EMProtocol):
         else:
             args+=" -noepik"
 
-        args+=' %s atomStructOut.mae'%fnIn
+        args+=' %s atomStructOut.maegz'%fnIn
         self.runJob(prog,args,cwd=self._getPath())
 
     def createOutput(self):
-        fnMae = self._getPath('atomStructOut.mae')
+        fnMae = self._getPath('atomStructOut.maegz')
         if os.path.exists(fnMae):
             maeFile=SchrodingerMaestroFile()
             maeFile.setFileName(fnMae)
 
             self._defineOutputs(outputMae=maeFile)
             self._defineSourceRelation(self.inputStructure, maeFile)
+
+    def _citations(self):
+        return ['Sastry2013']
