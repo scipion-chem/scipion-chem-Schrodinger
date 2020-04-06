@@ -23,9 +23,11 @@
 # **************************************************************************
 
 import pyworkflow.viewer as pwviewer
+import pyworkflow.utils as pwutils
 import pwem.viewers.views as views
 import pwem.viewers.showj as showj
 import schrodinger.objects
+from schrodinger import Plugin
 
 class SchrodingerDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
@@ -49,6 +51,7 @@ class SchrodingerDataViewer(pwviewer.Viewer):
 
         # For now handle both types of SetOfTiltSeries together
         if issubclass(cls, schrodinger.objects.SchrodingerMaestroFile):
-            views.append(self.textView([obj.getFileName()]))
+            # views.append(self.textView([]))
+            pwutils.runJob(None, Plugin.getHome('maestro'), obj.getFileName(), env=Plugin.getEnviron())
 
         return views
