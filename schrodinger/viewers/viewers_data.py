@@ -55,3 +55,15 @@ class SchrodingerDataViewer(pwviewer.Viewer):
             pwutils.runJob(None, Plugin.getHome('maestro'), obj.getFileName(), env=Plugin.getEnviron())
 
         return views
+
+class MaestroView(pwviewer.CommandView):
+    """ View for calling an external command. """
+    def __init__(self, inputFile, **kwargs):
+        pwviewer.CommandView.__init__(self, "%s %s &"%(Plugin.getHome('maestro'),inputFile),
+                                      env=Plugin.getEnviron(), **kwargs)
+
+class MaestroFileHandler(FileHandler):
+    def getFileActions(self, objFile):
+        fn = objFile.getPath()
+        return [('Open with Maestro', lambda: MaestroView(fn).show(),
+                 pwutils.Icon.ACTION_VISUALIZE)]
