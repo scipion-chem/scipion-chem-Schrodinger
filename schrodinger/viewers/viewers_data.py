@@ -23,6 +23,7 @@
 # **************************************************************************
 
 import pyworkflow.viewer as pwviewer
+from pyworkflow.gui.browser import FileHandler
 import pyworkflow.utils as pwutils
 import pwem.viewers.views as views
 import pwem.viewers.showj as showj
@@ -67,3 +68,7 @@ class MaestroFileHandler(FileHandler):
         fn = objFile.getPath()
         return [('Open with Maestro', lambda: MaestroView(fn).show(),
                  pwutils.Icon.ACTION_VISUALIZE)]
+
+    def getFileIcon(self, objFile):
+        return 'file_vol.gif'
+
