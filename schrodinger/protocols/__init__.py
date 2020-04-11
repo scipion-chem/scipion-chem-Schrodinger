@@ -25,5 +25,6 @@
 # **************************************************************************
 
 from .protocol_preparation_wizard import ProtSchrodingerPrepWizard
+from .protocol_preparation_wizard_manual import ProtSchrodingerPrepWizardManual
 from .protocol_prime import ProtSchrodingerPrime
 from .protocol_ligprep import ProtSchrodingerLigPrep
