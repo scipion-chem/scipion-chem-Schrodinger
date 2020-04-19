@@ -23,6 +23,7 @@
 # *
 # **************************************************************************
 
+import os
 import pwem.objects.data as data
 
 class SchrodingerAtomStruct(data.EMFile):
@@ -30,3 +31,14 @@ class SchrodingerAtomStruct(data.EMFile):
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 
+    def getExtension(self):
+        return os.path.splitext(self.getFileName())[1]
+
+class SchrodingerGrid(data.EMFile):
+    """A search grid in the file format of Maestro"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+        self.structurePtr = None
+
+    def setStructure(self, structurePtr):
+        self.structurePtr = structurePtr
