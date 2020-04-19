@@ -34,7 +34,7 @@ from schrodinger.objects import SchrodingerAtomStruct
 
 class ProtSchrodingerPrime(EMProtocol):
     """Schrodinger's prime is a structure prediction program """
-    _label = 'prime'
+    _label = 'target fixing (prime)'
     _program = ""
 
     def _defineParams(self, form):
@@ -67,10 +67,7 @@ class ProtSchrodingerPrime(EMProtocol):
         prog=Plugin.getHome('prime')
 
         fnInputStructure = self.inputStructure.get().getFileName()
-        if fnInputStructure.endswith('.mae'):
-            fnIn = self._getPath("atomStructIn.mae")
-        elif fnInputStructure.endswith('.maegz'):
-            fnIn = self._getPath("atomStructIn.maegz")
+        fnIn=self._getPath("atomStructIn")+self.inputStructure.get().getExtension()
 
         createLink(fnInputStructure,fnIn)
         fnIn=os.path.split(fnIn)[1]
