@@ -23,12 +23,11 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import glob
 import os
-import sys
 
-from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam
-from pyworkflow.utils.path import copyFile
+from pyworkflow.utils.path import copyFile, moveFile
 from pwem.protocols import EMProtocol
 from schrodinger import Plugin
 from bioinformatics.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
@@ -81,9 +80,11 @@ class ProtSchrodingerLigPrep(EMProtocol):
         self._insertFunctionStep('ligPrepStep')
 
     def ligPrepStep(self):
-        prog=Plugin.getHome('ligprep')
+        progLigPrep=Plugin.getHome('ligprep')
+        progStructConvert=Plugin.getHome('utilities/structconvert')
 
         outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMols')
+        outputSmallMoleculesDropped = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMolsDropped')
 
         for mol in self.inputSmallMols.get():
             fnSmall = mol.smallMoleculeFile.get()
@@ -122,10 +123,27 @@ class ProtSchrodingerLigPrep(EMProtocol):
                 print("Skipping %s"%fnSmall)
                 continue
 
-            args+=" -omae extra/%s.maegz"%fnRoot
-            self.runJob(prog,args,cwd=self._getPath())
+            fnMae = "extra/%s.maegz"%fnRoot
+            args+=" -omae %s"%fnMae
+            self.runJob(progLigPrep,args,cwd=self._getPath())
 
-            smallMolecule = SmallMolecule(smallMolFilename="extra/%s.maegz"%fnRoot)
-            outputSmallMolecules.append(smallMolecule)
+            if os.path.exists(self._getPath(fnMae)):
+                fnOmae="extra/o%s.maegz"%fnRoot
+                args = "-imae %s -omae %s -split-nstructures 1"%(fnMae,fnOmae)
+                self.runJob(progStructConvert, args, cwd=self._getPath())
+                for fn in glob.glob(self._getExtraPath("o%s*.maegz"%fnRoot)):
+                    fnDir, fnOut = os.path.split(fn)
+                    fnOut = fnOut[1:]
+                    moveFile(fn,self._getExtraPath(fnOut))
+                    smallMolecule = SmallMolecule(smallMolFilename=fnOut)
+                    outputSmallMolecules.append(smallMolecule)
+            else:
+                smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
+                outputSmallMoleculesDropped.append(smallMolecule)
 
-        self._defineOutputs(outputSmallMols=outputSmallMolecules)
+        if len(outputSmallMolecules)>0:
+            self._defineOutputs(outputSmallMols=outputSmallMolecules)
+            self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+        if len(outputSmallMoleculesDropped)>0:
+            self._defineOutputs(outputSmallMolsDropped=outputSmallMoleculesDropped)
+            self._defineSourceRelation(self.inputSmallMols, outputSmallMoleculesDropped)
