@@ -28,6 +28,7 @@
 This package contains protocols interfacing Schrodinger's Maestro
 """
 
+import glob
 import os
 import pwem
 import pyworkflow.utils as pwutils
@@ -56,3 +57,11 @@ class Plugin(pwem.Plugin):
         }, position=pos)
 
         return environ
+
+    @classmethod
+    def getMMshareDir(cls, fn):
+        fileList = glob.glob(cls.getHome('mmshare*'))
+        if len(fileList)==0:
+            return None
+        else:
+            return os.path.join(fileList[0],fn)

@@ -34,7 +34,7 @@ from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
 
 class ProtSchrodingerConvert(EMProtocol):
     """Convert a set of input ligands or a receptor structure to a specific file format"""
-    _label = 'lig convert'
+    _label = 'convert'
     _program = ""
 
     def _defineParams(self, form):
