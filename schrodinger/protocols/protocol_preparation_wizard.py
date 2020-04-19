@@ -37,7 +37,7 @@ from schrodinger.objects import SchrodingerAtomStruct
 
 class ProtSchrodingerPrepWizard(EMProtocol):
     """Calls the preparation wizard"""
-    _label = 'prepwizard'
+    _label = 'target preparation (prepwizard)'
     _program = ""
 
     def _defineParams(self, form):

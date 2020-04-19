@@ -34,7 +34,7 @@ from bioinformatics.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMo
 
 class ProtSchrodingerLigPrep(EMProtocol):
     """Schrodinger's LigPrep is a program to prepare ligand libraries"""
-    _label = 'ligprep'
+    _label = 'ligand preparation (ligprep)'
     _program = ""
 
     def _defineParams(self, form):
