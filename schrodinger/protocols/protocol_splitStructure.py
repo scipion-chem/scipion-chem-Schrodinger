@@ -32,6 +32,7 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, St
 from pwem.protocols import EMProtocol
 from schrodinger import Plugin
 from schrodinger.objects import SchrodingerAtomStruct
+from bioinformatics.objects import SmallMolecule
 
 class ProtSchrodingerSplitStructure(EMProtocol):
     """Split a structure into different pieces"""
@@ -113,18 +114,26 @@ class ProtSchrodingerSplitStructure(EMProtocol):
                                     self._getExtraPath('output.maegz'))
 
         self.runJob(Plugin.getHome('run'),args)
+        def getNumber(fn,suffix):
+            fnBase = os.path.splitext(os.path.split(fn)[1])[0]
+            tokens = fnBase.split(suffix)
+            return tokens[1]
 
         for fn in glob.glob(self._getExtraPath("output*")):
             if "_receptor" in fn:
                 target = SchrodingerAtomStruct(filename=fn)
-                fnBase = os.path.splitext(os.path.split(fn)[1])[0]
-                tokens = fnBase.split("_receptor")
-                number = tokens[1]
+                number = getNumber(fn,"_receptor")
                 outputDict = {'outputStructure%s' % number: target}
                 self._defineOutputs(**outputDict)
                 self._defineSourceRelation(self.inputStructure, target)
+            elif "_ligand" in fn:
+                ligand = SmallMolecule(smallMolFilename=fn)
+                number = getNumber(fn, "_ligand")
+                outputDict = {'outputLigand%s' % number: ligand}
+                self._defineOutputs(**outputDict)
+                self._defineSourceRelation(self.inputStructure, ligand)
             else:
-                print("I don't know how to handle %s"%fn)
+                print("Scipion: I don't know how to handle %s"%fn)
 
     def _summary(self):
         summary=[]
