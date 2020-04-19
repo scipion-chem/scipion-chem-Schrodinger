@@ -133,8 +133,8 @@ class ProtSchrodingerLigPrep(EMProtocol):
                 self.runJob(progStructConvert, args, cwd=self._getPath())
                 for fn in glob.glob(self._getExtraPath("o%s*.maegz"%fnRoot)):
                     fnDir, fnOut = os.path.split(fn)
-                    fnOut = fnOut[1:]
-                    moveFile(fn,self._getExtraPath(fnOut))
+                    fnOut = self._getExtraPath(fnOut[1:])
+                    moveFile(fn,fnOut)
                     smallMolecule = SmallMolecule(smallMolFilename=fnOut)
                     outputSmallMolecules.append(smallMolecule)
             else:

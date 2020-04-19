@@ -33,7 +33,7 @@ from pwem.protocols import EMProtocol
 from pwem.objects.data import AtomStruct
 from pwem.convert.atom_struct import AtomicStructHandler
 from schrodinger import Plugin
-from schrodinger.objects import SchrodingerMaestroFile
+from schrodinger.objects import SchrodingerAtomStruct
 
 class ProtSchrodingerPrepWizard(EMProtocol):
     """Calls the preparation wizard"""
@@ -42,7 +42,7 @@ class ProtSchrodingerPrepWizard(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct, SchrodingerMaestroFile",
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct, SchrodingerAtomStruct",
                        label='Atomic Structure:', allowsNull=False)
         form.addSection(label='Stage 1')
         form.addParam('stage1', BooleanParam, default=False, label='Stage 1 preparation:')
@@ -196,10 +196,10 @@ class ProtSchrodingerPrepWizard(EMProtocol):
     def createOutput(self):
         fnMae = self._getPath('atomStructOut.maegz')
         if os.path.exists(fnMae):
-            maeFile=SchrodingerMaestroFile()
+            maeFile=SchrodingerAtomStruct()
             maeFile.setFileName(fnMae)
 
-            self._defineOutputs(outputMae=maeFile)
+            self._defineOutputs(outputStructure=maeFile)
             self._defineSourceRelation(self.inputStructure, maeFile)
 
     def _citations(self):

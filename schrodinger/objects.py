@@ -25,8 +25,8 @@
 
 import pwem.objects.data as data
 
-class SchrodingerMaestroFile(data.EMFile):
-    """A file of Maestro"""
+class SchrodingerAtomStruct(data.EMFile):
+    """An AtomStruct in the file format of Maestro"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 

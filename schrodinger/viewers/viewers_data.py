@@ -35,7 +35,7 @@ class SchrodingerDataViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
-        schrodinger.objects.SchrodingerMaestroFile,
+        schrodinger.objects.SchrodingerAtomStruct,
     ]
 
     def __init__(self, **kwargs):
@@ -51,7 +51,7 @@ class SchrodingerDataViewer(pwviewer.Viewer):
         cls = type(obj)
 
         # For now handle both types of SetOfTiltSeries together
-        if issubclass(cls, schrodinger.objects.SchrodingerMaestroFile):
+        if issubclass(cls, schrodinger.objects.SchrodingerAtomStruct):
             # views.append(self.textView([]))
             pwutils.runJob(None, Plugin.getHome('maestro'), obj.getFileName(), env=Plugin.getEnviron())
 

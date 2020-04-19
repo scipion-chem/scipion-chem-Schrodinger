@@ -24,16 +24,13 @@
 # *
 # **************************************************************************
 import os
-import sys
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, StringParam, EnumParam, FloatParam
-from pyworkflow.utils.path import copyFile
+from pyworkflow.utils.path import createLink
 from pwem.protocols import EMProtocol
-from pwem.objects.data import AtomStruct
-from pwem.convert.atom_struct import AtomicStructHandler
 from schrodinger import Plugin
-from schrodinger.objects import SchrodingerMaestroFile
+from schrodinger.objects import SchrodingerAtomStruct
 
 class ProtSchrodingerPrime(EMProtocol):
     """Schrodinger's prime is a structure prediction program """
@@ -42,7 +39,7 @@ class ProtSchrodingerPrime(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerMaestroFile",
+        form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct",
                        label='Atomic Structure:', allowsNull=False)
         form.addParam('operation', EnumParam, choices=['Side chain prediction','Minimization of all hydrogens',
                                                        'Loop prediction'],
@@ -69,9 +66,14 @@ class ProtSchrodingerPrime(EMProtocol):
     def primeStep(self):
         prog=Plugin.getHome('prime')
 
-        fnIn = self._getPath("atomStructIn.mae")
-        copyFile(self.inputStructure.get().getFileName(),fnIn)
-        fnIn='atomStructIn.mae'
+        fnInputStructure = self.inputStructure.get().getFileName()
+        if fnInputStructure.endswith('.mae'):
+            fnIn = self._getPath("atomStructIn.mae")
+        elif fnInputStructure.endswith('.maegz'):
+            fnIn = self._getPath("atomStructIn.maegz")
+
+        createLink(fnInputStructure,fnIn)
+        fnIn=os.path.split(fnIn)[1]
 
         fhJob = open(self._getPath('job.inp'),'w')
         fhJob.write("STRUCT_FILE %s\n" % fnIn)
@@ -107,10 +109,10 @@ class ProtSchrodingerPrime(EMProtocol):
     def createOutput(self):
         fnMae = self._getPath('job-out.maegz')
         if os.path.exists(fnMae):
-            maeFile=SchrodingerMaestroFile()
+            maeFile=SchrodingerAtomStruct()
             maeFile.setFileName(fnMae)
 
-            self._defineOutputs(outputMae=maeFile)
+            self._defineOutputs(outputStructure=maeFile)
             self._defineSourceRelation(self.inputStructure, maeFile)
 
     def _citations(self):
