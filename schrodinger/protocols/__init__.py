@@ -31,3 +31,4 @@ from .protocol_ligprep import ProtSchrodingerLigPrep
 from .protocol_convert import ProtSchrodingerConvert
 from .protocol_splitStructure import ProtSchrodingerSplitStructure
 from .protocol_preparation_grid_manual import ProtSchrodingerGridManual
+from .protocol_glide_docking import ProtSchrodingerGlideDocking

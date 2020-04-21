@@ -37,7 +37,7 @@ from schrodinger import Plugin as schrodinger_plugin
 from schrodinger.objects import SchrodingerGrid
 
 class ProtSchrodingerGridManual(EMProtocol):
-    """Calls glide GUI"""
+    """Calls glide GUI to prepare a grid"""
     _label = 'grid definition manual (glide)'
     _program = ""
 
