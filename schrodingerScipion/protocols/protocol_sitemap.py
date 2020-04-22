@@ -23,15 +23,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import glob
 import os
-import sys
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, IntParam
 from pyworkflow.utils.path import createLink
+import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerBindingSites
+from bioinformatics.objects import BindingSite, SetOfBindingSites
 
 class ProtSchrodingerSiteMap(EMProtocol):
     """Calls sitemap to predict possible binding sites"""
@@ -63,12 +65,47 @@ class ProtSchrodingerSiteMap(EMProtocol):
         self.runJob(prog,args,cwd=self._getPath())
 
     def createOutput(self):
+        def parseEvalLog(fnLog):
+            fh=open(fnLog)
+            state = 0
+            for line in fh.readlines():
+                if state==0 and line.startswith("SiteScore"):
+                    state=1
+                elif state==1:
+                    # SiteScore size   Dscore  volume  exposure enclosure contact  phobic   philic   balance  don/acc
+                    tokens = [float(x) for x in line.split()]
+                    return tokens
+            return None
+
         fnBinding = self._getPath("job_out.maegz")
         if os.path.exists(fnBinding):
-            bindingFile=SchrodingerBindingSites(filename=fnBinding)
-            bindingFile.setStructure(self.inputStructure)
-            self._defineOutputs(outputGrid=bindingFile)
-            self._defineSourceRelation(self.inputStructure, bindingFile)
+            setOfBindings = SetOfBindingSites().create(path=self._getPath())
+            for fn in glob.glob(self._getPath("job_site_*_eval.log")):
+                score, size, dscore, volume, exposure, enclosure, contact, phobic, philic, balance, donacc = parseEvalLog(fn)
+                n = fn.split("job_site_")[1].replace("_eval.log","")
+                bindingSite = BindingSite(bindingSiteFilename="%s@%s"%(n,fnBinding))
+                bindingSite.score     = pwobj.Float(score)
+                bindingSite.size      = pwobj.Float(size)
+                bindingSite.dscore    = pwobj.Float(dscore)
+                bindingSite.volume    = pwobj.Float(volume)
+                bindingSite.exposure  = pwobj.Float(exposure)
+                bindingSite.enclosure = pwobj.Float(enclosure)
+                bindingSite.contact   = pwobj.Float(contact)
+                bindingSite.phobic    = pwobj.Float(phobic)
+                bindingSite.phobic    = pwobj.Float(phobic)
+                bindingSite.philic    = pwobj.Float(philic)
+                bindingSite.balance   = pwobj.Float(balance)
+                bindingSite.donacc    = pwobj.Float(donacc)
+                bindingSite.setStructure(self.inputStructure)
+
+                setOfBindings.append(bindingSite)
+
+            self._defineOutputs(outputSetBindingSites=setOfBindings)
+            self._defineSourceRelation(self.inputStructure, setOfBindings)
+
+            mae = SchrodingerBindingSites(filename=fnBinding)
+            self._defineOutputs(outputBindingSites=mae)
+            self._defineSourceRelation(self.inputStructure, mae)
 
     def _citations(self):
         return ['Halgren2009']
