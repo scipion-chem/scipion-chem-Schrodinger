@@ -71,5 +71,8 @@ class ProtSchrodingerGridManual(EMProtocol):
             if os.path.exists(fnGrid):
                 gridFile=SchrodingerGrid(filename=fnGrid)
                 gridFile.setStructure(self.inputStructure)
-                self._defineOutputs(outputGrid=gridFile)
+
+                n = fnDir.split('glide-')[1]
+                outputDict = {'outputGrid%s' % n: gridFile}
+                self._defineOutputs(**outputDict)
                 self._defineSourceRelation(self.inputStructure, gridFile)
