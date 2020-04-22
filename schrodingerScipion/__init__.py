@@ -28,6 +28,8 @@
 This package contains protocols interfacing Schrodinger's Maestro
 """
 
+# Useful reference: http://www.bi.cs.titech.ac.jp/mga_glide/xglide_mga.py
+
 import glob
 import os
 import pwem
@@ -53,9 +55,11 @@ class Plugin(pwem.Plugin):
         environ = pwutils.Environ(os.environ)
         pos = pwutils.Environ.BEGIN if schrodingerFirst else pwutils.Environ.END
         environ.update({
-            'PATH': cls.getHome('')
+            'SCHRODINGER': cls.getHome(''),
+            'PATH': cls.getHome(''),
+            'LD_LIBRARY_PATH': cls.getMMshareDir('lib/Linux-x86_64')+':'+cls.getHome('internal/lib'),
+            'PYTHONPATH': cls.getSitePackages()
         }, position=pos)
-
         return environ
 
     @classmethod
@@ -65,3 +69,11 @@ class Plugin(pwem.Plugin):
             return None
         else:
             return os.path.join(fileList[0],fn)
+
+    @classmethod
+    def getSitePackages(cls):
+        fileList = glob.glob(cls.getHome('internal/lib/python3.*'))
+        if len(fileList) == 0:
+            return None
+        else:
+            return os.path.join(fileList[0], 'site-packages')

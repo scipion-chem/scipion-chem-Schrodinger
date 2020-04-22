@@ -28,7 +28,7 @@ import os
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, FloatParam, IntParam
 from pwem.protocols import EMProtocol
-from schrodinger import Plugin as schrodinger_plugin
+from schrodingerScipion import Plugin as schrodinger_plugin
 from pyworkflow.utils.path import createLink, makePath
 
 class ProtSchrodingerGlideDocking(EMProtocol):

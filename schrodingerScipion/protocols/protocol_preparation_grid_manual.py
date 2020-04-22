@@ -33,8 +33,8 @@ from pwem.protocols import EMProtocol
 from pwem.objects.data import AtomStruct
 from pwem.convert.atom_struct import AtomicStructHandler
 
-from schrodinger import Plugin as schrodinger_plugin
-from schrodinger.objects import SchrodingerGrid
+from schrodingerScipion import Plugin as schrodinger_plugin
+from schrodingerScipion.objects import SchrodingerGrid
 
 class ProtSchrodingerGridManual(EMProtocol):
     """Calls glide GUI to prepare a grid"""

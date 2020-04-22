@@ -29,8 +29,8 @@ from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, StringParam, EnumParam, FloatParam
 from pyworkflow.utils.path import createLink
 from pwem.protocols import EMProtocol
-from schrodinger import Plugin
-from schrodinger.objects import SchrodingerAtomStruct
+from schrodingerScipion import Plugin
+from schrodingerScipion.objects import SchrodingerAtomStruct
 
 class ProtSchrodingerPrime(EMProtocol):
     """Schrodinger's prime is a structure prediction program """

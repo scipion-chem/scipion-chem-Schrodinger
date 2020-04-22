@@ -50,4 +50,13 @@ _bibtexStr = """
    Volume="55",
    Pages="351-367",
 }
+
+@Article{Halgren2009
+   Author="Halgren, T.",
+   Title="{Identifying and characterizing binding sites and assessing druggability}",
+   Journal="J. Chem. Inf. Models",
+   Year="2009",
+   Volume="49",
+   Pages="377-389",
+}
 """

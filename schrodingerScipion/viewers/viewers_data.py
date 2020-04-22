@@ -26,16 +26,16 @@ import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.browser import FileHandler
 import pyworkflow.utils as pwutils
 import pwem.viewers.views as views
-import pwem.viewers.showj as showj
-import schrodinger.objects
-from schrodinger import Plugin
+import schrodingerScipion.objects
+from schrodingerScipion import Plugin
 
 class SchrodingerDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
-        schrodinger.objects.SchrodingerAtomStruct,
+        schrodingerScipion.objects.SchrodingerAtomStruct,
+        schrodingerScipion.objects.SchrodingerBindingSites,
     ]
 
     def __init__(self, **kwargs):
@@ -51,8 +51,8 @@ class SchrodingerDataViewer(pwviewer.Viewer):
         cls = type(obj)
 
         # For now handle both types of SetOfTiltSeries together
-        if issubclass(cls, schrodinger.objects.SchrodingerAtomStruct):
-            # views.append(self.textView([]))
+        if issubclass(cls, schrodingerScipion.objects.SchrodingerAtomStruct) or \
+           issubclass(cls, schrodingerScipion.objects.SchrodingerBindingSites):
             pwutils.runJob(None, Plugin.getHome('maestro'), obj.getFileName(), env=Plugin.getEnviron())
 
         return views

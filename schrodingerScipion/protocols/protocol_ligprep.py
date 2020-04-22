@@ -29,7 +29,7 @@ import os
 from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam
 from pyworkflow.utils.path import copyFile, moveFile
 from pwem.protocols import EMProtocol
-from schrodinger import Plugin
+from schrodingerScipion import Plugin
 from bioinformatics.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
 
 class ProtSchrodingerLigPrep(EMProtocol):

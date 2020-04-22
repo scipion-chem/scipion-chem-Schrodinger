@@ -30,8 +30,8 @@ import os
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, StringParam
 from pwem.protocols import EMProtocol
-from schrodinger import Plugin
-from schrodinger.objects import SchrodingerAtomStruct
+from schrodingerScipion import Plugin
+from schrodingerScipion.objects import SchrodingerAtomStruct
 from bioinformatics.objects import SmallMolecule
 
 class ProtSchrodingerSplitStructure(EMProtocol):

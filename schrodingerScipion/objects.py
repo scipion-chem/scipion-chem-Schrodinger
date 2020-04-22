@@ -42,3 +42,12 @@ class SchrodingerGrid(data.EMFile):
 
     def setStructure(self, structurePtr):
         self.structurePtr = structurePtr
+
+class SchrodingerBindingSites(data.EMFile):
+    """A set of binding sites in the file format of Maestro"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+        self.structurePtr = None
+
+    def setStructure(self, structurePtr):
+        self.structurePtr = structurePtr

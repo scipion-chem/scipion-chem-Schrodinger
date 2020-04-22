@@ -28,8 +28,8 @@ import os
 from pyworkflow.protocol.params import PointerParam, EnumParam
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
-from schrodinger import Plugin
-from schrodinger.objects import SchrodingerAtomStruct
+from schrodingerScipion import Plugin
+from schrodingerScipion.objects import SchrodingerAtomStruct
 from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
 
 class ProtSchrodingerConvert(EMProtocol):

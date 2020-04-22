@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import glob
 import os
 
 from pyworkflow.protocol.params import PointerParam
@@ -32,12 +33,12 @@ from pwem.protocols import EMProtocol
 from pwem.objects.data import AtomStruct
 from pwem.convert.atom_struct import AtomicStructHandler
 
-from schrodinger import Plugin as schrodinger_plugin
-from schrodinger.objects import SchrodingerAtomStruct
+from schrodingerScipion import Plugin as schrodinger_plugin
+from schrodingerScipion.objects import SchrodingerGrid
 
-class ProtSchrodingerPrepWizardManual(EMProtocol):
-    """Calls the preparation wizard GUI"""
-    _label = 'target preparation manual (prepwizard)'
+class ProtSchrodingerGridSiteMap(EMProtocol):
+    """Calls glide to prepare a grid with an input that is a set of binding sites"""
+    _label = 'grid definition binding site (glide)'
     _program = ""
 
     def _defineParams(self, form):
@@ -56,26 +57,19 @@ class ProtSchrodingerPrepWizardManual(EMProtocol):
             aStruct1 = AtomicStructHandler(self.inputStructure.get().getFileName())
             aStruct1.write(fnIn)
             fnIn='extra/atomStructIn.pdb'
+            self.runJob(schrodinger_plugin.getHome('maestro'), "-b %s"%fnIn, cwd=self._getPath())
         else:
-            fnIn = self._getExtraPath("atomStructIn.mae")
+            fnIn = self._getExtraPath("atomStructIn")+self.inputStructure.get().getExtension()
             createLink(self.inputStructure.get().getFileName(),fnIn)
-            fnIn='extra/atomStructIn.mae'
-
-        self.runJob(schrodinger_plugin.getHome('maestro'), "-b %s"%fnIn, cwd=self._getPath())
+            fnIn=os.path.join('extra',os.path.split(fnIn)[1])
+            self.runJob(schrodinger_plugin.getHome('maestro'), "-m %s"%fnIn, cwd=self._getPath())
 
     def createOutput(self):
-        files = [self._getPath('prepwizard_workdir/%s'%file) \
-                               for file in os.listdir(self._getPath("prepwizard_workdir")) \
-                                           if (file.lower().endswith('out.mae'))]
-        if len(files)>0:
-            files.sort(key=os.path.getmtime)
-            filesSorted=sorted(files,key=os.path.getmtime)
-
-            maeFile=SchrodingerAtomStruct()
-            maeFile.setFileName(filesSorted[-1])
-
-            self._defineOutputs(outputStructure=maeFile)
-            self._defineSourceRelation(self.inputStructure, maeFile)
-
-    def _citations(self):
-        return ['Sastry2013']
+        for fnDir in glob.glob(self._getPath('glide-*')):
+            fnBase = os.path.split(fnDir)[1]
+            fnGrid = os.path.join(fnDir,'%s.zip'%fnBase)
+            if os.path.exists(fnGrid):
+                gridFile=SchrodingerGrid(filename=fnGrid)
+                gridFile.setStructure(self.inputStructure)
+                self._defineOutputs(outputGrid=gridFile)
+                self._defineSourceRelation(self.inputStructure, gridFile)
