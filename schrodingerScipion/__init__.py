@@ -77,3 +77,15 @@ class Plugin(pwem.Plugin):
             return None
         else:
             return os.path.join(fileList[0], 'site-packages')
+
+    @classmethod
+    def getPluginHome(cls, path=""):
+        import schrodingerScipion
+        fnDir = os.path.split(schrodingerScipion.__file__)[0]
+        return os.path.join(fnDir,path)
+
+
+    @classmethod
+    def runSchrodinger(cls, protocol, program, args, cwd=None):
+        """ Run rdkit command from a given protocol. """
+        protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
