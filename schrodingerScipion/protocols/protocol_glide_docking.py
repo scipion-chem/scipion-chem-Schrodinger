@@ -23,17 +23,25 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import numpy as np
 import os
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, FloatParam, IntParam
+import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin as schrodinger_plugin
 from pyworkflow.utils.path import createLink, makePath
+from .protocol_convert import inputArg
+from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
+from schrodingerScipion import Plugin as schrodinger_plugin
+from schrodingerScipion.utils.utils import putMol2Title
+from schrodingerScipion.objects import SchrodingerPoses
 
 class ProtSchrodingerGlideDocking(EMProtocol):
     """Calls glide to perform a docking of a set of compounds in a pocket defined by a grid.
-       It is assumed that the input library of ligands is already prepared. """
+       It is assumed that the input library of ligands is already prepared.
+
+       The dockinsScore is the Glide Docking Score and it is measured in kcal/mol"""
     _label = 'docking (glide)'
     _program = ""
 
@@ -65,6 +73,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                             'If set to -1, the default value is 400, except for XP precision that is 800.')
         form.addParam('posesPerLig', IntParam, default=5, expertLevel=LEVEL_ADVANCED,
                        label='No. Poses to report per ligand:')
+        form.addParam('keepPoses', BooleanParam, default=False, expertLevel=LEVEL_ADVANCED,
+                       label='Keep poses separated:')
 
         form.addSection(label='Ligand sampling')
         form.addParam('sampleNinversions', BooleanParam, default=True, condition='dockingMethod==0',
@@ -100,12 +110,16 @@ class ProtSchrodingerGlideDocking(EMProtocol):
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('dockingStep')
+        self._insertFunctionStep('createOutput')
 
     def dockingStep(self):
         def makeLocal(fn):
             return fn.replace(self._getPath()+'/','')
 
         glideProg = schrodinger_plugin.getHome('glide')
+        structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
+        structCatProg = schrodinger_plugin.getHome('utilities/structcat')
+        propListerProg = schrodinger_plugin.getHome('utilities/proplister')
 
         fnGrid = self._getExtraPath("grid.zip")
         if not os.path.exists(fnGrid): # Prepared to resume
@@ -160,26 +174,97 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     fhIn.write("MAXREF %d\n" % 800)
                 else:
                     fhIn.write("MAXREF %d\n" % 400)
-            fhIn.write("WRITE_CSV True\n")
             fhIn.write("POSES_PER_LIG %d\n"%self.posesPerLig.get())
 
-            fhIn.write("LIGANDFILE ")
-            i=0
             for small in self.inputLibrary.get():
                 fnSmall = small.getFileName()
-                fnSmallLocal = os.path.join(fnLigands,os.path.split(fnSmall)[1])
-                createLink(fnSmall,fnSmallLocal)
-                if i!=0:
-                    fhIn.write(",")
-                fhIn.write(makeLocal(fnSmallLocal))
-                i+=1
-            fhIn.write("\n")
+                args = inputArg(fnSmall)
+                fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
+                fnBaseFull = os.path.join(fnLigands,fnBase)+".mol2"
+                args += " -omol2 %s"%fnBaseFull
+                self.runJob(structConvertProg, args)
+                putMol2Title(fnBaseFull,fnBase)
+
+            self.runJob(structCatProg, "-imol2 ligands/*.mol2 -omol2 extra/allLigands.mol2", cwd=self._getPath())
+            self.runJob("rm","-rf %s"%self._getPath('ligands'))
+            fhIn.write("LIGANDFILE extra/allLigands.mol2\n")
 
             fhIn.close()
 
         args = "-WAIT -NJOBS %d -RESTART -LOCAL job.inp"%(self.numberOfMpi.get())
-
         self.runJob(glideProg, args, cwd=self._getPath())
+
+        self.runJob(propListerProg,
+                    '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" -p "glide ligand efficiency ln" -c -o %s %s'%\
+                    (self._getPath("job_pv.csv"), self._getPath("job_pv.maegz")))
+
+    def createOutput(self):
+        subsetProg = schrodinger_plugin.getHome('utilities/maesubset')
+
+        smallDict = {}
+        for small in self.inputLibrary.get():
+            fnSmall = small.getFileName()
+            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
+            if not fnBase in smallDict:
+                smallDict[fnBase]=fnSmall
+
+        interSet = []
+        posesDir = self._getExtraPath('poses')
+        makePath(posesDir)
+        fhCsv = open(self._getPath('job_pv.csv'))
+        fnPv = self._getPath('job_pv.maegz')
+        posesTemplate = self._getExtraPath('poses/pose_%08d_pv.maegz')
+        i = 0
+        for line in fhCsv.readlines():
+            if i>1:
+                tokens = line.split(',')
+                small = SmallMolecule(smallMolFilename=smallDict[tokens[0]])
+                small.dockingScore = pwobj.Float(tokens[1])
+                small.ligandEfficiency = pwobj.Float(tokens[2])
+                small.ligandEfficiencySA = pwobj.Float(tokens[3])
+                small.ligandEfficiencyLn = pwobj.Float(tokens[4])
+
+                if self.keepPoses.get():
+                    fnPose = posesTemplate%i
+                    self.runJob(subsetProg,"-n %d:%d %s -o %s"%(i,i,fnPv,fnPose))
+                    small.poseFile = pwobj.String(fnPose)
+                interSet.append(small)
+            i+=1
+        fhCsv.close()
+
+        ds = []
+        le = []
+        leSA = []
+        leLn = []
+        for small in interSet:
+            ds.append(small.dockingScore.get())
+            le.append(small.ligandEfficiency.get())
+            leSA.append(small.ligandEfficiencySA.get())
+            leLn.append(small.ligandEfficiencyLn.get())
+
+        iN = 100.0/len(ds)
+        ds = np.asarray(ds)
+        le = np.asarray(le)
+        leSA = np.asarray(leSA)
+        leLn = np.asarray(leLn)
+        outputSet = SetOfSmallMolecules().create(path=self._getPath())
+        for small in interSet:
+            hds = np.sum(ds>=small.dockingScore.get())*iN
+            hle = np.sum(le>=small.ligandEfficiency.get())*iN
+            hleSA = np.sum(leSA>=small.ligandEfficiencySA.get())*iN
+            hleLn = np.sum(leLn>=small.ligandEfficiencyLn.get())*iN
+            h=0.25*(hds+hle+hleSA+hleLn)
+            small.Hrank=pwobj.Float(-h)
+            outputSet.append(small)
+
+        self._defineOutputs(outputSmallMolecules=outputSet)
+        self._defineSourceRelation(self.inputGrid, outputSet)
+        self._defineSourceRelation(self.inputLibrary, outputSet)
+
+        mae = SchrodingerPoses(filename=fnPv)
+        self._defineOutputs(outputPoses=mae)
+        self._defineSourceRelation(self.inputGrid, mae)
+        self._defineSourceRelation(self.inputLibrary, mae)
 
     def _validate(self):
         errors = []

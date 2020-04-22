@@ -36,6 +36,7 @@ class SchrodingerDataViewer(pwviewer.Viewer):
     _targets = [
         schrodingerScipion.objects.SchrodingerAtomStruct,
         schrodingerScipion.objects.SchrodingerBindingSites,
+        schrodingerScipion.objects.SchrodingerPoses
     ]
 
     def __init__(self, **kwargs):
@@ -52,7 +53,8 @@ class SchrodingerDataViewer(pwviewer.Viewer):
 
         # For now handle both types of SetOfTiltSeries together
         if issubclass(cls, schrodingerScipion.objects.SchrodingerAtomStruct) or \
-           issubclass(cls, schrodingerScipion.objects.SchrodingerBindingSites):
+           issubclass(cls, schrodingerScipion.objects.SchrodingerBindingSites) or \
+           issubclass(cls, schrodingerScipion.objects.SchrodingerPoses):
             pwutils.runJob(None, Plugin.getHome('maestro'), obj.getFileName(), env=Plugin.getEnviron())
 
         return views

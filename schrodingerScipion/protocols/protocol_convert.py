@@ -32,6 +32,47 @@ from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerAtomStruct
 from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
 
+def inputArg(fn):
+    if fn.endswith('.mae') or fn.endswith('.maegz'):
+        args = "-imae "
+    elif fn.endswith('.cif'):
+        args = "-icif"
+    elif fn.endswith('.sd'):
+        args = "-isd"
+    elif fn.endswith('.pdb'):
+        args = "-ipdb"
+    elif fn.endswith('.mol2'):
+        args = "-imol2"
+    elif fn.endswith('.smi'):
+        args = "-ismi"
+    elif fn.endswith('.csv'):
+        args = "-icsv"
+    return args+" %s"%fn
+
+def outputArg(fnRoot, format):
+    if format == 0:
+        fnOut = self._getExtraPath(fnRoot + ".maegz")
+        args = " -omae %s" % fnOut
+    elif format == 1:
+        fnOut = self._getExtraPath(fnRoot + ".pdb")
+        args = " -opdb %s" % fnOut
+    elif format == 2:
+        fnOut = self._getExtraPath(fnRoot + ".mol2")
+        args = " -omol2 %s" % fnOut
+    elif format == 3:
+        fnOut = self._getExtraPath(fnRoot + ".smi")
+        args = " -osmi %s" % fnOut
+    elif format == 4:
+        fnOut = self._getExtraPath(fnRoot + ".cif")
+        args = " -ocif %s" % fnOut
+    elif format == 5:
+        fnOut = self._getExtraPath(fnRoot + ".sd")
+        args = " -osd %s" % fnOut
+    elif format == 6:
+        fnOut = self._getExtraPath(fnRoot + ".csv")
+        args = " -ocsv %s" % fnOut
+    return fnOut, args
+
 class ProtSchrodingerConvert(EMProtocol):
     """Convert a set of input ligands or a receptor structure to a specific file format"""
     _label = 'convert'
@@ -58,47 +99,6 @@ class ProtSchrodingerConvert(EMProtocol):
         self._insertFunctionStep('convertStep')
 
     def convertStep(self):
-        def inputArg(fn):
-            if fn.endswith('.mae') or fn.endswith('.maegz'):
-                args="-imae "
-            elif fn.endswith('.cif'):
-                args="-icif"
-            elif fn.endswith('.sd'):
-                args="-isd"
-            elif fnSmall.endswith('.pdb'):
-                args="-ipdb"
-            elif fnSmall.endswith('.mol2'):
-                args="-imol2"
-            elif fn.endswith('.smi'):
-                args="-ismi"
-            elif fnSmall.endswith('.csv'):
-                args="-icsv"
-            return args
-
-        def outputArg(fnRoot, format):
-            if format==0:
-                fnOut=self._getExtraPath(fnRoot+".maegz")
-                args=" -omae %s"%fnOut
-            elif format == 1:
-                fnOut = self._getExtraPath(fnRoot + ".pdb")
-                args = " -opdb %s" % fnOut
-            elif format == 2:
-                fnOut = self._getExtraPath(fnRoot + ".mol2")
-                args = " -omol2 %s" % fnOut
-            elif format==3:
-                fnOut=self._getExtraPath(fnRoot + ".smi")
-                args= " -osmi %s"%fnOut
-            elif format==4:
-                fnOut=self._getExtraPath(fnRoot + ".cif")
-                args= " -ocif %s"%fnOut
-            elif format==5:
-                fnOut=self._getExtraPath(fnRoot + ".sd")
-                args= " -osd %s"%fnOut
-            elif format==6:
-                fnOut=self._getExtraPath(fnRoot + ".csv")
-                args= " -ocsv %s"%fnOut
-            return fnOut,args
-
         progStructConvert=Plugin.getHome('utilities/structconvert')
 
         if self.inputType==0:
@@ -108,7 +108,7 @@ class ProtSchrodingerConvert(EMProtocol):
                 fnSmall = mol.smallMoleculeFile.get()
                 fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
 
-                args=inputArg(fnSmall)+" %s"%fnSmall
+                args=inputArg(fnSmall)
                 fnOut, argout = outputArg(fnRoot, self.outputFormatSmall.get())
                 args+=argout
 
@@ -121,7 +121,7 @@ class ProtSchrodingerConvert(EMProtocol):
                 self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
         else:
             fnStructure = self.inputStructure.get().getFileName()
-            args = inputArg(fnStructure) + " %s" % fnStructure
+            args = inputArg(fnStructure)
             fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
             fnOut, argout = outputArg(fnRoot, self.outputFormatTarget.get())
             args += argout
