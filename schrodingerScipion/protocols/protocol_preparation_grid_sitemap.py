@@ -26,7 +26,8 @@
 import glob
 import os
 
-from pyworkflow.protocol.params import MultiPointerParam, BooleanParam, FloatParam, IntParam, PointerParam
+from pyworkflow.protocol.params import MultiPointerParam, BooleanParam, FloatParam, IntParam
+from pyworkflow.object import String
 from pyworkflow.utils.path import createLink, makePath
 
 from pwem.protocols import EMProtocol
@@ -41,8 +42,6 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct",
-                       label='Atomic Structure:', allowsNull=False)
         form.addParam('inputSites', MultiPointerParam, pointerClass="BindingSite",
                        label='Binding sites:', allowsNull=False)
         line = form.addLine('Inner box (Angstroms)')
@@ -87,7 +86,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
             fnGridDir = "grid-%s"%n
             makePath(self._getPath(fnGridDir))
-            fnTarget = self.inputStructure.get().getFileName()
+            fnTarget = site.get().structureFile.get()
             fnTargetLocal = self._getPath("%s/%s.maegz"%(fnGridDir,fnGridDir))
             createLink(fnTarget, fnTargetLocal)
 
@@ -114,17 +113,22 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
             self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=self._getPath(fnGridDir))
 
     def createOutput(self):
-        for fnDir in glob.glob(self._getPath('grid-*')):
-            fnBase = os.path.split(fnDir)[1]
-            fnGrid = os.path.join(fnDir,'%s.zip'%fnBase)
-            if os.path.exists(fnGrid):
-                gridFile=SchrodingerGrid(filename=fnGrid)
-                gridFile.setStructure(self.inputStructure)
+        for site in self.inputSites:
+            fnSite = site.get().getFileName()
+            n = fnSite.split('@')[0]
 
-                n = fnDir.split('grid-')[1]
-                outputDict = {'outputGrid%s' % n: gridFile}
-                self._defineOutputs(**outputDict)
-                self._defineSourceRelation(self.inputStructure, gridFile)
+            fnDir = self._getPath("grid-%s"%n)
+            if os.path.exists(fnDir):
+                fnBase = os.path.split(fnDir)[1]
+                fnGrid = os.path.join(fnDir,'%s.zip'%fnBase)
+                if os.path.exists(fnGrid):
+                    gridFile=SchrodingerGrid(filename=fnGrid)
+                    gridFile.structureFile=String(site.get().structureFile.get())
+
+                    n = fnDir.split('grid-')[1]
+                    outputDict = {'outputGrid%s' % n: gridFile}
+                    self._defineOutputs(**outputDict)
+                    self._defineSourceRelation(site,gridFile)
 
     def _validate(self):
         errors = []

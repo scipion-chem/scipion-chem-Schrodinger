@@ -78,6 +78,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
             return None
 
         fnBinding = self._getPath("job_out.maegz")
+        fnStructure = self.inputStructure.get().getFileName()
         if os.path.exists(fnBinding):
             setOfBindings = SetOfBindingSites().create(path=self._getPath())
             for fn in glob.glob(self._getPath("job_site_*_eval.log")):
@@ -96,7 +97,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
                 bindingSite.philic    = pwobj.Float(philic)
                 bindingSite.balance   = pwobj.Float(balance)
                 bindingSite.donacc    = pwobj.Float(donacc)
-                bindingSite.setStructure(self.inputStructure)
+                bindingSite.structureFile = pwobj.String(fnStructure)
 
                 setOfBindings.append(bindingSite)
 
