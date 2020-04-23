@@ -27,7 +27,7 @@ import glob
 import os
 
 from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam
-from pyworkflow.utils.path import copyFile, moveFile
+from pyworkflow.utils.path import copyFile, moveFile, cleanPath
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from bioinformatics.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
@@ -89,8 +89,8 @@ class ProtSchrodingerLigPrep(EMProtocol):
         for mol in self.inputSmallMols.get():
             fnSmall = mol.smallMoleculeFile.get()
             fnMol = os.path.split(fnSmall)[1]
-            fnSmallExtra = self._getTmpPath(fnMol)
             fnRoot = os.path.splitext(fnMol)[0]
+            fnSmallExtra = self._getTmpPath(fnMol)
             copyFile(fnSmall,fnSmallExtra)
 
             args='-WAIT -LOCAL'
@@ -137,6 +137,8 @@ class ProtSchrodingerLigPrep(EMProtocol):
                     moveFile(fn,fnOut)
                     smallMolecule = SmallMolecule(smallMolFilename=fnOut)
                     outputSmallMolecules.append(smallMolecule)
+                if len(glob.glob(self._getExtraPath("%s-*.maegz"%fnRoot))) > 0:
+                    cleanPath(self._getPath(fnMae))
             else:
                 smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
                 outputSmallMoleculesDropped.append(smallMolecule)
