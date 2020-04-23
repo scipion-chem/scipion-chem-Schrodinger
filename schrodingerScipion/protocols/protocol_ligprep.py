@@ -90,58 +90,66 @@ class ProtSchrodingerLigPrep(EMProtocol):
             fnSmall = mol.smallMoleculeFile.get()
             fnMol = os.path.split(fnSmall)[1]
             fnRoot = os.path.splitext(fnMol)[0]
-            fnSmallExtra = self._getTmpPath(fnMol)
-            copyFile(fnSmall,fnSmallExtra)
 
-            args='-WAIT -LOCAL'
-            if self.ionization.get()!=0:
-                if self.ionization.get()==1:
-                    args+=" -epik"
-                    if self.emb.get():
-                        args+=" -epik_metal_binding"
+            existingFiles = glob.glob(self._getExtraPath(fnRoot+"*"))
+            if len(existingFiles)==0:
+                fnSmallExtra = self._getTmpPath(fnMol)
+                copyFile(fnSmall,fnSmallExtra)
+
+                args='-WAIT -LOCAL'
+                if self.ionization.get()!=0:
+                    if self.ionization.get()==1:
+                        args+=" -epik"
+                        if self.emb.get():
+                            args+=" -epik_metal_binding"
+                    else:
+                        args+=" -i %d"%self.ionization.get()-2
+                    args+=" -ph %f -pht %f"%(self.pH.get(),self.pHrange.get())
+
+                if self.stereoisomers.get():
+                    args+=" -g"
                 else:
-                    args+=" -i %d"%self.ionization.get()-2
-                args+=" -ph %f -pht %f"%(self.pH.get(),self.pHrange.get())
+                    args+=" -ac -s %d"%self.Niso.get()
 
-            if self.stereoisomers.get():
-                args+=" -g"
+                if self.optimization.get()==1:
+                    args+=" -bff 14"
+                elif self.optimization.get()==2:
+                    args+=" -bff 16"
+
+                if fnMol.endswith('.smi'):
+                    args+=" -ismi tmp/%s"%(fnMol)
+                elif fnMol.endswith('.mae') or fnMol.endswith('.maegz'):
+                    args += " -imae tmp/%s" % (fnMol)
+                elif fnMol.endswith('.sdf'):
+                    args += " -isd tmp/%s" % (fnMol)
+                else:
+                    print("Skipping %s"%fnSmall)
+                    continue
+
+                fnMae = "extra/%s.maegz" % fnRoot
+                args+=" -omae %s"%fnMae
+                self.runJob(progLigPrep,args,cwd=self._getPath())
+
+                if os.path.exists(self._getPath(fnMae)):
+                    fnOmae="extra/o%s.maegz"%fnRoot
+                    args = "-imae %s -omae %s -split-nstructures 1"%(fnMae,fnOmae)
+                    self.runJob(progStructConvert, args, cwd=self._getPath())
+                    for fn in glob.glob(self._getExtraPath("o%s*.maegz"%fnRoot)):
+                        fnDir, fnOut = os.path.split(fn)
+                        fnOut = self._getExtraPath(fnOut[1:])
+                        moveFile(fn,fnOut)
+                        smallMolecule = SmallMolecule(smallMolFilename=fnOut)
+                        outputSmallMolecules.append(smallMolecule)
+                    if len(glob.glob(self._getExtraPath("%s-*.maegz"%fnRoot))) > 0:
+                        cleanPath(self._getPath(fnMae))
+                else:
+                    smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
+                    outputSmallMoleculesDropped.append(smallMolecule)
             else:
-                args+=" -ac -s %d"%self.Niso.get()
-
-            if self.optimization.get()==1:
-                args+=" -bff 14"
-            elif self.optimization.get()==2:
-                args+=" -bff 16"
-
-            if fnMol.endswith('.smi'):
-                args+=" -ismi tmp/%s"%(fnMol)
-            elif fnMol.endswith('.mae') or fnMol.endswith('.maegz'):
-                args += " -imae tmp/%s" % (fnMol)
-            elif fnMol.endswith('.sdf'):
-                args += " -isd tmp/%s" % (fnMol)
-            else:
-                print("Skipping %s"%fnSmall)
-                continue
-
-            fnMae = "extra/%s.maegz"%fnRoot
-            args+=" -omae %s"%fnMae
-            self.runJob(progLigPrep,args,cwd=self._getPath())
-
-            if os.path.exists(self._getPath(fnMae)):
-                fnOmae="extra/o%s.maegz"%fnRoot
-                args = "-imae %s -omae %s -split-nstructures 1"%(fnMae,fnOmae)
-                self.runJob(progStructConvert, args, cwd=self._getPath())
-                for fn in glob.glob(self._getExtraPath("o%s*.maegz"%fnRoot)):
-                    fnDir, fnOut = os.path.split(fn)
-                    fnOut = self._getExtraPath(fnOut[1:])
-                    moveFile(fn,fnOut)
-                    smallMolecule = SmallMolecule(smallMolFilename=fnOut)
+                for fn in glob.glob(self._getExtraPath("%s*.maegz"%fnRoot)):
+                    print("Reading %s"%fn)
+                    smallMolecule = SmallMolecule(smallMolFilename=fn)
                     outputSmallMolecules.append(smallMolecule)
-                if len(glob.glob(self._getExtraPath("%s-*.maegz"%fnRoot))) > 0:
-                    cleanPath(self._getPath(fnMae))
-            else:
-                smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
-                outputSmallMoleculesDropped.append(smallMolecule)
 
         if len(outputSmallMolecules)>0:
             self._defineOutputs(outputSmallMols=outputSmallMolecules)
