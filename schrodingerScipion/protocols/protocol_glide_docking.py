@@ -23,7 +23,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import numpy as np
 import os
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
@@ -204,6 +203,16 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             if not fnBase in smallDict:
                 smallDict[fnBase]=fnSmall
 
+        grid = self.inputGrid.get()
+        fnStruct = grid.structureFile.get()
+        if hasattr(grid,"bindingSiteScore"):
+            bindingSiteScore = grid.bindingSiteScore.get()
+        else:
+            bindingSiteScore = None
+        if hasattr(grid,"bindingSiteDScore"):
+            bindingSiteDScore = grid.bindingSiteDScore.get()
+        else:
+            bindingSiteDScore = None
         smallList = []
         posesDir = self._getExtraPath('poses')
         makePath(posesDir)
@@ -219,6 +228,11 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 small.ligandEfficiencySA = pwobj.Float(tokens[3])
                 small.ligandEfficiencyLn = pwobj.Float(tokens[4])
                 small.poseFile = pwobj.String("%d@%s"%(i,fnPv))
+                small.structFile = pwobj.String(fnStruct)
+                if bindingSiteScore:
+                    small.bindingSiteScore = pwobj.Float(bindingSiteScore)
+                if bindingSiteDScore:
+                    small.bindingSiteDScore = pwobj.Float(bindingSiteDScore)
                 smallList.append(small)
             i+=1
         fhCsv.close()
@@ -227,8 +241,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
         outputSet = SetOfSmallMolecules().create(path=self._getPath())
         for idx in idxSorted:
-            # subsetProg = schrodinger_plugin.getHome('utilities/maesubset')
-            # self.runJob(subsetProg, "-n %d:%d %s -o %s" % (i, i, fnPv, fnPose))
             small=smallList[idx]
             outputSet.append(small)
 
