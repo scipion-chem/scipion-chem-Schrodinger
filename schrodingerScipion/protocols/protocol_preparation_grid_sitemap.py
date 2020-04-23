@@ -27,7 +27,7 @@ import glob
 import os
 
 from pyworkflow.protocol.params import MultiPointerParam, BooleanParam, FloatParam, IntParam
-from pyworkflow.object import String
+from pyworkflow.object import String, Float
 from pyworkflow.utils.path import createLink, makePath
 
 from pwem.protocols import EMProtocol
@@ -124,6 +124,8 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                 if os.path.exists(fnGrid):
                     gridFile=SchrodingerGrid(filename=fnGrid)
                     gridFile.structureFile=String(site.get().structureFile.get())
+                    gridFile.bindingSiteScore=Float(site.get().score.get())
+                    gridFile.bindingSiteDScore=Float(site.get().dscore.get())
 
                     n = fnDir.split('grid-')[1]
                     outputDict = {'outputGrid%s' % n: gridFile}

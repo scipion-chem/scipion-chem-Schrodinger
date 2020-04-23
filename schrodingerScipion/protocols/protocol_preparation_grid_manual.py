@@ -28,6 +28,7 @@ import os
 
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.utils.path import createLink
+from pyworkflow.object import String
 
 from pwem.protocols import EMProtocol
 from pwem.objects.data import AtomStruct
@@ -65,12 +66,14 @@ class ProtSchrodingerGridManual(EMProtocol):
             self.runJob(schrodinger_plugin.getHome('maestro'), "-m %s"%fnIn, cwd=self._getPath())
 
     def createOutput(self):
+        fnStruct = glob.glob(self._getExtraPath("atomStructIn*"))[0]
+
         for fnDir in glob.glob(self._getPath('glide-*')):
             fnBase = os.path.split(fnDir)[1]
             fnGrid = os.path.join(fnDir,'%s.zip'%fnBase)
             if os.path.exists(fnGrid):
                 gridFile=SchrodingerGrid(filename=fnGrid)
-                gridFile.setStructure(self.inputStructure)
+                gridFile.structureFile = String(fnStruct)
 
                 n = fnDir.split('glide-')[1]
                 outputDict = {'outputGrid%s' % n: gridFile}
