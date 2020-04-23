@@ -25,7 +25,6 @@
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.browser import FileHandler
 import pyworkflow.utils as pwutils
-import pwem.viewers.views as views
 import schrodingerScipion.objects
 from schrodingerScipion import Plugin
 
