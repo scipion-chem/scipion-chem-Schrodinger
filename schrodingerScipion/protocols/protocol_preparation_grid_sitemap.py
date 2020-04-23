@@ -44,7 +44,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct",
                        label='Atomic Structure:', allowsNull=False)
         form.addParam('inputSites', MultiPointerParam, pointerClass="BindingSite",
-                       label='Atomic Structure:', allowsNull=False)
+                       label='Binding sites:', allowsNull=False)
         line = form.addLine('Inner box (Angstroms)')
         line.addParam('innerX', IntParam, default=10, label='X')
         line.addParam('innerY', IntParam, default=10, label='Y')

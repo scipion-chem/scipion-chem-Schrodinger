@@ -51,9 +51,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        label='Grid to analyze:', allowsNull=False)
         form.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Library of compounds:', allowsNull=False)
-        form.addParam('dockingMethod', EnumParam, default=0, choices=['Flexible dock', 'Rigid dock',
-                                                                      'Refine (do not dock)',
-                                                                      'Score in place (do not dock)'],
+        form.addParam('dockingMethod', EnumParam, default=0, choices=['Flexible dock (confgen)', 'Rigid dock (rigid)',
+                                                                      'Refine (do not dock, mininplace)',
+                                                                      'Score in place (do not dock, inplace)'],
                        label='Docking method')
         form.addParam('dockingPrecision', EnumParam, default=0, choices=['Low (HTVS)','Medium (SP)','High (XP)'],
                        label='Docking precision',

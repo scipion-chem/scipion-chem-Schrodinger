@@ -71,8 +71,8 @@ class ProtSchrodingerLigPrep(EMProtocol):
                        label='Generate up to # isomers per input structure:')
 
         group = form.addGroup('Optimization')
-        group.addParam('optimization', EnumParam, default=0,
-                       choices=["None",'OPLS 2005 (recommended)','OPLS3e'],
+        group.addParam('optimization', EnumParam, default=2,
+                       choices=["None",'OPLS 2005','OPLS3e (recommended)'],
                        label='Force-field for final optimization')
 
         # --------------------------- INSERT steps functions --------------------

@@ -99,7 +99,7 @@ class ProtSchrodingerPrepWizard(EMProtocol):
                       label='RMSD cutoff:')
         form.addParam('fix', BooleanParam, default=False, condition='stage3',
                       label='Fix heavy atoms:', help='Minimize hydrogens only')
-        form.addParam('force', EnumParam, default=0, choices=["2005","3"],
+        form.addParam('force', EnumParam, default=1, choices=["2005","3"],
                       condition='stage3', label='OPLS force field:')
 
         form.addSection(label='Stage 4. Ionization and tautomeric states of HET groups (Epik)')
