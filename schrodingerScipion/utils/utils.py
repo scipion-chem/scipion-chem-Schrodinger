@@ -24,8 +24,10 @@
 # *
 # **************************************************************************
 
+import numpy as np
 import os
 from pyworkflow.utils.path import moveFile
+import pyworkflow.object as pwobj
 
 def putMol2Title(fn, title=""):
     i=0
@@ -43,3 +45,34 @@ def putMol2Title(fn, title=""):
     fhIn.close()
     fhOut.close()
     moveFile(fn+".aux",fn)
+
+def sortDockingResults(smallList):
+    ds = []
+    le = []
+    leSA = []
+    leLn = []
+    for small in smallList:
+        ds.append(small.dockingScore.get())
+        le.append(small.ligandEfficiency.get())
+        leSA.append(small.ligandEfficiencySA.get())
+        leLn.append(small.ligandEfficiencyLn.get())
+
+    iN = 100.0 / len(ds)
+    ds = np.asarray(ds)
+    le = np.asarray(le)
+    leSA = np.asarray(leSA)
+    leLn = np.asarray(leLn)
+
+    h = np.zeros(len(ds))
+    i=0
+    for small in smallList:
+        hds = np.sum(ds >= small.dockingScore.get()) * iN
+        hle = np.sum(le >= small.ligandEfficiency.get()) * iN
+        hleSA = np.sum(leSA >= small.ligandEfficiencySA.get()) * iN
+        hleLn = np.sum(leLn >= small.ligandEfficiencyLn.get()) * iN
+        hi = -0.25 * (hds + hle + hleSA + hleLn)
+        small.Hrank = pwobj.Float(hi)
+        h[i]=hi
+        i+=1
+
+    return np.argsort(h)
