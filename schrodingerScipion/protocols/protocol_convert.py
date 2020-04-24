@@ -30,6 +30,7 @@ from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerAtomStruct
+from schrodingerScipion.utils.utils import putMol2Title
 from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
 
 def inputArg(fn):
@@ -49,27 +50,27 @@ def inputArg(fn):
         args = "-icsv"
     return args+" %s"%fn
 
-def outputArg(fnRoot, format):
+def outputArg(fnRoot, format, protocol):
     if format == 0:
-        fnOut = self._getExtraPath(fnRoot + ".maegz")
+        fnOut = protocol._getExtraPath(fnRoot + ".maegz")
         args = " -omae %s" % fnOut
     elif format == 1:
-        fnOut = self._getExtraPath(fnRoot + ".pdb")
+        fnOut = protocol._getExtraPath(fnRoot + ".pdb")
         args = " -opdb %s" % fnOut
     elif format == 2:
-        fnOut = self._getExtraPath(fnRoot + ".mol2")
+        fnOut = protocol._getExtraPath(fnRoot + ".mol2")
         args = " -omol2 %s" % fnOut
     elif format == 3:
-        fnOut = self._getExtraPath(fnRoot + ".smi")
+        fnOut = protocol._getExtraPath(fnRoot + ".smi")
         args = " -osmi %s" % fnOut
     elif format == 4:
-        fnOut = self._getExtraPath(fnRoot + ".cif")
+        fnOut = protocol._getExtraPath(fnRoot + ".cif")
         args = " -ocif %s" % fnOut
     elif format == 5:
-        fnOut = self._getExtraPath(fnRoot + ".sd")
+        fnOut = protocol._getExtraPath(fnRoot + ".sd")
         args = " -osd %s" % fnOut
     elif format == 6:
-        fnOut = self._getExtraPath(fnRoot + ".csv")
+        fnOut = protocol._getExtraPath(fnRoot + ".csv")
         args = " -ocsv %s" % fnOut
     return fnOut, args
 
@@ -109,10 +110,12 @@ class ProtSchrodingerConvert(EMProtocol):
                 fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
 
                 args=inputArg(fnSmall)
-                fnOut, argout = outputArg(fnRoot, self.outputFormatSmall.get())
+                fnOut, argout = outputArg(fnRoot, self.outputFormatSmall.get(), self)
                 args+=argout
 
                 self.runJob(progStructConvert, args)
+                if self.outputFormatSmall.get()==2:
+                    putMol2Title(fnOut)
                 smallMolecule = SmallMolecule(smallMolFilename=fnOut)
                 outputSmallMolecules.append(smallMolecule)
 
