@@ -173,18 +173,22 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     fhIn.write("MAXREF %d\n" % 400)
             fhIn.write("POSES_PER_LIG %d\n"%self.posesPerLig.get())
 
+            fh=open(self._getTmpPath("allLigands.mol2"),'w')
             for small in self.inputLibrary.get():
                 fnSmall = small.getFileName()
-                args = inputArg(fnSmall)
                 fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
-                fnBaseFull = os.path.join(fnLigands,fnBase)+".mol2"
-                args += " -omol2 %s"%fnBaseFull
-                self.runJob(structConvertProg, args)
-                putMol2Title(fnBaseFull,fnBase)
-
-            self.runJob(structCatProg, "-imol2 ligands/*.mol2 -omol2 extra/allLigands.mol2", cwd=self._getPath())
-            self.runJob("rm","-rf %s"%self._getPath('ligands'))
-            fhIn.write("LIGANDFILE extra/allLigands.mol2\n")
+                if not fnSmall.endswith('.mol2'):
+                    args = inputArg(fnSmall)
+                    fnSmall = self._getTmpPath('ligand.mol2')
+                    args += " -omol2 %s"%fnSmall
+                    self.runJob(structConvertProg, args)
+                    putMol2Title(fnSmall,fnBase)
+                fhLigand = open(fnSmall)
+                for line in fhLigand:
+                    fh.write(line)
+                fhLigand.close()
+            fh.close()
+            fhIn.write("LIGANDFILE tmp/allLigands.mol2\n")
 
             fhIn.close()
 
