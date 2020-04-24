@@ -132,6 +132,12 @@ class ProtSchrodingerSplitStructure(EMProtocol):
                 outputDict = {'outputLigand%s' % number: ligand}
                 self._defineOutputs(**outputDict)
                 self._defineSourceRelation(self.inputStructure, ligand)
+            elif "_cof_ion" in fn:
+                cof = SchrodingerAtomStruct(filename=fn)
+                number = getNumber(fn, "_cof_ion")
+                outputDict = {'outputCofactors%s' % number: cof}
+                self._defineOutputs(**outputDict)
+                self._defineSourceRelation(self.inputStructure, cof)
             else:
                 print("Scipion: I don't know how to handle %s"%fn)
 
