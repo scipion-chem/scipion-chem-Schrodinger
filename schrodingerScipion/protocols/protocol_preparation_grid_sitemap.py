@@ -32,6 +32,7 @@ from pyworkflow.utils.path import createLink, makePath
 
 from pwem.protocols import EMProtocol
 from schrodingerScipion.objects import SchrodingerGrid
+from bioinformatics.objects import BindingSite, SetOfBindingSites
 
 from schrodingerScipion import Plugin as schrodinger_plugin
 
@@ -42,7 +43,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputSites', MultiPointerParam, pointerClass="BindingSite",
+        form.addParam('inputSites', MultiPointerParam, pointerClass="BindingSite, SetOfBindingSites",
                        label='Binding sites:', allowsNull=False)
         line = form.addLine('Inner box (Angstroms)')
         line.addParam('innerX', IntParam, default=10, label='X')
@@ -71,66 +72,91 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         self._insertFunctionStep('preparationStep')
         self._insertFunctionStep('createOutput')
 
+    def prepareGrid(self, fnSite, fnTarget):
+        n = fnSite.split('@')[0]
+
+        args = schrodinger_plugin.getPluginHome('utils/schrodingerUtils.py') + " centroid %s %s" % \
+               (fnSite, self._getTmpPath("centroid.txt"))
+        schrodinger_plugin.runSchrodinger(self, "python3", args)
+        fh = open(self._getTmpPath("centroid.txt"))
+        line = fh.readline()
+        fh.close()
+        x, y, z = line.split()
+
+        fnGridDir = "grid-%s" % n
+        makePath(self._getPath(fnGridDir))
+        fnTargetLocal = self._getPath("%s/%s.maegz" % (fnGridDir, fnGridDir))
+        createLink(fnTarget, fnTargetLocal)
+
+        fnJob = self._getPath('%s/%s.inp' % (fnGridDir, fnGridDir))
+        fh = open(fnJob, 'w')
+        fh.write("GRIDFILE %s.zip\n" % fnGridDir)
+        fh.write("OUTPUTDIR %s\n" % fnGridDir)
+        fh.write("RECEP_FILE %s.maegz\n" % fnGridDir)
+        fh.write("REC_MAECHARGES True\n")
+        fh.write("HBOND_DONOR_AROMH %s\n" % self.HbondDonorAromH.get())
+        if self.HbondDonorAromH.get():
+            fh.write("HBOND_DONOR_AROMH_CHARGE %f\n" % self.HbondDonorAromHCharge.get())
+        fh.write("HBOND_ACCEP_HALO %s\n" % self.HbondAcceptHalo.get())
+        fh.write("HBOND_DONOR_HALO %s\n" % self.HbondDonorHalo.get())
+        fh.write("INNERBOX %d,%d,%d\n" % (self.innerX.get(), self.innerY.get(), self.innerZ.get()))
+        fh.write("ACTXRANGE %d\n" % self.outerX.get())
+        fh.write("ACTYRANGE %d\n" % self.outerY.get())
+        fh.write("ACTZRANGE %d\n" % self.outerZ.get())
+        fh.write("OUTERBOX %d,%d,%d\n" % (self.outerX.get(), self.outerY.get(), self.outerZ.get()))
+        fh.write("GRID_CENTER %s,%s,%s\n" % (x, y, z))
+        fh.close()
+
+        args = "-WAIT -LOCAL %s.inp" % fnGridDir
+        self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=self._getPath(fnGridDir))
+
     def preparationStep(self):
         for site in self.inputSites:
-            fnSite = site.get().getFileName()
-            n = fnSite.split('@')[0]
+            if type(site)==BindingSite:
+                fnSite = site.get().getFileName()
+                fnTarget = site.get().structureFile.get()
+                self.prepareGrid(fnSite, fnTarget)
+            else:
+                setOfSites = site
+                for sitee in setOfSites.get():
+                    fnSite = sitee.getFileName()
+                    fnTarget = sitee.structureFile.get()
+                    self.prepareGrid(fnSite, fnTarget)
 
-            args = schrodinger_plugin.getPluginHome('utils/schrodingerUtils.py') + " centroid %s %s" %\
-                   (fnSite,self._getTmpPath("centroid.txt"))
-            schrodinger_plugin.runSchrodinger(self, "python3", args)
-            fh = open(self._getTmpPath("centroid.txt"))
-            line = fh.readline()
-            fh.close()
-            x,y,z = line.split()
+    def createOutputSingle(self, fnSite, fnStructureFile, score, dscore, srcObj):
+        n = fnSite.split('@')[0]
 
-            fnGridDir = "grid-%s"%n
-            makePath(self._getPath(fnGridDir))
-            fnTarget = site.get().structureFile.get()
-            fnTargetLocal = self._getPath("%s/%s.maegz"%(fnGridDir,fnGridDir))
-            createLink(fnTarget, fnTargetLocal)
+        fnDir = self._getPath("grid-%s" % n)
+        if os.path.exists(fnDir):
+            fnBase = os.path.split(fnDir)[1]
+            fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
+            if os.path.exists(fnGrid):
+                gridFile = SchrodingerGrid(filename=fnGrid)
+                gridFile.structureFile = String(fnStructureFile)
+                gridFile.bindingSiteScore = Float(score)
+                gridFile.bindingSiteDScore = Float(dscore)
 
-            fnJob = self._getPath('%s/%s.inp'%(fnGridDir,fnGridDir))
-            fh = open(fnJob,'w')
-            fh.write("GRIDFILE %s.zip\n"%fnGridDir)
-            fh.write("OUTPUTDIR %s\n"%fnGridDir)
-            fh.write("RECEP_FILE %s.maegz\n"%fnGridDir)
-            fh.write("REC_MAECHARGES True\n")
-            fh.write("HBOND_DONOR_AROMH %s\n"%self.HbondDonorAromH.get())
-            if self.HbondDonorAromH.get():
-                fh.write("HBOND_DONOR_AROMH_CHARGE %f\n" % self.HbondDonorAromHCharge.get())
-            fh.write("HBOND_ACCEP_HALO %s\n"%self.HbondAcceptHalo.get())
-            fh.write("HBOND_DONOR_HALO %s\n"%self.HbondDonorHalo.get())
-            fh.write("INNERBOX %d,%d,%d\n"%(self.innerX.get(),self.innerY.get(),self.innerZ.get()))
-            fh.write("ACTXRANGE %d\n"%self.outerX.get())
-            fh.write("ACTYRANGE %d\n"%self.outerY.get())
-            fh.write("ACTZRANGE %d\n"%self.outerZ.get())
-            fh.write("OUTERBOX %d,%d,%d\n"%(self.outerX.get(),self.outerY.get(),self.outerZ.get()))
-            fh.write("GRID_CENTER %s,%s,%s\n"%(x,y,z))
-            fh.close()
-
-            args = "-WAIT -LOCAL %s.inp"%fnGridDir
-            self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=self._getPath(fnGridDir))
+                n = fnDir.split('grid-')[1]
+                outputDict = {'outputGrid%s' % n: gridFile}
+                self._defineOutputs(**outputDict)
+                self._defineSourceRelation(srcObj, gridFile)
 
     def createOutput(self):
         for site in self.inputSites:
-            fnSite = site.get().getFileName()
-            n = fnSite.split('@')[0]
-
-            fnDir = self._getPath("grid-%s"%n)
-            if os.path.exists(fnDir):
-                fnBase = os.path.split(fnDir)[1]
-                fnGrid = os.path.join(fnDir,'%s.zip'%fnBase)
-                if os.path.exists(fnGrid):
-                    gridFile=SchrodingerGrid(filename=fnGrid)
-                    gridFile.structureFile=String(site.get().structureFile.get())
-                    gridFile.bindingSiteScore=Float(site.get().score.get())
-                    gridFile.bindingSiteDScore=Float(site.get().dscore.get())
-
-                    n = fnDir.split('grid-')[1]
-                    outputDict = {'outputGrid%s' % n: gridFile}
-                    self._defineOutputs(**outputDict)
-                    self._defineSourceRelation(site,gridFile)
+            if type(site)==BindingSite:
+                fnSite = site.get().getFileName()
+                fnStructureFile = site.get().structureFile.get()
+                score = site.get().score.get()
+                dscore = site.get().dscore.get()
+                self.createOutputSingle(fnSite, fnStructureFile, score, dscore, site)
+            else:
+                setOfSites = site
+                for sitee in setOfSites.get():
+                    fnSite = sitee.getFileName()
+                    fnStructureFile = sitee.structureFile.get()
+                    score = sitee.score.get()
+                    dscore = sitee.dscore.get()
+                    self.createOutputSingle(fnSite, fnStructureFile, score, dscore, setOfSites)
 
     def _validate(self):
         errors = []
