@@ -67,6 +67,8 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
                            '(noncovalent interaction) donors')
 
+        form.addParallelSection(threads=4, mpi=1)
+
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('preparationStep')
@@ -107,7 +109,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         fh.write("GRID_CENTER %s,%s,%s\n" % (x, y, z))
         fh.close()
 
-        args = "-WAIT -LOCAL %s.inp" % fnGridDir
+        args = "-WAIT -LOCAL -NJOBS %d %s.inp" % (self.numberOfThreads.get(),fnGridDir)
         self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=self._getPath(fnGridDir))
 
     def preparationStep(self):

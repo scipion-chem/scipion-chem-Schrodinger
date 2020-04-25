@@ -102,7 +102,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
                            '(noncovalent interaction) donors')
 
-        form.addParallelSection(threads=1, mpi=1)
+        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -192,7 +192,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
             fhIn.close()
 
-        args = "-WAIT -NJOBS %d -RESTART -LOCAL job.inp"%(self.numberOfMpi.get())
+        args = "-WAIT -NJOBS %d -RESTART -LOCAL job.inp"%(self.numberOfThreads.get())
         self.runJob(glideProg, args, cwd=self._getPath())
 
         self.runJob(propListerProg,
