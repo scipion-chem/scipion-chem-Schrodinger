@@ -34,3 +34,4 @@ from .protocol_preparation_grid_manual import ProtSchrodingerGridManual
 from .protocol_glide_docking import ProtSchrodingerGlideDocking
 from .protocol_sitemap import ProtSchrodingerSiteMap
 from .protocol_preparation_grid_sitemap import ProtSchrodingerGridSiteMap
+from .protocol_preparation_grid_adt import ProtSchrodingerGridADT

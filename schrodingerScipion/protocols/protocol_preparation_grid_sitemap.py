@@ -23,7 +23,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
 import os
 
 from pyworkflow.protocol.params import MultiPointerParam, BooleanParam, FloatParam, IntParam
