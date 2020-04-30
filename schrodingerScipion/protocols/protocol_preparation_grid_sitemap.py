@@ -113,7 +113,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     def preparationStep(self):
         for site in self.inputSites:
-            if type(site)==BindingSite:
+            if type(site.get())==BindingSite:
                 fnSite = site.get().getFileName()
                 fnTarget = site.get().structureFile.get()
                 self.prepareGrid(fnSite, fnTarget)
