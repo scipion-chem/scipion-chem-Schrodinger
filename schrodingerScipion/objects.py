@@ -38,19 +38,11 @@ class SchrodingerGrid(data.EMFile):
     """A search grid in the file format of Maestro"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
-        self.structurePtr = None
-
-    def setStructure(self, structurePtr):
-        self.structurePtr = structurePtr
 
 class SchrodingerBindingSites(data.EMFile):
     """A set of binding sites in the file format of Maestro"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
-        self.structurePtr = None
-
-    def setStructure(self, structurePtr):
-        self.structurePtr = structurePtr
 
 class SchrodingerPoses(data.EMFile):
     """A set of poses and a structure in the file format of Maestro"""

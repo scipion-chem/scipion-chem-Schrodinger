@@ -25,14 +25,14 @@
 # **************************************************************************
 import os
 
-from pyworkflow.protocol.params import MultiPointerParam, BooleanParam, FloatParam, IntParam, PointerParam
+from pyworkflow.protocol.params import MultiPointerParam, FloatParam, IntParam, PointerParam
 from pyworkflow.object import String, Float
 from pyworkflow.utils.path import createLink, makePath
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 
 from pwem.protocols import EMProtocol
 from schrodingerScipion.objects import SchrodingerGrid
-from bioinformatics.objects import BindingSite, SetOfBindingSites
+from bioinformatics.objects import BindingSite, SetOfBindingSites, AutodockGrid
 from bioinformatics import Plugin as bioinformatics_plugin
 from schrodingerScipion import Plugin as schrodinger_plugin
 
@@ -43,17 +43,11 @@ class ProtSchrodingerGridADT(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('useCoordinates', BooleanParam, default=False,
-                      label='Use coordinates')
-        line = form.addLine('Center (Angstroms)', condition='useCoordinates')
-        line.addParam('X', IntParam, default=0, label='X')
-        line.addParam('Y', IntParam, default=0, label='Y')
-        line.addParam('Z', IntParam, default=0, label='Z')
 
         form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
                        label='Input structure:', allowsNull=False)
         form.addParam('inputSites', MultiPointerParam, pointerClass="BindingSite, SetOfBindingSites, SchrodingerGrid",
-                       condition='not useCoordinates', label='Binding sites or grids:', allowsNull=False)
+                       label='Binding sites or grids:', allowsNull=False)
         form.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Library of compounds:', allowsNull=False,
                        help='They must be either mol2 or pdbqt')
@@ -102,25 +96,17 @@ class ProtSchrodingerGridADT(EMProtocol):
     def prepareGrid(self, site, fnLigandBase):
         fnSite = site.getFileName()
         fnTarget = self.inputStructure.get().getFileName()
-        if self.useCoordinates:
-            x = str(self.X.get())
-            y = str(self.Y.get())
-            z = str(self.Z.get())
         if type(site)==BindingSite:
             n = fnSite.split('@')[0]
-            if not self.useCoordinates:
-                x,y,z = self.getSiteCentroidSchrodingeBindingSite(fnSite)
+            x,y,z = self.getSiteCentroidSchrodingeBindingSite(fnSite)
         else:
             fnDir = os.path.split(fnSite)[0]
             fnLastDir = os.path.split(fnDir)[1]
-            if not self.useCoordinates:
-                x, y, z = self.getGridCentroid(fnDir, fnLastDir)
+            x, y, z = self.getGridCentroid(fnDir, fnLastDir)
             if "glide" in fnLastDir:
                 n = fnLastDir.split("_")[1]
             else:
                 n = fnLastDir.split("-")[1]
-            print(fnDir)
-            print(fnTarget)
 
         fnGridDir = "grid-%s" % n
         fnGridDirAbs = self._getPath(fnGridDir)
@@ -138,10 +124,15 @@ class ProtSchrodingerGridADT(EMProtocol):
 
         args = " -r %s -l %s -d %s"%(fnTargetLocal,self._getExtraPath("Ligands/"+fnLigandBase),
                                      self._getExtraPath("Ligands"))
-        args += " -o %s"%os.path.join(fnGridDirAbs,"library.gpf")
+        libraryGPF = os.path.join(fnGridDirAbs,"library.gpf")
+        args += " -o %s"%libraryGPF
 
         self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
                     bioinformatics_plugin.getADTPath('Utilities24/prepare_gpf4.py')+args)
+
+        args = "-p library.gpf -l library.glg"
+        self.runJob(bioinformatics_plugin.getAutodockPath("autogrid4"),args, cwd=fnGridDirAbs)
+        return fnGridDirAbs
 
     def preparationStep(self):
         # Create a link to all ligands
@@ -155,43 +146,29 @@ class ProtSchrodingerGridADT(EMProtocol):
         # Now create the grids
         for site in self.inputSites:
             if type(site.get())==BindingSite or type(site.get())==SchrodingerGrid:
-                self.prepareGrid(site.get(), fnBase)
+                gridDir = self.prepareGrid(site.get(), fnBase)
+                self.createOutputSingle(site.get(), gridDir, site)
             elif type(site.get())==SetOfBindingSites:
                 setOfSites = site
                 for sitee in setOfSites.get():
-                    self.prepareGrid(sitee, fnBase)
+                    gridDir = self.prepareGrid(sitee, fnBase)
+                    self.createOutputSingle(sitee, gridDir, setOfSites)
 
-    def createOutputSingle(self, fnSite, fnStructureFile, score, dscore, srcObj):
-        n = fnSite.split('@')[0]
+    def createOutputSingle(self, site, fnDir, srcObj):
+        score = None
+        dscore = None
+        if hasattr(site.get(), "score"):
+            score = site.get().score.get()
+            dscore = site.get().dscore.get()
 
-        fnDir = self._getPath("grid-%s" % n)
         if os.path.exists(fnDir):
-            fnBase = os.path.split(fnDir)[1]
-            fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
-            if os.path.exists(fnGrid):
-                gridFile = SchrodingerGrid(filename=fnGrid)
-                gridFile.structureFile = String(fnStructureFile)
+            gridFile = AutodockGrid(gridDir=fnDir)
+            gridFile.structureFile = String(site.getFileName())
+            if score:
                 gridFile.bindingSiteScore = Float(score)
                 gridFile.bindingSiteDScore = Float(dscore)
 
-                n = fnDir.split('grid-')[1]
-                outputDict = {'outputGrid%s' % n: gridFile}
-                self._defineOutputs(**outputDict)
-                self._defineSourceRelation(srcObj, gridFile)
-
-    def createOutput(self):
-        for site in self.inputSites:
-            if type(site)==BindingSite:
-                fnSite = site.get().getFileName()
-                fnStructureFile = site.get().structureFile.get()
-                score = site.get().score.get()
-                dscore = site.get().dscore.get()
-                self.createOutputSingle(fnSite, fnStructureFile, score, dscore, site)
-            else:
-                setOfSites = site
-                for sitee in setOfSites.get():
-                    fnSite = sitee.getFileName()
-                    fnStructureFile = sitee.structureFile.get()
-                    score = sitee.score.get()
-                    dscore = sitee.dscore.get()
-                    self.createOutputSingle(fnSite, fnStructureFile, score, dscore, setOfSites)
+            n = fnDir.split('grid-')[1]
+            outputDict = {'outputGrid%s' % n: gridFile}
+            self._defineOutputs(**outputDict)
+            self._defineSourceRelation(srcObj, gridFile)
