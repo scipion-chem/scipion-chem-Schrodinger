@@ -162,8 +162,8 @@ class ProtSchrodingerGridADT(EMProtocol):
             dscore = site.get().dscore.get()
 
         if os.path.exists(fnDir):
-            gridFile = AutodockGrid(gridDir=fnDir)
-            gridFile.structureFile = String(site.getFileName())
+            gridFile = AutodockGrid(filename=fnDir)
+            gridFile.structureFile = String(self.inputStructure.get().getFileName())
             if score:
                 gridFile.bindingSiteScore = Float(score)
                 gridFile.bindingSiteDScore = Float(dscore)
