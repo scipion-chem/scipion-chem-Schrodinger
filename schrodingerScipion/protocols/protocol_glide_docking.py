@@ -60,9 +60,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         form.addParam('maxkeep', IntParam, default=5000, expertLevel=LEVEL_ADVANCED,
                        label='No. Poses to keep per ligand:',
                        help='Number of poses per ligand to keep in initial phase of docking.')
-        form.addParam('maxkeep', IntParam, default=5000, expertLevel=LEVEL_ADVANCED,
-                       label='No. Poses to keep per ligand:',
-                       help='Number of poses per ligand to keep in initial phase of docking.')
         form.addParam('scoreCutoff', FloatParam, default=100.0, expertLevel=LEVEL_ADVANCED,
                        label='Score cutoff:',
                        help='Scoring window for keeping initial poses.')
