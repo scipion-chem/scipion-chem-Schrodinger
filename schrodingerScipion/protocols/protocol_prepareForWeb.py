@@ -97,14 +97,15 @@ class ProtSchrodingerPrepareForWeb(EMProtocol):
 
             headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "gridNumber", grids[getGridRun(mol)])
 
-            fnAux = self._getTmpPath("tmp.mae")
-            n, fnRaw = mol.poseFile.get().split('@')
-            args = "-n %s %s -o %s"%(n, fnRaw, fnAux)
-            self.runJob(progMaeSubset, args)
-
             fnOut = self._getExtraPath("pose_%d.pdb"%lineNo)
-            args = "-imae %s -opdb %s"%(fnAux, fnOut)
-            self.runJob(progStructConvert, args)
+            if not os.path.exists(fnOut):
+                fnAux = self._getTmpPath("tmp.mae")
+                n, fnRaw = mol.poseFile.get().split('@')
+                args = "-n %s %s -o %s"%(n, fnRaw, fnAux)
+                self.runJob(progMaeSubset, args)
+
+                args = "-imae %s -opdb %s"%(fnAux, fnOut)
+                self.runJob(progStructConvert, args)
 
             headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "poseFile", os.path.split(fnOut)[1])
 

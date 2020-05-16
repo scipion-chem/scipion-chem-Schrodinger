@@ -127,8 +127,9 @@ class ProtSchrodingerLigPrep(EMProtocol):
                     continue
 
                 fnMae = "extra/%s.maegz" % fnRoot
-                args+=" -omae %s"%fnMae
-                self.runJob(progLigPrep,args,cwd=self._getPath())
+                if not os.path.exists(fnMae):
+                    args+=" -omae %s"%fnMae
+                    self.runJob(progLigPrep,args,cwd=self._getPath())
 
                 if os.path.exists(self._getPath(fnMae)):
                     fnOmae="extra/o%s.maegz"%fnRoot
