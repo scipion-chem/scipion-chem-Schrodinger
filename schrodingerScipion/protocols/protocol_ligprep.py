@@ -30,7 +30,7 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, Bool
 from pyworkflow.utils.path import copyFile, moveFile, cleanPath
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
-from bioinformatics.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
 
 class ProtSchrodingerLigPrep(EMProtocol):
     """Schrodinger's LigPrep is a program to prepare ligand libraries"""
@@ -83,8 +83,8 @@ class ProtSchrodingerLigPrep(EMProtocol):
         progLigPrep=Plugin.getHome('ligprep')
         progStructConvert=Plugin.getHome('utilities/structconvert')
 
-        outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMols')
-        outputSmallMoleculesDropped = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMolsDropped')
+        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMols')
+        outputSmallMoleculesDropped = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMolsDropped')
 
         for mol in self.inputSmallMols.get():
             fnSmall = mol.smallMoleculeFile.get()
@@ -152,6 +152,7 @@ class ProtSchrodingerLigPrep(EMProtocol):
                     smallMolecule = SmallMolecule(smallMolFilename=fn)
                     outputSmallMolecules.append(smallMolecule)
 
+        print(outputSmallMolecules)
         if len(outputSmallMolecules)>0:
             self._defineOutputs(outputSmallMols=outputSmallMolecules)
             self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)

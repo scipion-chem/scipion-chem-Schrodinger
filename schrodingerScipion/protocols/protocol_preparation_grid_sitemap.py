@@ -31,7 +31,7 @@ from pyworkflow.utils.path import createLink, makePath
 
 from pwem.protocols import EMProtocol
 from schrodingerScipion.objects import SchrodingerGrid
-from bioinformatics.objects import BindingSite, SetOfBindingSites
+from pwchem.objects import BindingSite, SetOfBindingSites
 
 from schrodingerScipion import Plugin as schrodinger_plugin
 

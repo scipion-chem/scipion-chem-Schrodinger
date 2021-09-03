@@ -30,7 +30,7 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, Bool
 from pyworkflow.utils.path import copyFile, moveFile, cleanPath
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
-from bioinformatics.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
 
 class ProtSchrodingerPrepareForWeb(EMProtocol):
     """Prepare a set of small molecules for the web"""

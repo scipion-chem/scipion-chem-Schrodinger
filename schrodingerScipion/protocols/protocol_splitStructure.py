@@ -32,7 +32,7 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, St
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerAtomStruct
-from bioinformatics.objects import SmallMolecule
+from pwchem.objects import SmallMolecule
 
 class ProtSchrodingerSplitStructure(EMProtocol):
     """Split a structure into different pieces"""

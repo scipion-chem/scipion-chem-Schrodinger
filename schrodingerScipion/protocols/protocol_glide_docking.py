@@ -31,7 +31,7 @@ import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import createLink, makePath
 from .protocol_convert import inputArg
-from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.utils.utils import putMol2Title, sortDockingResults
 from schrodingerScipion.objects import SchrodingerPoses
@@ -240,7 +240,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
         idxSorted=sortDockingResults(smallList)
 
-        outputSet = SetOfSmallMolecules().create(path=self._getPath())
+        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
         for idx in idxSorted:
             small=smallList[idx]
             outputSet.append(small)

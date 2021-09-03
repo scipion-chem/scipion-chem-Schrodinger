@@ -33,7 +33,7 @@ import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerBindingSites
-from bioinformatics.objects import BindingSite, SetOfBindingSites
+from pwchem.objects import BindingSite, SetOfBindingSites
 
 class ProtSchrodingerSiteMap(EMProtocol):
     """Calls sitemap to predict possible binding sites"""
@@ -80,7 +80,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
         fnBinding = self._getPath("job_out.maegz")
         fnStructure = self.inputStructure.get().getFileName()
         if os.path.exists(fnBinding):
-            setOfBindings = SetOfBindingSites().create(path=self._getPath())
+            setOfBindings = SetOfBindingSites().create(outputPath=self._getPath())
             for fn in glob.glob(self._getPath("job_site_*_eval.log")):
                 score, size, dscore, volume, exposure, enclosure, contact, phobic, philic, balance, donacc = parseEvalLog(fn)
                 n = fn.split("job_site_")[1].replace("_eval.log","")

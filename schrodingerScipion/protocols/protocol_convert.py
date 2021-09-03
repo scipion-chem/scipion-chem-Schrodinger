@@ -31,7 +31,7 @@ from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerAtomStruct
 from schrodingerScipion.utils.utils import putMol2Title
-from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 def inputArg(fn):
     if fn.endswith('.mae') or fn.endswith('.maegz'):
@@ -103,7 +103,7 @@ class ProtSchrodingerConvert(EMProtocol):
         progStructConvert=Plugin.getHome('utilities/structconvert')
 
         if self.inputType==0:
-            outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMols')
+            outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMols')
 
             for mol in self.inputSmallMols.get():
                 fnSmall = mol.smallMoleculeFile.get()
