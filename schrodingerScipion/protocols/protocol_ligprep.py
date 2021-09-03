@@ -152,7 +152,6 @@ class ProtSchrodingerLigPrep(EMProtocol):
                     smallMolecule = SmallMolecule(smallMolFilename=fn)
                     outputSmallMolecules.append(smallMolecule)
 
-        print(outputSmallMolecules)
         if len(outputSmallMolecules)>0:
             self._defineOutputs(outputSmallMols=outputSmallMolecules)
             self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
