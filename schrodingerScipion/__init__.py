@@ -43,7 +43,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar('SCHRODINGER_HOME', 'Schrodinger2021-1')
+        cls._defineEmVar('SCHRODINGER_HOME', 'Schrodinger2021-3')
 
     @classmethod
     def defineBinaries(cls, env):
