@@ -27,7 +27,7 @@ import glob
 import os
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, IntParam
+from pyworkflow.protocol.params import PointerParam, IntParam, StringParam
 from pyworkflow.utils.path import createLink
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
@@ -44,6 +44,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
         form.addSection(label='Input')
         form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct",
                        label='Atomic Structure:', allowsNull=False)
+        form.addParam('jobName', StringParam, label='Job Name:', default='job', expertLevel=LEVEL_ADVANCED)
         form.addParam('maxsites', IntParam, expertLevel=LEVEL_ADVANCED, default=5,
                        label='Number of predicted sites:')
 
@@ -59,32 +60,31 @@ class ProtSchrodingerSiteMap(EMProtocol):
         createLink(self.inputStructure.get().getFileName(), fnIn)
         fnIn = os.path.join('extra', os.path.split(fnIn)[1])
 
-        args='-WAIT -prot %s -j job -keeplogs -keepeval'%fnIn
+        args='-WAIT -prot %s -j %s -keepvolpts' % (fnIn, self.jobName.get())
         args+=" -maxsites %d"%self.maxsites.get()
 
         self.runJob(prog,args,cwd=self._getPath())
 
     def createOutput(self):
-        def parseEvalLog(fnLog):
-            fh=open(fnLog)
-            state = 0
-            for line in fh.readlines():
-                if state==0 and line.startswith("SiteScore"):
-                    state=1
-                elif state==1:
-                    # SiteScore size   Dscore  volume  exposure enclosure contact  phobic   philic   balance  don/acc
-                    tokens = [float(x) for x in line.split()]
-                    return tokens
-            return None
+        def parseLogPockets(fnLog):
+            pocketsDic, pId = {}, 1
+            with open(fnLog) as fh:
+                for line in fh:
+                    if line.startswith("SiteScore"):
+                        # SiteScore size   Dscore  volume  exposure enclosure contact  phobic   philic   balance  don/acc
+                        pocketsDic[pId] = [float(x) for x in fh.readline().split()]
+                        pId += 1
+            return pocketsDic
 
-        fnBinding = self._getPath("job_out.maegz")
+        fnBinding = self._getPath("{}_out.maegz".format(self.jobName.get()))
         fnStructure = self.inputStructure.get().getFileName()
+        fnLog = self._getPath('{}.log'.format(self.jobName.get()))
         if os.path.exists(fnBinding):
             setOfBindings = SetOfBindingSites().create(outputPath=self._getPath())
-            for fn in glob.glob(self._getPath("job_site_*_eval.log")):
-                score, size, dscore, volume, exposure, enclosure, contact, phobic, philic, balance, donacc = parseEvalLog(fn)
-                n = fn.split("job_site_")[1].replace("_eval.log","")
-                bindingSite = BindingSite(bindingSiteFilename="%s@%s"%(n,fnBinding))
+            pocketsDic = parseLogPockets(fnLog)
+            for pocketId in pocketsDic:
+                score, size, dscore, volume, exposure, enclosure, contact, phobic, philic, balance, donacc = pocketsDic[pocketId]
+                bindingSite = BindingSite(bindingSiteFilename="%s@%s"%(pocketId,fnBinding))
                 bindingSite.score     = pwobj.Float(score)
                 bindingSite.size      = pwobj.Float(size)
                 bindingSite.dscore    = pwobj.Float(dscore)
@@ -92,7 +92,6 @@ class ProtSchrodingerSiteMap(EMProtocol):
                 bindingSite.exposure  = pwobj.Float(exposure)
                 bindingSite.enclosure = pwobj.Float(enclosure)
                 bindingSite.contact   = pwobj.Float(contact)
-                bindingSite.phobic    = pwobj.Float(phobic)
                 bindingSite.phobic    = pwobj.Float(phobic)
                 bindingSite.philic    = pwobj.Float(philic)
                 bindingSite.balance   = pwobj.Float(balance)

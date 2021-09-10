@@ -24,3 +24,5 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+SCHRODINGER_HOME = 'SCHRODINGER_HOME' #Acceso by Plugin.getHome()

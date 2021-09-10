@@ -31,19 +31,21 @@ This package contains protocols interfacing Schrodinger's Maestro
 # Useful reference: http://www.bi.cs.titech.ac.jp/mga_glide/xglide_mga.py
 
 import glob
-import os
+import os, fnmatch
 import pwem
 import pyworkflow.utils as pwutils
 from .bibtex import _bibtexStr
+from .constants import *
 
 _logo = 'schrodinger.png'
+_version = '2021-3'
 
 class Plugin(pwem.Plugin):
-    _homeVar = 'SCHRODINGER_HOME'
+    _homeVar = SCHRODINGER_HOME
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar('SCHRODINGER_HOME', 'Schrodinger2021-3')
+        cls._defineEmVar(SCHRODINGER_HOME, cls.getSchrodingerDir())
 
     @classmethod
     def defineBinaries(cls, env):
@@ -89,3 +91,24 @@ class Plugin(pwem.Plugin):
     def runSchrodinger(cls, protocol, program, args, cwd=None):
         """ Run rdkit command from a given protocol. """
         protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+
+    # ---------------------------------- Utils functions  -----------------------
+    @staticmethod
+    def find(path, pattern):  # This function is analogous to linux find (case of folders)
+        paths = []
+        for root, dirs, files in os.walk(path):
+            for name in dirs:
+                if fnmatch.fnmatch(name, pattern):
+                    paths.append(os.path.join(root, name))
+        return paths
+
+    @classmethod
+    def getSchrodingerDir(cls, fn=""):
+        fileList = Plugin.find('/home', "Schrodinger{}".format(_version))
+        if len(fileList) == 0:
+            return None
+        else:
+            if fn == "":
+                return fileList[0]
+            else:
+                return os.path.join(fileList[0], fn)
