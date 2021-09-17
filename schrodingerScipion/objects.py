@@ -62,7 +62,7 @@ class SitemapPocket(ProteinPocket):
                 self.properties['class'] = 'SiteMap'
                 kwargs.update(self.getKwargs(self.properties, AM))
 
-        super().__init__(filename, proteinFile, **kwargs)
+        super().__init__(filename, proteinFile, logFile, **kwargs)
         if hasattr(self, 'pocketId'):
             self.setObjId(self.pocketId)
 
