@@ -105,7 +105,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getSchrodingerDir(cls, fn=""):
-        fileList = Plugin.find(getScipionHome(), "Schrodinger{}".format(_version))
+        fileList = Plugin.find(getScipionHome()+'/software/em', "Schrodinger{}".format(_version))
         if len(fileList) == 0:
             return None
         else:
