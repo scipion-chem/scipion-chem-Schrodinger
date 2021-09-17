@@ -98,10 +98,6 @@ class ProtSchrodingerSiteMap(EMProtocol):
             self._defineOutputs(outputSetBindingSites=setOfBindings)
             self._defineSourceRelation(self.inputStructure, setOfBindings)
 
-            mae = SchrodingerBindingSites(filename=fnBinding)
-            self._defineOutputs(outputBindingSites=mae)
-            self._defineSourceRelation(self.inputStructure, mae)
-
             proteinFile, pocketFiles = self.createOutputPDBFile()
             outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
             for oFile in pocketFiles:
