@@ -45,7 +45,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(SCHRODINGER_HOME, cls.getSchrodingerDir())
+        cls._defineEmVar(SCHRODINGER_HOME, 'Schrodinger{}'.format(_version))
 
     @classmethod
     def defineBinaries(cls, env):
@@ -101,14 +101,3 @@ class Plugin(pwem.Plugin):
                 if fnmatch.fnmatch(name, pattern):
                     paths.append(os.path.join(root, name))
         return paths
-
-    @classmethod
-    def getSchrodingerDir(cls, fn=""):
-        fileList = Plugin.find('/home', "Schrodinger{}".format(_version))
-        if len(fileList) == 0:
-            return None
-        else:
-            if fn == "":
-                return fileList[0]
-            else:
-                return os.path.join(fileList[0], fn)

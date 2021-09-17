@@ -76,3 +76,26 @@ def sortDockingResults(smallList):
         i+=1
 
     return np.argsort(h)
+
+def parseLogPockets(fnLog):
+    pocketsDic, pId = {}, 1
+    with open(fnLog) as fh:
+        for line in fh:
+            if line.startswith("SiteScore"):
+                # SiteScore size   Dscore  volume  exposure enclosure contact  phobic   philic   balance  don/acc
+                pocketsDic[pId] = [float(x) for x in fh.readline().split()]
+                pId += 1
+    return pocketsDic
+
+def parseLogProperties(fnLog, idx=None):
+    pDic, pId = {}, 1
+    with open(fnLog) as fh:
+        for line in fh:
+            if line.startswith("SiteScore"):
+                # SiteScore size   Dscore  volume  exposure enclosure contact  phobic   philic   balance  don/acc
+                if idx == pId:
+                    keys = line.split()
+                    values = [float(x) for x in fh.readline().split()]
+                    pDic = dict(zip(keys, values))
+                pId += 1
+    return pDic
