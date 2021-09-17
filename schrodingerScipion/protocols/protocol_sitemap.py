@@ -33,7 +33,7 @@ from pyworkflow.utils.path import createLink
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
-from schrodingerScipion.objects import SchrodingerBindingSites
+from schrodingerScipion.objects import SchrodingerBindingSites, SchrodingerAtomStruct
 from pwchem.objects import BindingSite, SetOfBindingSites, SetOfPockets
 from pwchem.constants import *
 from pwchem.utils import writePDBLine, writeSurfPML
@@ -49,7 +49,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
         form.addSection(label='Input')
         form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct",
                        label='Atomic Structure:', allowsNull=False)
-        form.addParam('jobName', StringParam, label='Job Name:', default='job', expertLevel=LEVEL_ADVANCED)
+        form.addParam('jobName', StringParam, label='Job Name:', default='', expertLevel=LEVEL_ADVANCED)
         form.addParam('maxsites', IntParam, expertLevel=LEVEL_ADVANCED, default=5,
                        label='Number of predicted sites:')
 
@@ -65,7 +65,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
         createLink(self.getInputFileName(), fnIn)
         fnIn = os.path.join('extra', os.path.split(fnIn)[1])
 
-        args='-WAIT -prot %s -j %s -keepvolpts' % (fnIn, self.jobName.get())
+        args='-WAIT -prot %s -j %s -keepvolpts' % (fnIn, self.getJobName())
         args+=" -maxsites %d"%self.maxsites.get()
 
         self.runJob(prog, args, cwd=self._getPath())
@@ -102,45 +102,49 @@ class ProtSchrodingerSiteMap(EMProtocol):
             self._defineOutputs(outputBindingSites=mae)
             self._defineSourceRelation(self.inputStructure, mae)
 
-            pdbOutFile, pocketFiles = self.createOutputPDBFile()
-            self.createPML()
+            proteinFile, pocketFiles = self.createOutputPDBFile()
+            outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
+            for oFile in pocketFiles:
+              pock = SitemapPocket(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog))
+              outPockets.append(pock)
+
+            pdbOutFile = outPockets.buildPocketsFiles()
+            self._defineOutputs(outputPockets=outPockets)
             outStruct = AtomStruct(pdbOutFile)
             self._defineOutputs(outputAtomStruct=outStruct)
 
-            outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
-            for oFile in pocketFiles:
-              pock = SitemapPocket(os.path.abspath(oFile), os.path.abspath(pdbOutFile), os.path.abspath(fnLog))
-              outPockets.append(pock)
-            self._defineOutputs(outputPockets=outPockets)
-
-            pmlFileName = '{}/{}_surf.pml'.format(self._getExtraPath(), self.jobName.get())
-            writeSurfPML(outPockets, pmlFileName)
-
+            outSchStruct = SchrodingerAtomStruct()
+            outSchStruct.setFileName(self.getMaestroOutput())
+            self._defineOutputs(outputSchrodingerAtomStruct=outSchStruct)
 
     def _citations(self):
         return ['Halgren2009']
 
 
 ########################## UTILS FUNCTIONS
+    def getJobName(self):
+      if self.jobName.get() != '':
+        return self.jobName.get()
+      else:
+        return self.getInputFileName().split('/')[-1].split('.')[0]
 
     def createOutputPDBFile(self):
       maeFile = os.path.abspath(self.getMaestroOutput())
-      pdbOutFile = self.jobName.get()+'_out.pdb'
-      outDir = self._getExtraPath()
-      pdbFiles = self.maestro2pdb(maeFile, pdbOutFile, outDir=outDir)
+      pdbOutFile = self.getJobName()+'_out.pdb'
+      pdbFiles = self.maestro2pdb(maeFile, pdbOutFile, outDir=self._getExtraPath())
 
       # Creates a pdb with the HETATM corresponding to pocket points
-      pdbFiles = self.mergePDBFiles(pdbFiles, pdbOutFile)
-      return self._getExtraPath(pdbOutFile), pdbFiles
+      pdbFiles, proteinFile = self.mergePDBFiles(pdbFiles, pdbOutFile)
+      return proteinFile, pdbFiles
 
     def getMaestroOutput(self):
-        return self._getPath("{}_out.maegz".format(self.jobName.get()))
+        return self._getPath("{}_out.maegz".format(self.getJobName()))
 
     def getInputFileName(self):
         return self.inputStructure.get().getFileName()
 
     def getOutputLogFile(self):
-        return self._getPath('{}.log'.format(self.jobName.get()))
+        return self._getPath('{}.log'.format(self.getJobName()))
 
     def maestro2pdb(self, maeIn, pdbOut, outDir):
       '''Convert a maestro file (.mae) to a pdb file(s)
@@ -153,7 +157,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
       try:
           self.runJob(prog, args, cwd=self._getExtraPath())
       except CalledProcessError as exception:
-          #TODO: ask to Schrodinger why it returns a code 2 if it worked properly
+          # ask to Schrodinger why it returns a code 2 if it worked properly
           if exception.returncode != 2:
               raise exception
 
@@ -190,8 +194,8 @@ class ProtSchrodingerSiteMap(EMProtocol):
           f.write(hetatmLines)
           f.write('\nTER')
 
-        pdbFiles = self.renamePDBFiles(pdbFiles, idsDic)
-        return pdbFiles
+        pdbFiles, proteinFile = self.renamePDBFiles(pdbFiles, idsDic)
+        return pdbFiles, proteinFile
 
     def renamePDBFiles(self, pdbFiles, idsDic):
         tmpFiles = []
@@ -202,13 +206,14 @@ class ProtSchrodingerSiteMap(EMProtocol):
                 shutil.move(pFile, tmpFile)
                 tmpFiles.append(tmpFile)
             else:
-                shutil.move(pFile, pFile.replace('out-{}.pdb'.format(fileId), 'protein.pdb'))
+                proteinFile = pFile.replace('out-{}.pdb'.format(fileId), 'protein.pdb')
+                shutil.move(pFile, proteinFile)
 
         finalPDBFiles = []
         for tmpFile in tmpFiles:
             finalPDBFiles.append(tmpFile.replace('tmp.pdb', '.pdb'))
             shutil.move(tmpFile, finalPDBFiles[-1])
-        return finalPDBFiles
+        return finalPDBFiles, proteinFile
 
     def getPDBName(self, pdbOut):
       if '.pdb' in pdbOut:
@@ -225,18 +230,6 @@ class ProtSchrodingerSiteMap(EMProtocol):
         if pdbName in outFile and '.pdb' in outFile:
           pdbFiles.append(os.path.join(outDir, outFile))
       return pdbFiles
-
-    def createPML(self):
-      outFile = self._getExtraPath(self.jobName.get()+'_out.pdb')
-      pmlFile = self._getExtraPath('{}.pml'.format(self.jobName.get()))
-      # Creates the pml for pymol visualization
-      with open(pmlFile, 'w') as f:
-        f.write(PML_STR.format(outFile.split('/')[-1]))
-
-
-
-
-
 
 
 

@@ -33,6 +33,7 @@ This package contains protocols interfacing Schrodinger's Maestro
 import glob
 import os, fnmatch
 import pwem
+from scipion.utils import getScipionHome
 import pyworkflow.utils as pwutils
 from .bibtex import _bibtexStr
 from .constants import *
@@ -104,7 +105,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getSchrodingerDir(cls, fn=""):
-        fileList = Plugin.find('/home', "Schrodinger{}".format(_version))
+        fileList = Plugin.find(getScipionHome(), "Schrodinger{}".format(_version))
         if len(fileList) == 0:
             return None
         else:
