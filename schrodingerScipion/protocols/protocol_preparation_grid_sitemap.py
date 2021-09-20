@@ -23,15 +23,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
+import os, shutil
+from subprocess import CalledProcessError
 
-from pyworkflow.protocol.params import MultiPointerParam, BooleanParam, FloatParam, IntParam
+from pyworkflow.protocol.params import MultiPointerParam, STEPS_PARALLEL, PointerParam, BooleanParam, \
+    FloatParam, IntParam, EnumParam
 from pyworkflow.object import String, Float
 from pyworkflow.utils.path import createLink, makePath
 
 from pwem.protocols import EMProtocol
-from schrodingerScipion.objects import SchrodingerGrid
-from pwchem.objects import BindingSite, SetOfBindingSites
+from schrodingerScipion.objects import SchrodingerGrid, SetOfSchrodingerGrids
 
 from schrodingerScipion import Plugin as schrodinger_plugin
 
@@ -40,29 +41,64 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
     _label = 'grid definition binding site (glide)'
     _program = ""
 
+    def __init__(self, **kwargs):
+        EMProtocol.__init__(self, **kwargs)
+        self.stepsExecutionMode = STEPS_PARALLEL
+
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputSites', MultiPointerParam, pointerClass="BindingSite, SetOfBindingSites",
-                       label='Binding sites:', allowsNull=False)
-        line = form.addLine('Inner box (Angstroms)')
+        form.addParam('inputSetsOfPockets', MultiPointerParam, pointerClass="SetOfPockets",
+                      label='Sets of Pockets:', allowsNull=False,
+                      help='Sets of known or predicted protein pockets to center the grid on')
+        form.addParam('inputSchAtomStruct', PointerParam, pointerClass="SchrodingerAtomStruct",
+                      label='Schrodinger Atom Structure target :', allowsNull=False,
+                      help='Target atomic structure prepared with Schrodinger, containing the necessary mae file')
+
+        form.addSection(label='Parameters')
+        group = form.addGroup('Inner box')
+        group.addParam('innerAction', EnumParam, default=0, label='Determine inner box: ',
+                      choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
+                      help='How to set the inner box.'
+                           'Manually: you will manually set the same x,y,z for every pocket'
+                           'PocketSize: the diameter * n of each pocket will be used. You can set n')
+
+        line = group.addLine('Inner box (Angstroms)', condition='innerAction==0',
+                             help='The docked ligand mass center must be inside the inner box')
         line.addParam('innerX', IntParam, default=10, label='X')
         line.addParam('innerY', IntParam, default=10, label='Y')
         line.addParam('innerZ', IntParam, default=10, label='Z')
 
-        line = form.addLine('Outer box (Angstroms)')
+        group.addParam('diameterNin', FloatParam, default=0.3, condition='innerAction==1',
+                       label='Size of inner box vs diameter: ',
+                       help='The diameter * n of each pocket will be used as inner box side')
+
+        group = form.addGroup('Outer box')
+        group.addParam('outerAction', EnumParam, default=0, label='Determine outer box: ',
+                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
+                       help='How to set the outer box.'
+                            'Manually: you will manually set the same x,y,z for every pocket'
+                            'PocketSize: the diameter * n of each pocket will be used. You can set n')
+
+        line = group.addLine('Outer box (Angstroms)', condition='outerAction==0',
+                            help='The docked ligand atoms must be inside the outer box.')
         line.addParam('outerX', IntParam, default=30, label='X')
         line.addParam('outerY', IntParam, default=30, label='Y')
         line.addParam('outerZ', IntParam, default=30, label='Z')
 
-        form.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
+        group.addParam('diameterNout', FloatParam, default=1.2, condition='outerAction==1',
+                       label='Size of outer box vs diameter: ',
+                       help='The diameter * n of each pocket will be used as outer box side')
+
+        group = form.addGroup('Hydrogen bonds')
+        group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
                       help='Accept aromatic hydrogens as potential H-bond donors.')
-        form.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
+        group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
                       condition='HbondDonorAromH',
                       help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
                            'The cutoff is applied to the actual (signed) charge, not the absolute value.')
-        form.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
+        group.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
                       help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
-        form.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
+        group.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
                            '(noncovalent interaction) donors')
 
@@ -70,94 +106,104 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('preparationStep')
-        self._insertFunctionStep('createOutput')
+        prepSteps = []
+        makePath(self._getPath('grids'))
+        for i, pocketSet in enumerate(self.inputSetsOfPockets):
+            for pocket in pocketSet.get():
+                pStep = self._insertFunctionStep('preparationStep', pocket.clone(), i, prerequisites=[])
+                prepSteps.append(pStep)
 
-    def prepareGrid(self, fnSite, fnTarget):
-        n = fnSite.split('@')[0]
+        self._insertFunctionStep('createOutputStep', prerequisites=prepSteps)
 
-        args = schrodinger_plugin.getPluginHome('utils/schrodingerUtils.py') + " centroid %s %s" % \
-               (fnSite, self._getTmpPath("centroid.txt"))
-        schrodinger_plugin.runSchrodinger(self, "python3", args)
-        fh = open(self._getTmpPath("centroid.txt"))
-        line = fh.readline()
-        fh.close()
-        x, y, z = line.split()
+    def preparationStep(self, pocket, setId):
+        x, y, z = pocket.calculateMassCenter()
 
-        fnGridDir = "grid-%s" % n
+        fnGridDir = self.getGridDir(setId, pocket.getObjId())
+        gridName = self.getGridName(setId, pocket.getObjId())
         makePath(self._getPath(fnGridDir))
-        fnTargetLocal = self._getPath("%s/%s.maegz" % (fnGridDir, fnGridDir))
-        createLink(fnTarget, fnTargetLocal)
+        fnTargetLocal = "%s/%s.maegz" % (self._getPath(fnGridDir), gridName)
+        shutil.copy(self.getInputMaeFile(), fnTargetLocal)
 
-        fnJob = self._getPath('%s/%s.inp' % (fnGridDir, fnGridDir))
+        fnJob = '%s/%s.inp' % (self._getPath(fnGridDir), gridName)
         fh = open(fnJob, 'w')
-        fh.write("GRIDFILE %s.zip\n" % fnGridDir)
+        fh.write("GRIDFILE %s.zip\n" % gridName)
         fh.write("OUTPUTDIR %s\n" % fnGridDir)
-        fh.write("RECEP_FILE %s.maegz\n" % fnGridDir)
+        fh.write("RECEP_FILE %s\n" % fnTargetLocal.split('/')[-1])
         fh.write("REC_MAECHARGES True\n")
         fh.write("HBOND_DONOR_AROMH %s\n" % self.HbondDonorAromH.get())
         if self.HbondDonorAromH.get():
             fh.write("HBOND_DONOR_AROMH_CHARGE %f\n" % self.HbondDonorAromHCharge.get())
         fh.write("HBOND_ACCEP_HALO %s\n" % self.HbondAcceptHalo.get())
         fh.write("HBOND_DONOR_HALO %s\n" % self.HbondDonorHalo.get())
-        fh.write("INNERBOX %d,%d,%d\n" % (self.innerX.get(), self.innerY.get(), self.innerZ.get()))
-        fh.write("ACTXRANGE %d\n" % self.outerX.get())
-        fh.write("ACTYRANGE %d\n" % self.outerY.get())
-        fh.write("ACTZRANGE %d\n" % self.outerZ.get())
-        fh.write("OUTERBOX %d,%d,%d\n" % (self.outerX.get(), self.outerY.get(), self.outerZ.get()))
+        fh.write("INNERBOX %d,%d,%d\n" % (self.getInnerBox(pocket)))
+        fh.write("ACTXRANGE %d\n" % self.getOuterBox(pocket)[0])
+        fh.write("ACTYRANGE %d\n" % self.getOuterBox(pocket)[1])
+        fh.write("ACTZRANGE %d\n" % self.getOuterBox(pocket)[2])
+        fh.write("OUTERBOX %d,%d,%d\n" % (self.getOuterBox(pocket)))
         fh.write("GRID_CENTER %s,%s,%s\n" % (x, y, z))
         fh.close()
 
-        args = "-WAIT -LOCAL -NJOBS %d %s.inp" % (self.numberOfThreads.get(),fnGridDir)
+        args = "-WAIT -LOCAL %s.inp" % (gridName)
         self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=self._getPath(fnGridDir))
 
-    def preparationStep(self):
-        for site in self.inputSites:
-            if type(site.get())==BindingSite:
-                fnSite = site.get().getFileName()
-                fnTarget = site.get().structureFile.get()
-                self.prepareGrid(fnSite, fnTarget)
-            else:
-                setOfSites = site
-                for sitee in setOfSites.get():
-                    fnSite = sitee.getFileName()
-                    fnTarget = sitee.structureFile.get()
-                    self.prepareGrid(fnSite, fnTarget)
+    def createOutputStep(self):
+        outGrids = SetOfSchrodingerGrids(filename=self._getPath('SchGrids.sqlite'))
+        for setId, pocketSet in enumerate(self.inputSetsOfPockets):
+            for pocket in pocketSet.get():
+                fnDir = self._getPath(self.getGridDir(setId, pocket.getObjId()))
+                if os.path.exists(fnDir):
+                    fnBase = os.path.split(fnDir)[1]
+                    fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
+                    if os.path.exists(fnGrid):
+                        SchGrid = SchrodingerGrid(filename=fnGrid, **self.getGridArgs(pocket))
+                        SchGrid.structureFile = String(self.getInputMaeFile())
+                        SchGrid.pocketScore = Float(pocket.getScore())
+                        # gridFile.bindingSiteDScore = Float(dscore)
 
-    def createOutputSingle(self, fnSite, fnStructureFile, score, dscore, srcObj):
-        n = fnSite.split('@')[0]
+                        outGrids.append(SchGrid)
+        self._defineOutputs(outputGrids=outGrids)
 
-        fnDir = self._getPath("grid-%s" % n)
-        if os.path.exists(fnDir):
-            fnBase = os.path.split(fnDir)[1]
-            fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
-            if os.path.exists(fnGrid):
-                gridFile = SchrodingerGrid(filename=fnGrid)
-                gridFile.structureFile = String(fnStructureFile)
-                gridFile.bindingSiteScore = Float(score)
-                gridFile.bindingSiteDScore = Float(dscore)
+    ############################ Utils functions ###########################################
 
-                n = fnDir.split('grid-')[1]
-                outputDict = {'outputGrid%s' % n: gridFile}
-                self._defineOutputs(**outputDict)
-                self._defineSourceRelation(srcObj, gridFile)
+    def pdb2maestro(self, pdbIn, maeOut):
+        prog = schrodinger_plugin.getHome('utilities/pdbconvert')
+        args = '-ipdb {} -omae {}'.format(os.path.abspath(pdbIn), os.path.abspath(maeOut))
+        try:
+            self.runJob(prog, args, cwd=self._getExtraPath())
+        except CalledProcessError as exception:
+            # ask to Schrodinger why it returns a code 2 if it worked properly
+            if exception.returncode != 2:
+                raise exception
+        return maeOut
 
-    def createOutput(self):
-        for site in self.inputSites:
-            if type(site)==BindingSite:
-                fnSite = site.get().getFileName()
-                fnStructureFile = site.get().structureFile.get()
-                score = site.get().score.get()
-                dscore = site.get().dscore.get()
-                self.createOutputSingle(fnSite, fnStructureFile, score, dscore, site)
-            else:
-                setOfSites = site
-                for sitee in setOfSites.get():
-                    fnSite = sitee.getFileName()
-                    fnStructureFile = sitee.structureFile.get()
-                    score = sitee.score.get()
-                    dscore = sitee.dscore.get()
-                    self.createOutputSingle(fnSite, fnStructureFile, score, dscore, setOfSites)
+    def getInputMaeFile(self):
+        return self.inputSchAtomStruct.get().getFileName()
+
+    def getGridDir(self, setId, pocketId):
+        return 'grids/{}'.format(self.getGridName(setId, pocketId))
+
+    def getGridName(self, setId, pocketId):
+        return 'grid_{}-{}'.format(setId, pocketId)
+
+    def getInnerBox(self, pocket):
+        if self.innerAction.get() == 0:
+            return self.innerX.get(), self.innerY.get(), self.innerZ.get()
+        else:
+            diam = pocket.getDiameter() * self.diameterNin.get()
+            return diam, diam, diam
+
+    def getOuterBox(self, pocket):
+        if self.outerAction.get() == 0:
+            return self.outerX.get(), self.outerY.get(), self.outerZ.get()
+        else:
+            diam = pocket.getDiameter() * self.diameterNout.get()
+            return diam, diam, diam
+
+    def getGridArgs(self, pocket):
+        oBox, iBox = self.getOuterBox(pocket), self.getInnerBox(pocket)
+        return {'innerX': iBox[0], 'innerY': iBox[1], 'innerZ': iBox[2],
+                'outerX': oBox[0], 'outerY': oBox[1], 'outerZ': oBox[2]}
+
 
     def _validate(self):
         errors = []

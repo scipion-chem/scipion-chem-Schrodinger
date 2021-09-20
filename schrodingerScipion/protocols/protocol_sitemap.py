@@ -75,33 +75,11 @@ class ProtSchrodingerSiteMap(EMProtocol):
         fnStructure = self.getInputFileName()
         fnLog = self.getOutputLogFile()
         if os.path.exists(fnBinding):
-            setOfBindings = SetOfBindingSites().create(outputPath=self._getPath())
-            pocketsDic = parseLogPockets(fnLog)
-            for pocketId in pocketsDic:
-                score, size, dscore, volume, exposure, enclosure, contact, phobic, philic, balance, donacc = pocketsDic[pocketId]
-                bindingSite = BindingSite(bindingSiteFilename="%s@%s"%(pocketId,fnBinding))
-                bindingSite.score     = pwobj.Float(score)
-                bindingSite.size      = pwobj.Float(size)
-                bindingSite.dscore    = pwobj.Float(dscore)
-                bindingSite.volume    = pwobj.Float(volume)
-                bindingSite.exposure  = pwobj.Float(exposure)
-                bindingSite.enclosure = pwobj.Float(enclosure)
-                bindingSite.contact   = pwobj.Float(contact)
-                bindingSite.phobic    = pwobj.Float(phobic)
-                bindingSite.philic    = pwobj.Float(philic)
-                bindingSite.balance   = pwobj.Float(balance)
-                bindingSite.donacc    = pwobj.Float(donacc)
-                bindingSite.structureFile = pwobj.String(fnStructure)
-
-                setOfBindings.append(bindingSite)
-
-            self._defineOutputs(outputSetBindingSites=setOfBindings)
-            self._defineSourceRelation(self.inputStructure, setOfBindings)
-
             proteinFile, pocketFiles = self.createOutputPDBFile()
             outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
             for oFile in pocketFiles:
               pock = SitemapPocket(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog))
+              pock.structureFile = pwobj.String(os.path.abspath(fnStructure))
               outPockets.append(pock)
 
             pdbOutFile = outPockets.buildPocketsFiles()

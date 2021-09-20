@@ -26,6 +26,7 @@
 import os
 import pwem.objects.data as data
 from pwchem.objects import ProteinPocket
+from pyworkflow.object import (Float, Integer, List, String)
 from .utils.utils import parseLogProperties
 from .constants import ATTRIBUTES_MAPPING as AM
 
@@ -41,6 +42,31 @@ class SchrodingerGrid(data.EMFile):
     """A search grid in the file format of Maestro"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
+        self._innerX = Integer(kwargs.get('innerX', None))
+        self._innerY = Integer(kwargs.get('innerY', None))
+        self._innerZ = Integer(kwargs.get('innerZ', None))
+        self._outerX = Integer(kwargs.get('outerX', None))
+        self._outerY = Integer(kwargs.get('outerY', None))
+        self._outerZ = Integer(kwargs.get('outerZ', None))
+
+    def __str__(self):
+      s = '{} (Inner: {}, Outer: {})'.format(self.getClassName(), self.getInnerBox(), self.getOuterBox())
+      return s
+
+    def getInnerBox(self):
+        return self._innerX, self._innerY, self._innerZ
+
+    def getOuterBox(self):
+        return self._outerX, self._outerY, self._outerZ
+
+class SetOfSchrodingerGrids(data.EMSet):
+    ITEM_TYPE = SchrodingerGrid
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+
+    def __str__(self):
+      s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+      return s
 
 class SchrodingerBindingSites(data.EMFile):
     """A set of binding sites in the file format of Maestro"""
@@ -76,3 +102,9 @@ class SitemapPocket(ProteinPocket):
     def __str__(self):
         s = 'SiteMap pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
         return s
+
+    def getStructureMaeFile(self):
+        return self.structureFile.get()
+
+    def setStructureMaeFile(self, value):
+        self.structureFile.set(value)
