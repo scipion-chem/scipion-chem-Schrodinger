@@ -47,7 +47,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputSetsOfPockets', MultiPointerParam, pointerClass="SetOfPockets",
+        form.addParam('inputSetOfPockets', PointerParam, pointerClass="SetOfPockets",
                       label='Sets of Pockets:', allowsNull=False,
                       help='Sets of known or predicted protein pockets to center the grid on')
         form.addParam('inputSchAtomStruct', PointerParam, pointerClass="SchrodingerAtomStruct",
@@ -108,18 +108,17 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
     def _insertAllSteps(self):
         prepSteps = []
         makePath(self._getPath('grids'))
-        for i, pocketSet in enumerate(self.inputSetsOfPockets):
-            for pocket in pocketSet.get():
-                pStep = self._insertFunctionStep('preparationStep', pocket.clone(), i, prerequisites=[])
-                prepSteps.append(pStep)
+        for pocket in self.inputSetOfPockets.get():
+            pStep = self._insertFunctionStep('preparationStep', pocket.clone(), prerequisites=[])
+            prepSteps.append(pStep)
 
         self._insertFunctionStep('createOutputStep', prerequisites=prepSteps)
 
-    def preparationStep(self, pocket, setId):
+    def preparationStep(self, pocket):
         x, y, z = pocket.calculateMassCenter()
 
-        fnGridDir = self.getGridDir(setId, pocket.getObjId())
-        gridName = self.getGridName(setId, pocket.getObjId())
+        fnGridDir = self.getGridDir(pocket.getObjId())
+        gridName = self.getGridName(pocket.getObjId())
         makePath(self._getPath(fnGridDir))
         fnTargetLocal = "%s/%s.maegz" % (self._getPath(fnGridDir), gridName)
         shutil.copy(self.getInputMaeFile(), fnTargetLocal)
@@ -147,21 +146,24 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=self._getPath(fnGridDir))
 
     def createOutputStep(self):
+        i=1
         outGrids = SetOfSchrodingerGrids(filename=self._getPath('SchGrids.sqlite'))
-        for setId, pocketSet in enumerate(self.inputSetsOfPockets):
-            for pocket in pocketSet.get():
-                fnDir = self._getPath(self.getGridDir(setId, pocket.getObjId()))
-                if os.path.exists(fnDir):
-                    fnBase = os.path.split(fnDir)[1]
-                    fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
-                    if os.path.exists(fnGrid):
-                        SchGrid = SchrodingerGrid(filename=fnGrid, **self.getGridArgs(pocket))
-                        SchGrid.structureFile = String(self.getInputMaeFile())
-                        SchGrid.pocketScore = Float(pocket.getScore())
-                        # gridFile.bindingSiteDScore = Float(dscore)
+        for pocket in self.inputSetOfPockets.get():
+            fnDir = self._getPath(self.getGridDir(pocket.getObjId()))
+            if os.path.exists(fnDir):
+                fnBase = os.path.split(fnDir)[1]
+                fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
+                if os.path.exists(fnGrid):
+                    SchGrid = SchrodingerGrid(filename=fnGrid, **self.getGridArgs(pocket))
+                    SchGrid.structureFile = String(self.getInputMaeFile())
+                    SchGrid.pocketScore = Float(pocket.getScore())
+                    SchGrid.setObjId(i)
+                    # gridFile.bindingSiteDScore = Float(dscore)
 
-                        outGrids.append(SchGrid)
+                    outGrids.append(SchGrid.clone())
+                    i+=1
         self._defineOutputs(outputGrids=outGrids)
+
 
     ############################ Utils functions ###########################################
 
@@ -179,11 +181,11 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
     def getInputMaeFile(self):
         return self.inputSchAtomStruct.get().getFileName()
 
-    def getGridDir(self, setId, pocketId):
-        return 'grids/{}'.format(self.getGridName(setId, pocketId))
+    def getGridDir(self, pocketId):
+        return 'grids/{}'.format(self.getGridName(pocketId))
 
-    def getGridName(self, setId, pocketId):
-        return 'grid_{}-{}'.format(setId, pocketId)
+    def getGridName(self, pocketId):
+        return 'grid_{}'.format(pocketId)
 
     def getInnerBox(self, pocket):
         if self.innerAction.get() == 0:
@@ -201,7 +203,9 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     def getGridArgs(self, pocket):
         oBox, iBox = self.getOuterBox(pocket), self.getInnerBox(pocket)
-        return {'innerX': iBox[0], 'innerY': iBox[1], 'innerZ': iBox[2],
+        cMass = pocket.calculateMassCenter()
+        return {'centerX': cMass[0], 'centerY': cMass[1], 'centerZ': cMass[2],
+                'innerX': iBox[0], 'innerY': iBox[1], 'innerZ': iBox[2],
                 'outerX': oBox[0], 'outerY': oBox[1], 'outerZ': oBox[2]}
 
 

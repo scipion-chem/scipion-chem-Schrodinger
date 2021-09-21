@@ -42,6 +42,9 @@ class SchrodingerGrid(data.EMFile):
     """A search grid in the file format of Maestro"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
+        self._centerX = Float(kwargs.get('centerX', None))
+        self._centerY = Float(kwargs.get('centerY', None))
+        self._centerZ = Float(kwargs.get('centerZ', None))
         self._innerX = Integer(kwargs.get('innerX', None))
         self._innerY = Integer(kwargs.get('innerY', None))
         self._innerZ = Integer(kwargs.get('innerZ', None))
@@ -50,17 +53,21 @@ class SchrodingerGrid(data.EMFile):
         self._outerZ = Integer(kwargs.get('outerZ', None))
 
     def __str__(self):
-      s = '{} (Inner: {}, Outer: {})'.format(self.getClassName(), self.getInnerBox(), self.getOuterBox())
+      s = '{} (Center: {})'.format(self.getClassName(), self.getCenter())
       return s
 
+    def getCenter(self):
+        return self._centerX.get(), self._centerY.get(), self._centerZ.get()
+
     def getInnerBox(self):
-        return self._innerX, self._innerY, self._innerZ
+        return self._innerX.get(), self._innerY.get(), self._innerZ.get()
 
     def getOuterBox(self):
-        return self._outerX, self._outerY, self._outerZ
+        return self._outerX.get(), self._outerY.get(), self._outerZ.get()
 
 class SetOfSchrodingerGrids(data.EMSet):
     ITEM_TYPE = SchrodingerGrid
+
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 

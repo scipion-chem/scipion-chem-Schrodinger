@@ -23,14 +23,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
 import os
 
-from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam
-from pyworkflow.utils.path import copyFile, moveFile, cleanPath
+from pyworkflow.protocol.params import PointerParam, STEPS_PARALLEL, FloatParam, BooleanParam, IntParam
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
-from pwchem.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
+from pwchem.utils import mergePDBs
 
 class ProtSchrodingerPrepareForWeb(EMProtocol):
     """Prepare a set of small molecules for the web"""
@@ -40,7 +38,13 @@ class ProtSchrodingerPrepareForWeb(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
-                       label='Set of small molecules:', allowsNull=False)
+                       label='Set of small molecules: ', allowsNull=False)
+        form.addParam('addTarget', BooleanParam, default=False,
+                      label='Add protein structure: ',
+                      help='Add the target structure to the output pdbs')
+        form.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
+                      label='Optional atomic structure: ', condition='addTarget', allowsNull=True,
+                      help='Target structure to include in the output pdbs')
 
         # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -61,56 +65,55 @@ class ProtSchrodingerPrepareForWeb(EMProtocol):
                 lineToPrint += str(value)
             return headerLine, lineToPrint
 
-        def getGridRun(mol):
+        def getGridId(mol):
             fn = mol.poseFile.get()
-            return fn.split('Runs/')[1][0:6]
+            return fn.split('/')[-2].split('grid_')[1]
 
         progStructConvert=Plugin.getHome('utilities/structconvert')
         progMaeSubset=Plugin.getHome('utilities/maesubset')
-        grids = {}
-        gridNo = 1
-        for mol in self.inputSmallMols.get():
-            gridRun = getGridRun(mol)
-            if not gridRun in grids:
-                grids[gridRun] = gridNo
-                gridNo += 1
 
-        fh = open(self._getExtraPath("smallMolecules.csv"),'w')
-        lineNo = 0
-        headerLine = ""
-        for mol in self.inputSmallMols.get():
-            fnSmall = mol.smallMoleculeFile.get()
-            fnMol = os.path.split(fnSmall)[1]
-            fnRoot = os.path.splitext(fnMol)[0]
-            if "-" in fnRoot:
-                fnRoot = fnRoot.split('-')[0]
+        if self.addTarget:
+            os.mkdir(self._getExtraPath('withTarget'))
 
-            lineToPrint = ""
-            headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "smallMolecule", fnRoot)
-            if fnRoot.startswith("ZINC"):
-                headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "url",
-                                                   "https://zinc15.docking.org/substances/%s"%fnRoot)
+        with open(self._getExtraPath("smallMolecules.csv"),'w') as fh:
+            lineNo = 0
+            headerLine = ""
+            for mol in self.inputSmallMols.get():
+                fnSmall = mol.smallMoleculeFile.get()
+                fnMol = os.path.split(fnSmall)[1]
+                fnRoot = os.path.splitext(fnMol)[0]
+                if "-" in fnRoot:
+                    fnRoot = fnRoot.split('-')[0]
 
-            headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "bindingSiteScore")
-            headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "dockingScore")
-            headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "ligandEfficiency")
+                lineToPrint = ""
+                headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "smallMolecule", fnRoot)
+                if fnRoot.startswith("ZINC"):
+                    headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "url",
+                                                       "https://zinc15.docking.org/substances/%s"%fnRoot)
 
-            headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "gridNumber", grids[getGridRun(mol)])
+                headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "bindingSiteScore")
+                headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "dockingScore")
+                headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "ligandEfficiency")
 
-            fnOut = self._getExtraPath("pose_%d.pdb"%lineNo)
-            if not os.path.exists(fnOut):
-                fnAux = self._getTmpPath("tmp.mae")
-                n, fnRaw = mol.poseFile.get().split('@')
-                args = "-n %s %s -o %s"%(n, fnRaw, fnAux)
-                self.runJob(progMaeSubset, args)
+                headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "gridNumber", getGridId(mol))
 
-                args = "-imae %s -opdb %s"%(fnAux, fnOut)
-                self.runJob(progStructConvert, args)
+                fnOut = self._getExtraPath("pose_%d.pdb"%lineNo)
+                if not os.path.exists(fnOut):
+                    fnAux = self._getTmpPath("tmp.mae")
+                    n, fnRaw = mol.poseFile.get().split('@')
+                    args = "-n %s %s -o %s"%(n, fnRaw, fnAux)
+                    self.runJob(progMaeSubset, args)
 
-            headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "poseFile", os.path.split(fnOut)[1])
+                    args = "%s %s"%(fnAux, fnOut)
+                    self.runJob(progStructConvert, args)
 
-            if lineNo==0:
-                fh.write(headerLine+"\n")
-            fh.write(lineToPrint+"\n")
-            lineNo+=1
-        fh.close()
+                if self.addTarget:
+                    mergePDBs(self.inputAtomStruct.get().getFileName(), fnOut,
+                              self._getExtraPath('withTarget/targetPose_%d.pdb' % lineNo))
+
+                headerLine, lineToPrint = addParam(headerLine, lineToPrint, lineNo, "poseFile", os.path.split(fnOut)[1])
+
+                if lineNo==0:
+                    fh.write(headerLine+"\n")
+                fh.write(lineToPrint+"\n")
+                lineNo+=1

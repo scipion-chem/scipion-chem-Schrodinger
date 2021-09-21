@@ -33,51 +33,11 @@ from schrodingerScipion.objects import SchrodingerAtomStruct
 from schrodingerScipion.utils.utils import putMol2Title
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
-def inputArg(fn):
-    if fn.endswith('.mae') or fn.endswith('.maegz'):
-        args = "-imae "
-    elif fn.endswith('.cif'):
-        args = "-icif"
-    elif fn.endswith('.sd'):
-        args = "-isd"
-    elif fn.endswith('.pdb'):
-        args = "-ipdb"
-    elif fn.endswith('.mol2'):
-        args = "-imol2"
-    elif fn.endswith('.smi'):
-        args = "-ismi"
-    elif fn.endswith('.csv'):
-        args = "-icsv"
-    return args+" %s"%fn
-
-def outputArg(fnRoot, format, protocol):
-    if format == 0:
-        fnOut = protocol._getExtraPath(fnRoot + ".maegz")
-        args = " -omae %s" % fnOut
-    elif format == 1:
-        fnOut = protocol._getExtraPath(fnRoot + ".pdb")
-        args = " -opdb %s" % fnOut
-    elif format == 2:
-        fnOut = protocol._getExtraPath(fnRoot + ".mol2")
-        args = " -omol2 %s" % fnOut
-    elif format == 3:
-        fnOut = protocol._getExtraPath(fnRoot + ".smi")
-        args = " -osmi %s" % fnOut
-    elif format == 4:
-        fnOut = protocol._getExtraPath(fnRoot + ".cif")
-        args = " -ocif %s" % fnOut
-    elif format == 5:
-        fnOut = protocol._getExtraPath(fnRoot + ".sd")
-        args = " -osd %s" % fnOut
-    elif format == 6:
-        fnOut = protocol._getExtraPath(fnRoot + ".csv")
-        args = " -ocsv %s" % fnOut
-    return fnOut, args
-
 class ProtSchrodingerConvert(EMProtocol):
     """Convert a set of input ligands or a receptor structure to a specific file format"""
     _label = 'convert'
     _program = ""
+    _outFormats = ['maegz', 'pdb', 'mol2', 'smi', 'cif', 'sd', 'csv']
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -97,45 +57,49 @@ class ProtSchrodingerConvert(EMProtocol):
 
         # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('convertStep')
+        if self.inputType.get() == 0:
+            self.outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
+            for mol in self.inputSmallMols.get():
+                self._insertFunctionStep('convertMolStep', mol.clone())
+        else:
+            self._insertFunctionStep('convertTargetStep')
 
-    def convertStep(self):
+        self._insertFunctionStep('createOutputStep')
+
+    def convertMolStep(self, mol):
         progStructConvert=Plugin.getHome('utilities/structconvert')
 
-        if self.inputType==0:
-            outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMols')
+        fnSmall = mol.smallMoleculeFile.get()
+        fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
+        fnOut = self._getExtraPath("{}.{}".format(fnRoot, self._outFormats[self.outputFormatSmall.get()]))
 
-            for mol in self.inputSmallMols.get():
-                fnSmall = mol.smallMoleculeFile.get()
-                fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
+        args = '{} {}'.format(fnSmall, fnOut)
 
-                args=inputArg(fnSmall)
-                fnOut, argout = outputArg(fnRoot, self.outputFormatSmall.get(), self)
-                args+=argout
+        self.runJob(progStructConvert, args)
+        if self.outputFormatSmall.get()==2:
+            putMol2Title(fnOut)
+        smallMolecule = SmallMolecule(smallMolFilename=fnOut)
+        self.outputSmallMolecules.append(smallMolecule.clone())
 
-                self.runJob(progStructConvert, args)
-                if self.outputFormatSmall.get()==2:
-                    putMol2Title(fnOut)
-                smallMolecule = SmallMolecule(smallMolFilename=fnOut)
-                outputSmallMolecules.append(smallMolecule)
+    def convertTargetStep(self):
+        progStructConvert = Plugin.getHome('utilities/structconvert')
+        fnStructure = self.inputStructure.get().getFileName()
+        args = inputArg(fnStructure)
+        fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
+        fnOut, argout = outputArg(fnRoot, self.outputFormatTarget.get())
+        args += argout
+        self.runJob(progStructConvert, args)
 
-            if len(outputSmallMolecules)>0:
-                self._defineOutputs(outputSmallMols=outputSmallMolecules)
-                self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+        if fnOut.endswith('.maegz'):
+            self.target = SchrodingerAtomStruct(filename=fnOut)
         else:
-            fnStructure = self.inputStructure.get().getFileName()
-            args = inputArg(fnStructure)
-            fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
-            fnOut, argout = outputArg(fnRoot, self.outputFormatTarget.get())
-            args += argout
-            self.runJob(progStructConvert, args)
+            self.target = AtomStruct(filename=fnOut)
 
-            if fnOut.endswith('.maegz'):
-                target = SchrodingerAtomStruct(filename=fnOut)
-            else:
-                target = AtomStruct(filename=fnOut)
-            self._defineOutputs(outputStructure=target)
-            self._defineSourceRelation(self.inputStructure, target)
+    def createOutputStep(self):
+        if self.inputType.get() == 0:
+            self._defineOutputs(outputSmallMols=self.outputSmallMolecules)
+        else:
+            self._defineOutputs(outputStructure=self.target)
 
     def _summary(self):
         summary=[]
