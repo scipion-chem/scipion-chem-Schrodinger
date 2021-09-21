@@ -23,9 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
+import os, time
 
-from pyworkflow.protocol.params import PointerParam, EnumParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, STEPS_PARALLEL
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
@@ -33,38 +33,54 @@ from schrodingerScipion.objects import SchrodingerAtomStruct
 from schrodingerScipion.utils.utils import putMol2Title
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
+SMALLMOL, TARGET = 0, 1
+
 class ProtSchrodingerConvert(EMProtocol):
     """Convert a set of input ligands or a receptor structure to a specific file format"""
     _label = 'convert'
     _program = ""
     _outFormats = ['maegz', 'pdb', 'mol2', 'smi', 'cif', 'sd', 'csv']
 
+    saving = False
+
+    def __init__(self, **kwargs):
+        EMProtocol.__init__(self, **kwargs)
+        self.stepsExecutionMode = STEPS_PARALLEL
+
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputType', EnumParam, default=0,
-                       choices=["Small molecules",'Target structure'],
+                       choices=["Small molecules", 'Target structure'],
                        label='Input type')
-        form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
+        form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
+                      condition='inputType=={}'.format(SMALLMOL),
                       label='Input set:', allowsNull=False)
-        form.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
-                       choices=["Maestro",'PDB',"Sybyl Mol2","Smiles",'Cif','V2000 SD','CSV (Smiles with properties)'],
+        form.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType=={}'.format(SMALLMOL),
+                       choices=["Maestro", 'PDB', "Sybyl Mol2", "Smiles", 'Cif',
+                                'V2000 SD', 'CSV (Smiles with properties)'],
                        label='Output format')
         form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct, AtomStruct",
-                      condition='inputType==1', label='Input structure:', allowsNull=False)
-        form.addParam('outputFormatTarget', EnumParam, default=2, condition='inputType==1',
-                       choices=["Maestro",'PDB',"Sybyl Mol2"],
+                      condition='inputType=={}'.format(TARGET), label='Input structure:', allowsNull=False)
+        form.addParam('outputFormatTarget', EnumParam, default=2, condition='inputType=={}'.format(TARGET),
+                       choices=["Maestro", 'PDB', "Sybyl Mol2"],
                        label='Output format')
+
+        form.addParallelSection(threads=4, mpi=1)
 
         # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        if self.inputType.get() == 0:
+        convSteps = []
+        if self.inputType.get() == SMALLMOL:
             self.outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
             for mol in self.inputSmallMols.get():
-                self._insertFunctionStep('convertMolStep', mol.clone())
-        else:
-            self._insertFunctionStep('convertTargetStep')
+                cStep = self._insertFunctionStep('convertMolStep', mol.clone(), prerequisites=[])
+                convSteps.append(cStep)
 
-        self._insertFunctionStep('createOutputStep')
+        elif self.inputType.get() == TARGET:
+            cStep = self._insertFunctionStep('convertTargetStep', prerequisites=[])
+            convSteps.append(cStep)
+
+        self._insertFunctionStep('createOutputStep', prerequisites=convSteps)
 
     def convertMolStep(self, mol):
         progStructConvert=Plugin.getHome('utilities/structconvert')
@@ -78,16 +94,16 @@ class ProtSchrodingerConvert(EMProtocol):
         self.runJob(progStructConvert, args)
         if self.outputFormatSmall.get()==2:
             putMol2Title(fnOut)
-        smallMolecule = SmallMolecule(smallMolFilename=fnOut)
-        self.outputSmallMolecules.append(smallMolecule.clone())
+
+        self.saveMolecule(fnOut, self.outputSmallMolecules)
 
     def convertTargetStep(self):
         progStructConvert = Plugin.getHome('utilities/structconvert')
         fnStructure = self.inputStructure.get().getFileName()
-        args = inputArg(fnStructure)
+        args = fnStructure
         fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
-        fnOut, argout = outputArg(fnRoot, self.outputFormatTarget.get())
-        args += argout
+        fnOut = self._getExtraPath("{}.{}".format(fnRoot, self._outFormats[self.outputFormatTarget.get()]))
+        args += fnOut
         self.runJob(progStructConvert, args)
 
         if fnOut.endswith('.maegz'):
@@ -100,6 +116,15 @@ class ProtSchrodingerConvert(EMProtocol):
             self._defineOutputs(outputSmallMols=self.outputSmallMolecules)
         else:
             self._defineOutputs(outputStructure=self.target)
+
+    def saveMolecule(self, molFn, molSet):
+        while self.saving:
+            time.sleep(0.2)
+        self.saving = True
+        smallMolecule = SmallMolecule(smallMolFilename=molFn)
+        molSet.append(smallMolecule.clone())
+        self.saving = False
+
 
     def _summary(self):
         summary=[]
