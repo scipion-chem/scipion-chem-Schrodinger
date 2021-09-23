@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, shutil
+import os, shutil, threading, subprocess
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, FloatParam, IntParam, STEPS_PARALLEL
@@ -39,6 +39,7 @@ glideProg = schrodinger_plugin.getHome('glide')
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 structCatProg = schrodinger_plugin.getHome('utilities/structcat')
 propListerProg = schrodinger_plugin.getHome('utilities/proplister')
+maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
 
 class ProtSchrodingerGlideDocking(EMProtocol):
     """Calls glide to perform a docking of a set of compounds in a pocket defined by a grid.
@@ -60,24 +61,31 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        label='Library of compounds:', allowsNull=False)
         form.addParam('mergeOutput', BooleanParam, default=False,
                       label='Merge output from different pockets: ')
-        form.addParam('dockingMethod', EnumParam, default=0, choices=['Flexible dock (confgen)', 'Rigid dock (rigid)',
+        form.addParam('doConvertOutput', BooleanParam, default=False,
+                      label='Convert output from maestro format: ')
+        form.addParam('convertType', EnumParam, condition='doConvertOutput',
+                      choices=['pdb', 'mol2', 'smi', 'sdf'], default=0, display=EnumParam.DISPLAY_HLIST,
+                      label='Convert to: ',
+                      help='Convert output molecules to this format')
+        group = form.addGroup('Docking')
+        group.addParam('dockingMethod', EnumParam, default=0, choices=['Flexible dock (confgen)', 'Rigid dock (rigid)',
                                                                       'Refine (do not dock, mininplace)',
                                                                       'Score in place (do not dock, inplace)'],
                        label='Docking method')
-        form.addParam('dockingPrecision', EnumParam, default=0, choices=['Low (HTVS)','Medium (SP)','High (XP)'],
+        group.addParam('dockingPrecision', EnumParam, default=0, choices=['Low (HTVS)','Medium (SP)','High (XP)'],
                        label='Docking precision',
                        help='You may use a low to high strategy. HTVS takes about 2 s/ligand, SP about 10s, and XP about 10 min.')
-        form.addParam('maxkeep', IntParam, default=5000, expertLevel=LEVEL_ADVANCED,
+        group.addParam('maxkeep', IntParam, default=5000, expertLevel=LEVEL_ADVANCED,
                        label='No. Poses to keep per ligand:',
                        help='Number of poses per ligand to keep in initial phase of docking.')
-        form.addParam('scoreCutoff', FloatParam, default=100.0, expertLevel=LEVEL_ADVANCED,
+        group.addParam('scoreCutoff', FloatParam, default=100.0, expertLevel=LEVEL_ADVANCED,
                        label='Score cutoff:',
                        help='Scoring window for keeping initial poses.')
-        form.addParam('maxref', IntParam, default=-1, expertLevel=LEVEL_ADVANCED,
+        group.addParam('maxref', IntParam, default=-1, expertLevel=LEVEL_ADVANCED,
                        label='No. Poses to keep per ligand:',
                        help='Number of poses to keep per ligand for energy minimization. '
                             'If set to -1, the default value is 400, except for XP precision that is 800.')
-        form.addParam('posesPerLig', IntParam, default=5, expertLevel=LEVEL_ADVANCED,
+        group.addParam('posesPerLig', IntParam, default=5, expertLevel=LEVEL_ADVANCED,
                        label='No. Poses to report per ligand:')
 
         form.addSection(label='Ligand sampling')
@@ -113,11 +121,57 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
+        cStep = self._insertFunctionStep('createLigandsFileStep', prerequisites=[])
+        c2Step = self._insertFunctionStep('combineLigandsFilesStep', prerequisites=[cStep])
         dockSteps = []
         for grid in self.inputGridSet.get():
-            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=[])
+            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=[c2Step])
             dockSteps.append(dStep)
         self._insertFunctionStep('createOutput', prerequisites=dockSteps)
+
+    def createLigandsFileStep(self):
+        nt = self.numberOfThreads.get()
+        ligSet = self.inputLibrary.get()
+        nLigs = len(ligSet) // nt
+        it, curLigSet = 0, []
+        threads = []
+        for lig in ligSet:
+            curLigSet.append(lig.clone())
+            if len(curLigSet) == nLigs and it < nt -1:
+                t = threading.Thread(target=self.createLigandsFile, args=(curLigSet.copy(), it,),
+                                     daemon=False)
+                threads.append(t)
+                t.start()
+                curLigSet, it = [], it + 1
+
+        if len(curLigSet) > 0:
+            t = threading.Thread(target=self.createLigandsFile, args=(curLigSet.copy(), it,),
+                                 daemon=False)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+    def combineLigandsFilesStep(self):
+        nt = self.numberOfThreads.get()
+        allLigandsFile = self._getTmpPath(self.getAllLigandsFile())
+        with open(allLigandsFile, 'w') as f:
+            for it in range(nt):
+                with open(self._getTmpPath(self.getAllLigandsFile(suffix=it))) as fLig:
+                    f.write(fLig.read())
+
+
+    def createLigandsFile(self, ligSet, it):
+        curAllLigandsFile = self._getTmpPath(self.getAllLigandsFile(suffix=it))
+        with open(curAllLigandsFile, 'w') as fh:
+            for small in ligSet:
+                fnSmall = small.getFileName()
+                if not fnSmall.endswith('.mol2'):
+                    fnSmall = self.convert2Mol2(fnSmall, it)
+
+                with open(fnSmall) as fhLigand:
+                    fh.write(fhLigand.read())
 
     def dockingStep(self, grid):
         gridId = grid.getObjId()
@@ -127,10 +181,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         fnGrid = self._getPath(gridDir + "grid.zip")
         if not os.path.exists(fnGrid): # Prepared to resume
             shutil.copy(grid.getFileName(), fnGrid)
-
-        allLigandsFile = self._getTmpPath("allLigands.mol2")
-        if not os.path.exists(allLigandsFile):
-            self.createAllLigandsMol2(allLigandsFile)
 
         fnIn = self._getPath(gridDir + 'job_{}.inp'.format(gridId))
         if not os.path.exists(fnIn): # Prepared to resume
@@ -179,7 +229,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         fhIn.write("MAXREF %d\n" % 400)
                 fhIn.write("POSES_PER_LIG %d\n"%self.posesPerLig.get())
 
-                fhIn.write("LIGANDFILE ../tmp/allLigands.mol2\n")
+                fhIn.write("LIGANDFILE ../tmp/{}\n".format(self.getAllLigandsFile()))
 
         args = "-WAIT -RESTART -LOCAL job_{}.inp".format(gridId)
         self.runJob(glideProg, args, cwd=self._getPath(gridDir))
@@ -250,6 +300,10 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 self._defineOutputs(**{'outputSmallMolecules_{}'.format(gridId): outputSet})
                 self._defineSourceRelation(grid, outputSet)
                 self._defineSourceRelation(self.inputLibrary, outputSet)
+                if self.doConvertOutput:
+                    print('Converting output to {}: ', 'outputSmallMolecules_{}'.
+                          format(gridId, self.getEnumText('convertType')))
+                    self.convertOutput(outputSet, nameDir='outputSmallMolecules_{}'.format(gridId))
 
         if self.mergeOutput:
             idxSorted = sortDockingResults(allSmallList)
@@ -261,7 +315,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             self._defineOutputs(outputSmallMolecules=outputSet)
             self._defineSourceRelation(self.inputGridSet, outputSet)
             self._defineSourceRelation(self.inputLibrary, outputSet)
-
+            if self.doConvertOutput:
+                print('Converting output to {}: outputSmallMolecules'.format(self.getEnumText('convertType')))
+                self.convertOutput(outputSet, nameDir="outputSmallMolecules")
 
 
     def _validate(self):
@@ -271,22 +327,54 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         return errors
 
     ###########################  Utils functions #####################
-    def createAllLigandsMol2(self, allLigandsFile):
-        with open(allLigandsFile, 'w') as fh:
-            for small in self.inputLibrary.get():
-                fnSmall = small.getFileName()
-                if not fnSmall.endswith('.mol2'):
-                    fnSmall = self.convert2Mol2(fnSmall)
+    def convertOutput(self, molSet, nameDir):
+        outDir = self._getExtraPath(nameDir)
+        os.mkdir(outDir)
 
-                with open(fnSmall) as fhLigand:
-                    for line in fhLigand:
-                        fh.write(line)
+        nt = self.numberOfThreads.get()
+        nMols = len(molSet) // nt
+        it, curMolSet = 0, []
+        threads=[]
+        for mol in molSet:
+            curMolSet.append(mol.clone())
+            if len(curMolSet) == nMols and it < nt - 1:
+                t = threading.Thread(target=self.convertOutputStep, args=(curMolSet.copy(), outDir, it,),
+                                     daemon=False)
+                t.start()
+                threads.append(t)
+                curMolSet, it = [], it+1
 
-    def convert2Mol2(self, fnSmall):
+        if len(curMolSet) > 0:
+            t = threading.Thread(target=self.convertOutputStep, args=(curMolSet.copy(), outDir, it,),
+                                 daemon=False)
+            t.start()
+            threads.append(t)
+        for t in threads:
+            t.join()
+
+
+    def convertOutputStep(self, curMolSet, outDir, it):
+        for i, mol in enumerate(curMolSet):
+            fnAux = os.path.abspath(self._getExtraPath("tmp_%d_%d.mae" % (it, i)))
+            n, fnRaw = mol.poseFile.get().split('@')
+            fnOut = os.path.join(outDir, os.path.basename(mol.getFileName()).split('.')[0] + '_{}.pdb'.format(n))
+
+            if not os.path.exists(fnOut):
+                args = "-n %s %s -o %s" % (n, os.path.abspath(fnRaw), fnAux)
+                subprocess.call([maeSubsetProg, *args.split()])
+
+                args = fnAux + ' ' + os.path.abspath(fnOut)
+                subprocess.call([structConvertProg, *args.split()])
+                os.remove(fnAux)
+
+    def convert2Mol2(self, fnSmall, it):
         fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
         args = fnSmall
-        fnSmall = self._getTmpPath('ligand.mol2')
-        args += " -omol2 %s" % fnSmall
-        self.runJob(structConvertProg, args)
+        fnSmall = self._getTmpPath('ligand{}.mol2'.format(it))
+        args += " %s" % fnSmall
+        subprocess.call([structConvertProg, *args.split()])
         putMol2Title(fnSmall, fnBase)
         return fnSmall
+
+    def getAllLigandsFile(self, suffix=''):
+        return 'allMoleculesFile{}.mol2'.format(suffix)

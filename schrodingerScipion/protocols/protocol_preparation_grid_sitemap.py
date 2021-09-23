@@ -162,6 +162,8 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
                     outGrids.append(SchGrid.clone())
                     i+=1
+
+        outGrids.buildBBoxesPML()
         self._defineOutputs(outputGrids=outGrids)
 
 
@@ -206,7 +208,8 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         cMass = pocket.calculateMassCenter()
         return {'centerX': cMass[0], 'centerY': cMass[1], 'centerZ': cMass[2],
                 'innerX': iBox[0], 'innerY': iBox[1], 'innerZ': iBox[2],
-                'outerX': oBox[0], 'outerY': oBox[1], 'outerZ': oBox[2]}
+                'outerX': oBox[0], 'outerY': oBox[1], 'outerZ': oBox[2],
+                'proteinFile': pocket.getProteinFile()}
 
 
     def _validate(self):
