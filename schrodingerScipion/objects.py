@@ -26,6 +26,8 @@
 import os
 import pwem.objects.data as data
 from pwchem.objects import ProteinPocket
+from pwchem.constants import *
+from pyworkflow.object import (Float, Integer, List, String)
 from .utils.utils import parseLogProperties
 from .constants import ATTRIBUTES_MAPPING as AM
 
@@ -41,6 +43,69 @@ class SchrodingerGrid(data.EMFile):
     """A search grid in the file format of Maestro"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
+        self._centerX = Float(kwargs.get('centerX', None))
+        self._centerY = Float(kwargs.get('centerY', None))
+        self._centerZ = Float(kwargs.get('centerZ', None))
+        self._innerX = Integer(kwargs.get('innerX', None))
+        self._innerY = Integer(kwargs.get('innerY', None))
+        self._innerZ = Integer(kwargs.get('innerZ', None))
+        self._outerX = Integer(kwargs.get('outerX', None))
+        self._outerY = Integer(kwargs.get('outerY', None))
+        self._outerZ = Integer(kwargs.get('outerZ', None))
+
+        self._proteinFile = String(kwargs.get('proteinFile', None))
+
+    def __str__(self):
+      s = '{} (Center: {})'.format(self.getClassName(), self.getCenter())
+      return s
+
+    def getCenter(self):
+        return self._centerX.get(), self._centerY.get(), self._centerZ.get()
+
+    def getInnerBox(self):
+        return self._innerX.get(), self._innerY.get(), self._innerZ.get()
+
+    def getOuterBox(self):
+        return self._outerX.get(), self._outerY.get(), self._outerZ.get()
+
+    def getProteinFile(self):
+        return self._proteinFile.get()
+
+
+class SetOfSchrodingerGrids(data.EMSet):
+    ITEM_TYPE = SchrodingerGrid
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+
+    def __str__(self):
+      s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+      return s
+
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self):
+        return '/'.join(self.getSetPath().split('/')[:-1])
+
+    def getProteinFile(self):
+        return self.getFirstItem().getProteinFile()
+
+    def getBBoxPml(self):
+        return self.getSetDir() + '/BBoxes.pml'
+
+    def buildBBoxesPML(self):
+        pmlFile = self.getBBoxPml()
+        toWrite = FUNCTION_BOUNDING_BOX
+        for grid in self:
+            toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], grid.getCenter(), grid.getInnerBox(),
+                                                'InnerBox_'+str(grid.getObjId()))
+            toWrite += PML_BBOX_STR_EACH.format([1, 0, 1], grid.getCenter(), grid.getOuterBox(),
+                                                'OuterBox_' + str(grid.getObjId()))
+        with open(pmlFile, 'w') as f:
+            f.write(PML_BBOX_STR.format(self.getProteinFile(), toWrite))
+
+
 
 class SchrodingerBindingSites(data.EMFile):
     """A set of binding sites in the file format of Maestro"""
@@ -76,3 +141,9 @@ class SitemapPocket(ProteinPocket):
     def __str__(self):
         s = 'SiteMap pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
         return s
+
+    def getStructureMaeFile(self):
+        return self.structureFile.get()
+
+    def setStructureMaeFile(self, value):
+        self.structureFile.set(value)

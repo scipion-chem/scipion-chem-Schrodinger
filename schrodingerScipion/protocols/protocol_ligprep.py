@@ -23,10 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
-import os
+import os, time, glob
 
-from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam, STEPS_PARALLEL
 from pyworkflow.utils.path import copyFile, moveFile, cleanPath
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
@@ -36,6 +35,11 @@ class ProtSchrodingerLigPrep(EMProtocol):
     """Schrodinger's LigPrep is a program to prepare ligand libraries"""
     _label = 'ligand preparation (ligprep)'
     _program = ""
+    saving = False
+
+    def __init__(self, **kwargs):
+        EMProtocol.__init__(self, **kwargs)
+        self.stepsExecutionMode = STEPS_PARALLEL
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -75,86 +79,100 @@ class ProtSchrodingerLigPrep(EMProtocol):
                        choices=["None",'OPLS 2005','OPLS3e (recommended)'],
                        label='Force-field for final optimization')
 
+        form.addParallelSection(threads=4, mpi=1)
+
         # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('ligPrepStep')
+        iniStep = self._insertFunctionStep('initializeStep')
+        prepSteps=[]
+        for mol in self.inputSmallMols.get():
+            pStep = self._insertFunctionStep('ligPrepStep', mol.clone(), prerequisites=[iniStep])
+            prepSteps.append(pStep)
+        self._insertFunctionStep('createOutputStep', prerequisites=prepSteps)
 
-    def ligPrepStep(self):
+    def initializeStep(self):
+        self.outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
+        self.outputSmallMoleculesDropped = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMolsDropped')
+
+    def ligPrepStep(self, mol):
         progLigPrep=Plugin.getHome('ligprep')
         progStructConvert=Plugin.getHome('utilities/structconvert')
 
-        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMols')
-        outputSmallMoleculesDropped = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMolsDropped')
+        fnSmall = mol.smallMoleculeFile.get()
+        fnMol = os.path.split(fnSmall)[1]
+        fnRoot = os.path.splitext(fnMol)[0]
 
-        for mol in self.inputSmallMols.get():
-            fnSmall = mol.smallMoleculeFile.get()
-            fnMol = os.path.split(fnSmall)[1]
-            fnRoot = os.path.splitext(fnMol)[0]
+        existingFiles = glob.glob(self._getExtraPath(fnRoot+"*"))
+        if len(existingFiles)==0:
+            fnSmallExtra = self._getTmpPath(fnMol)
+            copyFile(fnSmall,fnSmallExtra)
 
-            existingFiles = glob.glob(self._getExtraPath(fnRoot+"*"))
-            if len(existingFiles)==0:
-                fnSmallExtra = self._getTmpPath(fnMol)
-                copyFile(fnSmall,fnSmallExtra)
-
-                args='-WAIT -LOCAL'
-                if self.ionization.get()!=0:
-                    if self.ionization.get()==1:
-                        args+=" -epik"
-                        if self.emb.get():
-                            args+=" -epik_metal_binding"
-                    else:
-                        args+=" -i %d"%self.ionization.get()-2
-                    args+=" -ph %f -pht %f"%(self.pH.get(),self.pHrange.get())
-
-                if self.stereoisomers.get():
-                    args+=" -g"
+            args='-WAIT -LOCAL'
+            if self.ionization.get()!=0:
+                if self.ionization.get()==1:
+                    args+=" -epik"
+                    if self.emb.get():
+                        args+=" -epik_metal_binding"
                 else:
-                    args+=" -ac -s %d"%self.Niso.get()
+                    args+=" -i %d"%self.ionization.get()-2
+                args+=" -ph %f -pht %f"%(self.pH.get(),self.pHrange.get())
 
-                if self.optimization.get()==1:
-                    args+=" -bff 14"
-                elif self.optimization.get()==2:
-                    args+=" -bff 16"
-
-                if fnMol.endswith('.smi'):
-                    args+=" -ismi tmp/%s"%(fnMol)
-                elif fnMol.endswith('.mae') or fnMol.endswith('.maegz'):
-                    args += " -imae tmp/%s" % (fnMol)
-                elif fnMol.endswith('.sdf'):
-                    args += " -isd tmp/%s" % (fnMol)
-                else:
-                    print("Skipping %s"%fnSmall)
-                    continue
-
-                fnMae = "extra/%s.maegz" % fnRoot
-                if not os.path.exists(fnMae):
-                    args+=" -omae %s"%fnMae
-                    self.runJob(progLigPrep,args,cwd=self._getPath())
-
-                if os.path.exists(self._getPath(fnMae)):
-                    fnOmae="extra/o%s.maegz"%fnRoot
-                    args = "-imae %s -omae %s -split-nstructures 1"%(fnMae,fnOmae)
-                    self.runJob(progStructConvert, args, cwd=self._getPath())
-                    for fn in glob.glob(self._getExtraPath("o%s*.maegz"%fnRoot)):
-                        fnDir, fnOut = os.path.split(fn)
-                        fnOut = self._getExtraPath(fnOut[1:])
-                        moveFile(fn,fnOut)
-                        smallMolecule = SmallMolecule(smallMolFilename=fnOut)
-                        outputSmallMolecules.append(smallMolecule)
-                    if len(glob.glob(self._getExtraPath("%s-*.maegz"%fnRoot))) > 0:
-                        cleanPath(self._getPath(fnMae))
-                else:
-                    smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
-                    outputSmallMoleculesDropped.append(smallMolecule)
+            if self.stereoisomers.get():
+                args+=" -g"
             else:
-                for fn in glob.glob(self._getExtraPath("%s*.maegz"%fnRoot)):
-                    print("Reading %s"%fn)
-                    smallMolecule = SmallMolecule(smallMolFilename=fn)
-                    outputSmallMolecules.append(smallMolecule)
+                args+=" -ac -s %d"%self.Niso.get()
 
-        if len(outputSmallMolecules)>0:
-            self._defineOutputs(outputSmallMols=outputSmallMolecules)
-            self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
-        if len(outputSmallMoleculesDropped)>0:
-            self._defineOutputs(outputSmallMolsDropped=outputSmallMoleculesDropped)
-            self._defineSourceRelation(self.inputSmallMols, outputSmallMoleculesDropped)
+            if self.optimization.get()==1:
+                args+=" -bff 14"
+            elif self.optimization.get()==2:
+                args+=" -bff 16"
+
+            if fnMol.endswith('.smi'):
+                args+=" -ismi tmp/%s"%(fnMol)
+            elif fnMol.endswith('.mae') or fnMol.endswith('.maegz'):
+                args += " -imae tmp/%s" % (fnMol)
+            elif fnMol.endswith('.sdf'):
+                args += " -isd tmp/%s" % (fnMol)
+            else:
+                print("Skipping %s"%fnSmall)
+                return
+
+            fnMae = "extra/%s.maegz" % fnRoot
+            if not os.path.exists(fnMae):
+                args+=" -omae %s"%fnMae
+                self.runJob(progLigPrep,args,cwd=self._getPath())
+
+            if os.path.exists(self._getPath(fnMae)):
+                fnOmae="extra/o%s.maegz"%fnRoot
+                args = "%s %s -split-nstructures 1"%(fnMae,fnOmae)
+                self.runJob(progStructConvert, args, cwd=self._getPath())
+                for fn in glob.glob(self._getExtraPath("o%s*.maegz"%fnRoot)):
+                    fnDir, fnOut = os.path.split(fn)
+                    fnOut = self._getExtraPath(fnOut[1:])
+                    moveFile(fn,fnOut)
+                    self.saveMolecule(fnOut, self.outputSmallMolecules)
+                if len(glob.glob(self._getExtraPath("%s-*.maegz"%fnRoot))) > 0:
+                    cleanPath(self._getPath(fnMae))
+            else:
+                self.saveMolecule(fnSmall, self.outputSmallMoleculesDropped)
+        else:
+            for fn in glob.glob(self._getExtraPath("%s*.maegz"%fnRoot)):
+                print("Reading %s"%fn)
+                self.saveMolecule(fn, self.outputSmallMolecules)
+
+
+    def createOutputStep(self):
+        if len(self.outputSmallMolecules)>0:
+            self._defineOutputs(outputSmallMols=self.outputSmallMolecules)
+            self._defineSourceRelation(self.inputSmallMols, self.outputSmallMolecules)
+        if len(self.outputSmallMoleculesDropped)>0:
+            self._defineOutputs(outputSmallMolsDropped=self.outputSmallMoleculesDropped)
+            self._defineSourceRelation(self.inputSmallMols, self.outputSmallMoleculesDropped)
+
+    def saveMolecule(self, molFn, molSet):
+        while self.saving:
+            time.sleep(0.2)
+        self.saving = True
+        smallMolecule = SmallMolecule(smallMolFilename=molFn)
+        molSet.append(smallMolecule.clone())
+        self.saving = False
