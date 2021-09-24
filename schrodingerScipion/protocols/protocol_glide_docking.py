@@ -64,7 +64,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         form.addParam('doConvertOutput', BooleanParam, default=False,
                       label='Convert output from maestro format: ')
         form.addParam('convertType', EnumParam, condition='doConvertOutput',
-                      choices=['pdb', 'mol2', 'smi', 'sdf'], default=0, display=EnumParam.DISPLAY_HLIST,
+                      choices=['pdb', 'mol2', 'sdf'], default=0, display=EnumParam.DISPLAY_HLIST,
                       label='Convert to: ',
                       help='Convert output molecules to this format')
         group = form.addGroup('Docking')
@@ -357,7 +357,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         for i, mol in enumerate(curMolSet):
             fnAux = os.path.abspath(self._getExtraPath("tmp_%d_%d.mae" % (it, i)))
             n, fnRaw = mol.poseFile.get().split('@')
-            fnOut = os.path.join(outDir, os.path.basename(mol.getFileName()).split('.')[0] + '_{}.pdb'.format(n))
+            fnOut = os.path.join(outDir, os.path.basename(mol.getFileName()).split('.')[0] + '_{}.{}'.
+                                 format(n, self.getEnumText('convertType')))
 
             if not os.path.exists(fnOut):
                 args = "-n %s %s -o %s" % (n, os.path.abspath(fnRaw), fnAux)
