@@ -34,7 +34,7 @@ class TestGlideDocking(BaseTest):
     @classmethod
     def setUpClass(cls):
         cls.ds = DataSet.getDataSet('model_building_tutorial')
-        #cls.dsLig = DataSet.getDataSet("ligandLibraries")
+        cls.dsLig = DataSet.getDataSet("smallMolecules")
 
         setupTestProject(cls)
         cls._runImportPDB()
@@ -53,7 +53,7 @@ class TestGlideDocking(BaseTest):
     def _runImportSmallMols(cls):
       protImportSmallMols = cls.newProtocol(
         ProtChemImportSmallMolecules,
-        filesPath='/home/danieldh/i2pc/scipion-chem-rosetta/rosetta/tests/data/smallMolecules/mol2')
+        filesPath=cls.dsLig.getFile('mol2'))
       cls.launchProtocol(protImportSmallMols)
       cls.protImportSmallMols = protImportSmallMols
 
