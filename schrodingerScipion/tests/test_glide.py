@@ -76,8 +76,7 @@ class TestGlideDocking(BaseTest):
     def _runSitemap(self, targetProt):
         protSitemap = self.newProtocol(
             ProtSchrodingerSiteMap,
-            inputStructure=targetProt.outputStructure,
-            maxsites=2)
+            inputStructure=targetProt.outputStructure)
 
         self.launchProtocol(protSitemap)
         pocketsOut = getattr(protSitemap, 'outputPockets', None)
@@ -87,10 +86,11 @@ class TestGlideDocking(BaseTest):
     def _runFilterSites(self, siteProt):
         protFilter = self.newProtocol(
             ProtSetFilter,
-            inputSet=siteProt.outputPockets,
             operation=ProtSetFilter.CHOICE_RANKED,
-            topRankValue=3,
-            topRankAttribute='_score')
+            threshold=2,
+            rankingField='_score')
+        protFilter.inputSet.set(siteProt)
+        protFilter.inputSet.setExtended('outputPockets')
 
         self.launchProtocol(protFilter)
         return protFilter
@@ -100,8 +100,8 @@ class TestGlideDocking(BaseTest):
             ProtSchrodingerGridSiteMap,
             inputSetOfPockets=filterProt.outputPockets,
             inputSchAtomStruct=targetProt.outputStructure,
-            innerAction=1, diameterNin=1.0,
-            outerAction=1, diameterNout=0.6)
+            innerAction=1, diameterNin=1.2,
+            outerAction=1, diameterNout=0.8)
 
         self.launchProtocol(protGrid)
         gridsOut = getattr(protGrid, 'outputGrids', None)
@@ -121,8 +121,8 @@ class TestGlideDocking(BaseTest):
     def testGlide(self):
         prepProt = self._runTargetPreparation(self.getPrepTargetWizardArgs())
         siteProt = self._runSitemap(prepProt)
-        #filterProt = self._runFilterSites(siteProt)
-        gridProt = self._runGridDefinition(siteProt, prepProt)
+        filterProt = self._runFilterSites(siteProt)
+        gridProt = self._runGridDefinition(filterProt, prepProt)
 
         ligProt = self._runLigandPreparation()
         glideProt = self._runGlideDocking(ligProt, gridProt)
