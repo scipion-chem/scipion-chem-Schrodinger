@@ -1,0 +1,139 @@
+# **************************************************************************
+# *
+# * Authors:     Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
+# *
+# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# *
+# * This program is free software; you can redistribute it and/or modify
+# * it under the terms of the GNU General Public License as published by
+# * the Free Software Foundation; either version 3 of the License, or
+# * (at your option) any later version.
+# *
+# * This program is distributed in the hope that it will be useful,
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# * GNU General Public License for more details.
+# *
+# * You should have received a copy of the GNU General Public License
+# * along with this program; if not, write to the Free Software
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+# * 02111-1307  USA
+# *
+# *  All comments concerning this program package may be sent to the
+# *  e-mail address 'scipion@cnb.csic.es'
+# *
+# **************************************************************************
+
+from pyworkflow.tests import BaseTest, setupTestProject, DataSet
+from pwem.protocols import ProtImportPdb, ProtSetFilter
+from pwchem.protocols import ProtChemImportSmallMolecules
+from ..protocols import ProtSchrodingerSiteMap, ProtSchrodingerPrepWizard, \
+    ProtSchrodingerLigPrep, ProtSchrodingerGridSiteMap, ProtSchrodingerGlideDocking
+
+class TestGlideDocking(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        cls.ds = DataSet.getDataSet('model_building_tutorial')
+        #cls.dsLig = DataSet.getDataSet("ligandLibraries")
+
+        setupTestProject(cls)
+        cls._runImportPDB()
+        cls._runImportSmallMols()
+
+    @classmethod
+    def _runImportPDB(cls):
+        protImportPDB = cls.newProtocol(
+            ProtImportPdb,
+            inputPdbData=1,
+            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1_noHETATM.pdb'))
+        cls.launchProtocol(protImportPDB)
+        cls.protImportPDB = protImportPDB
+
+    @classmethod
+    def _runImportSmallMols(cls):
+      protImportSmallMols = cls.newProtocol(
+        ProtChemImportSmallMolecules,
+        filesPath='/home/danieldh/i2pc/scipion-chem-rosetta/rosetta/tests/data/smallMolecules/mol2')
+      cls.launchProtocol(protImportSmallMols)
+      cls.protImportSmallMols = protImportSmallMols
+
+    def _runTargetPreparation(self, kwargs):
+        protPrepWizard = self.newProtocol(
+            ProtSchrodingerPrepWizard,
+            inputStructure=self.protImportPDB.outputPdb,
+            **kwargs)
+        self.launchProtocol(protPrepWizard)
+        return protPrepWizard
+
+    def _runLigandPreparation(self):
+        protPrepLigand = self.newProtocol(
+            ProtSchrodingerLigPrep,
+            inputSmallMols=self.protImportSmallMols.outputSmallMols,
+            ionization=1)
+        self.launchProtocol(protPrepLigand)
+        return protPrepLigand
+
+    def _runSitemap(self, targetProt):
+        protSitemap = self.newProtocol(
+            ProtSchrodingerSiteMap,
+            inputStructure=targetProt.outputStructure,
+            maxsites=2)
+
+        self.launchProtocol(protSitemap)
+        pocketsOut = getattr(protSitemap, 'outputPockets', None)
+        self.assertIsNotNone(pocketsOut)
+        return protSitemap
+    
+    def _runFilterSites(self, siteProt):
+        protFilter = self.newProtocol(
+            ProtSetFilter,
+            inputSet=siteProt.outputPockets,
+            operation=ProtSetFilter.CHOICE_RANKED,
+            topRankValue=3,
+            topRankAttribute='_score')
+
+        self.launchProtocol(protFilter)
+        return protFilter
+
+    def _runGridDefinition(self, filterProt, targetProt):
+        protGrid = self.newProtocol(
+            ProtSchrodingerGridSiteMap,
+            inputSetOfPockets=filterProt.outputPockets,
+            inputSchAtomStruct=targetProt.outputStructure,
+            innerAction=1, diameterNin=1.0,
+            outerAction=1, diameterNout=0.6)
+
+        self.launchProtocol(protGrid)
+        gridsOut = getattr(protGrid, 'outputGrids', None)
+        self.assertIsNotNone(gridsOut)
+        return protGrid
+
+    def _runGlideDocking(self, ligProt, gridProt):
+        protGlide = self.newProtocol(
+            ProtSchrodingerGlideDocking,
+            inputGridSet=gridProt.outputGrids,
+            inputLibrary=ligProt.outputSmallMols,
+            doConvertOutput=True, convertType=1)
+
+        self.launchProtocol(protGlide)
+        return protGlide
+
+    def testGlide(self):
+        prepProt = self._runTargetPreparation(self.getPrepTargetWizardArgs())
+        siteProt = self._runSitemap(prepProt)
+        #filterProt = self._runFilterSites(siteProt)
+        gridProt = self._runGridDefinition(siteProt, prepProt)
+
+        ligProt = self._runLigandPreparation()
+        glideProt = self._runGlideDocking(ligProt, gridProt)
+
+    def getPrepTargetWizardArgs(self):
+        args={'stage1':True, 'hydrogens': 1,
+              'stage2':True, 'propKa':True,
+              'stage3':True,
+              'stage4':True, 'ms':True}
+        return args
+
+
+
+

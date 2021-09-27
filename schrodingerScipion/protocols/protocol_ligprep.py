@@ -31,6 +31,9 @@ from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from pwchem.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
 
+progLigPrep=Plugin.getHome('ligprep')
+progStructConvert=Plugin.getHome('utilities/structconvert')
+
 class ProtSchrodingerLigPrep(EMProtocol):
     """Schrodinger's LigPrep is a program to prepare ligand libraries"""
     _label = 'ligand preparation (ligprep)'
@@ -95,9 +98,6 @@ class ProtSchrodingerLigPrep(EMProtocol):
         self.outputSmallMoleculesDropped = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMolsDropped')
 
     def ligPrepStep(self, mol):
-        progLigPrep=Plugin.getHome('ligprep')
-        progStructConvert=Plugin.getHome('utilities/structconvert')
-
         fnSmall = mol.smallMoleculeFile.get()
         fnMol = os.path.split(fnSmall)[1]
         fnRoot = os.path.splitext(fnMol)[0]
@@ -134,8 +134,11 @@ class ProtSchrodingerLigPrep(EMProtocol):
             elif fnMol.endswith('.sdf'):
                 args += " -isd tmp/%s" % (fnMol)
             else:
-                print("Skipping %s"%fnSmall)
-                return
+                fnSDF = self._getTmpPath(fnRoot + '.sdf')
+                self.runJob(progStructConvert, '{} {}'.format(fnSmall, fnSDF))
+                mol.smallMoleculeFile.set(fnSDF)
+
+                args += " -isd tmp/%s" % (fnRoot + '.sdf')
 
             fnMae = "extra/%s.maegz" % fnRoot
             if not os.path.exists(fnMae):

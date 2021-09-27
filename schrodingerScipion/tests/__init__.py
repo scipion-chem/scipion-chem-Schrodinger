@@ -25,3 +25,4 @@
 # **************************************************************************
 
 from .test_sitemap import TestSitemap
+from .test_glide import TestGlideDocking
