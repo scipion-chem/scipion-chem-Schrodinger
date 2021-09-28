@@ -98,10 +98,11 @@ class TestGlideDocking(BaseTest):
     def _runGridDefinition(self, filterProt, targetProt):
         protGrid = self.newProtocol(
             ProtSchrodingerGridSiteMap,
-            inputSetOfPockets=filterProt.outputPockets,
             inputSchAtomStruct=targetProt.outputStructure,
             innerAction=1, diameterNin=1.2,
             outerAction=1, diameterNout=0.8)
+        protGrid.inputSetOfPockets.set(filterProt)
+        protGrid.inputSetOfPockets.setExtended("outputPockets")
 
         self.launchProtocol(protGrid)
         gridsOut = getattr(protGrid, 'outputGrids', None)
