@@ -21,11 +21,11 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(
-    name='scipion-em-schrodingerScipion',
+    name='scipion-chem-schrodingerScipion',
     version='3.0.0',
     description='A Scipion plugin for Schrodinger methods',
     long_description=long_description,
-    url='https://github.com/scipion-em/scipion-em-schrodinger',
+    url='https://github.com/scipion-chem/scipion-chem-schrodinger',
     author='Carlos Oscar Sorzano',
     author_email='scipion@cnb.csic.es',
     keywords='scipion scipion-3',

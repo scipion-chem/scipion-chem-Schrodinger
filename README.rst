@@ -14,7 +14,7 @@ You will need to use `3.0.0 <https://github.com/I2PC/scipion/releases/tag/v3.0>`
 
 .. code-block:: 
 
-      scipion installp -p scipion-em-schrodinger
+      scipion installp -p scipion-chem-schrodinger
       
 OR
 
@@ -26,13 +26,13 @@ OR
 
 .. code-block::
 
-            git clone https://github.com/scipion-em/scipion-em-schrodinger.git
+            git clone https://github.com/scipion-chem/scipion-chem-schrodinger.git
 
 2. Install:
 
 .. code-block::
 
-            scipion installp -p path_to_scipion-em-schrodinger --devel
+            scipion installp -p path_to_scipion-chem-schrodinger --devel
 
 - **Binary files** 
 
