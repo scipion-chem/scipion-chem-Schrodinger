@@ -27,7 +27,7 @@
 import os
 from subprocess import call, Popen
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
-from pyworkflow.protocol.params import IntParam, EnumParam
+from pyworkflow.protocol.params import IntParam, EnumParam, BooleanParam
 import pyworkflow.utils as pwutils
 from pwchem.viewers import PyMolViewer
 
@@ -52,41 +52,66 @@ class ProtSchrodingerGlideDockingViewer(ProtocolViewer):
                       label='Display docking output with: ',
                       help='*PyMol*: display target and ligands in pymol.\n '
                            '*Maestro*: display target and ligands in Maestro.')
-        form.addParam('displayPymol', EnumParam, condition='displaySoft=={}'.format(PYMOL),
+        form.addParam('singleLigand', BooleanParam, condition='displaySoft=={}'.format(PYMOL),
+                      default=False,
+                      label='Display single ligand: ',
+                      help='Display the target with a single ligand docked')
+        form.addParam('displayPymol', EnumParam, condition='displaySoft=={} and not singleLigand'.format(PYMOL),
                       choices=self.getChoices(pymol=True), default=0,
                       label='Display docking on pocket result: ',
                       help='Docking results are grouped by their pocket, choose the one to visualize')
+        form.addParam('displayPymolSingle', EnumParam, condition='displaySoft=={} and singleLigand'.format(PYMOL),
+                      choices=self.getChoicesSingle(), default=0,
+                      label='Display single ligand: ',
+                      help='Display this single ligand with the target')
 
         form.addParam('displayMaestro', EnumParam, condition='displaySoft=={}'.format(MAESTRO),
                       choices=self.getChoices(pymol=False), default=0,
                       label='Display docking on pocket result: ',
                       help='Docking results are grouped by their pocket, choose the one to visualize')
 
+
+    def getChoicesSingle(self):
+        self.outputLigands = {}
+        for oAttr in self.protocol.iterOutputAttributes():
+            if 'outputSmallMolecules' in oAttr[0]:
+                molSet = getattr(self.protocol, oAttr[0])
+                for mol in molSet:
+                    curMol = mol.clone()
+                    pName = curMol.getUniqueName()
+                    self.outputLigands[pName] = curMol
+
+        outputLabels = list(self.outputLigands.keys())
+        outputLabels.sort()
+        return outputLabels
+
+    def getChoices(self, pymol=True):
+        outputLabels = []
+        for oAttr in self.protocol.iterOutputAttributes():
+            if pymol and 'outputSmallMolecules' in oAttr[0]:
+                outputLabels.append(oAttr[0])
+            elif not pymol and 'outputPoses' in oAttr[0]:
+                outputLabels.append(oAttr[0])
+        outputLabels.sort()
+        if pymol and not self.protocol.mergeOutput:
+            outputLabels = ['All'] + outputLabels
+        return outputLabels
+
+
     def _getVisualizeDict(self):
         return {'displayPymol': self._viewPymol,
-                'displayMaestro': self._viewMaestro}
+                'displayMaestro': self._viewMaestro,
+                'displayPymolSingle': self._viewSinglePymol}
 
-    def _viewPose(self, e=None):
+    def _viewSinglePymol(self, e=None):
         #todo: develop a viewer for single poses
-        i = self.pose.get()
-        fnPose = None
-        for small in self.protocol.outputSmallMolecules:
-            if small.getObjId() == i:
-                fnPose = small.poseFile.get()
-                break
-        if fnPose:
-            i = int(fnPose.split('@')[0])
-            fnPv = self.protocol.outputPoses.getFileName()
-            fnPose = self.protocol._getTmpPath('posei.maegz')
-            pwutils.runJob(None, schrodinger_plugin.getHome('utilities/maesubset'),
-                           "-n %d:%d %s -o %s" % (i, i, fnPv, fnPose))
-            fnStruct = self.protocol.inputGrid.get().structureFile.get()
-            fnBoth = self.protocol._getTmpPath('pv.maegz')
-            pwutils.runJob(None, schrodinger_plugin.getHome('utilities/structcat'),
-                           "-imae %s -imae %s -o %s" % (fnPose,fnStruct,fnBoth))
+        ligandLabel = self.getEnumText('displayPymolSingle')
+        mol = self.outputLigands[ligandLabel].clone()
+        pmlFile = self.protocol._getExtraPath(ligandLabel)+'/{}.pml'.format(ligandLabel)
+        self.writePmlFile(pmlFile, self.buildPMLDockingSingleStr(mol, ligandLabel, addTarget=True))
 
-            pwutils.runJob(None, schrodinger_plugin.getHome('maestro'), fnBoth,
-                           env=schrodinger_plugin.getEnviron())
+        pymolV = PyMolViewer(project=self.getProject())
+        pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
     def _viewMaestro(self, e=None):
         fnPv = getattr(self.protocol, self.getEnumText('displayMaestro')).getFileName()
@@ -101,44 +126,49 @@ class ProtSchrodingerGlideDockingViewer(ProtocolViewer):
         else:
             pmlFile = self.protocol._getPath('allOutputMols.pml')
             outName = self.getChoices()[1]
-            pmlStr = self.buildPMLDockingsStr(outName, prefix='grid-{}_'.format(outName.split('_')[-1]))
+            pmlStr = self.buildPMLDockingsStr(outName)
             for outName in self.getChoices()[2:]:
-                pmlStr += self.buildPMLDockingsStr(outName, addTarget=False,
-                                                   prefix='grid-{}_'.format(outName.split('_')[-1]))
+                pmlStr += self.buildPMLDockingsStr(outName, addTarget=False)
 
         self.writePmlFile(pmlFile, pmlStr)
         pymolV = PyMolViewer(project=self.getProject())
         pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
-    def getChoices(self, pymol=True):
-        outputLabels = []
-        for oAttr in self.protocol.iterOutputAttributes():
-            if pymol and 'outputSmallMolecules' in oAttr[0]:
-                outputLabels.append(oAttr[0])
-            elif not pymol and 'outputPoses' in oAttr[0]:
-                outputLabels.append(oAttr[0])
-        outputLabels.sort()
-        if pymol:
-            outputLabels = ['All'] + outputLabels
-        return outputLabels
 
-    def buildPMLDockingsStr(self, outName, addTarget=True, prefix=''):
-        molSet = getattr(self.protocol, outName)
+    def buildPMLDockingSingleStr(self, mol, molName, addTarget=True):
+        pmlStr = ''
         if addTarget:
             pmlStr = 'load {}\n'.format(self.protocol.inputGridSet.get().getProteinFile())
-        else:
-            pmlStr = ''
+
+        pdbFile = os.path.abspath(self.maePos2pdb(mol, 'single', molName))
+        pmlStr += 'load {}, {}\n'.format(pdbFile, molName)
+        return pmlStr
+
+    def buildPMLDockingsStr(self, outName, addTarget=True):
+        molSet = getattr(self.protocol, outName)
+        pmlStr = ''
+        if addTarget:
+            pmlStr = 'load {}\n'.format(self.protocol.inputGridSet.get().getProteinFile())
         if not os.path.exists(self.getPDBsDir(outName)):
+            molDic = {}
             for i, mol in enumerate(molSet):
                 pdbFile = self.maePos2pdb(mol, i, outName)
-                pFile = os.path.abspath(pdbFile), os.path.abspath(pdbFile)
-                pName = prefix + pdbFile.split('.')[0]
-                pmlStr += 'load {}, {}\ndisable {}\n'.format(pFile, pName, pName)
+                pFile = os.path.abspath(pdbFile)
+                pName = mol.getUniqueName()
+                molDic[pName] = pFile
+
+            molKeys = list(molDic.keys())
+            molKeys.sort()
+            for molName in molKeys:
+                pFile = molDic[molName]
+                pmlStr += 'load {}, {}\ndisable {}\n'.format(pFile, molName, molName)
 
         else:
-            for pdbFile in os.listdir(self.getPDBsDir(outName)):
+            molFiles = list(os.listdir(self.getPDBsDir(outName)))
+            molFiles.sort()
+            for pdbFile in molFiles:
                 pFile = os.path.abspath(os.path.join(self.getPDBsDir(outName), pdbFile))
-                pName = prefix + pdbFile.split('.')[0]
+                pName = pdbFile.split('.')[0]
                 pmlStr += 'load {}, {}\ndisable {}\n'.format(pFile, pName, pName)
         return pmlStr
 
@@ -155,9 +185,9 @@ class ProtSchrodingerGlideDockingViewer(ProtocolViewer):
         outDir = self.getPDBsDir(outName)
         if not os.path.exists(outDir):
             os.mkdir(outDir)
-        fnAux = os.path.abspath(self.protocol._getExtraPath("tmp_%d.mae" % i))
+        fnAux = os.path.abspath(self.protocol._getExtraPath("tmp_{}.mae".format(i)))
         n, fnRaw = mol.poseFile.get().split('@')
-        fnOut = os.path.join(outDir, os.path.basename(mol.getFileName()).split('.')[0] + '_{}.pdb'.format(n))
+        fnOut = os.path.join(outDir, '{}.pdb'.format(mol.getUniqueName()))
 
         if not os.path.basename(fnOut) in os.listdir(outDir):
             args = "-n %s %s -o %s" % (n, os.path.abspath(fnRaw), fnAux)
