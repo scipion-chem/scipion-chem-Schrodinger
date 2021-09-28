@@ -276,6 +276,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         small.ligandEfficiencyLn = pwobj.Float(tokens[4])
                         small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
                         small.structFile = pwobj.String(fnStruct)
+                        small.setGridId(gridId)
                         if bindingSiteScore:
                             small.bindingSiteScore = pwobj.Float(bindingSiteScore)
                         if bindingSiteDScore:
@@ -292,7 +293,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
             if not self.mergeOutput:
                 idxSorted = sortDockingResults(smallList)
-                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
+                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=gridId)
                 for idx in idxSorted:
                     small = smallList[idx]
                     outputSet.append(small)
@@ -301,8 +302,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 self._defineSourceRelation(grid, outputSet)
                 self._defineSourceRelation(self.inputLibrary, outputSet)
                 if self.doConvertOutput:
-                    print('Converting output to {}: ', 'outputSmallMolecules_{}'.
-                          format(gridId, self.getEnumText('convertType')))
+                    print('Converting output to {}: ', 'outputSmallMolecules_{}'.format(
+                        self.getEnumText('convertType'), gridId))
                     self.convertOutput(outputSet, nameDir='outputSmallMolecules_{}'.format(gridId))
 
         if self.mergeOutput:
@@ -352,13 +353,12 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         for t in threads:
             t.join()
 
-
     def convertOutputStep(self, curMolSet, outDir, it):
         for i, mol in enumerate(curMolSet):
             fnAux = os.path.abspath(self._getExtraPath("tmp_%d_%d.mae" % (it, i)))
             n, fnRaw = mol.poseFile.get().split('@')
-            fnOut = os.path.join(outDir, os.path.basename(mol.getFileName()).split('.')[0] + '_{}.{}'.
-                                 format(n, self.getEnumText('convertType')))
+            fnOut = os.path.join(outDir, '{}.{}'.format(
+                mol.getUniqueName(), self.getEnumText('convertType')))
 
             if not os.path.exists(fnOut):
                 args = "-n %s %s -o %s" % (n, os.path.abspath(fnRaw), fnAux)
