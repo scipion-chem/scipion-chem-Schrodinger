@@ -32,8 +32,9 @@ from pyworkflow.protocol.constants import LEVEL_ADVANCED
 
 from pwem.protocols import EMProtocol
 from schrodingerScipion.objects import SchrodingerGrid
-from bioinformatics.objects import BindingSite, SetOfBindingSites, AutodockGrid
-from bioinformatics import Plugin as bioinformatics_plugin
+from pwchem.objects import BindingSite, SetOfBindingSites
+from autodock.objects import AutodockGrid
+from pwchem import Plugin as pwchem_plugin
 from schrodingerScipion import Plugin as schrodinger_plugin
 
 class ProtSchrodingerGridADT(EMProtocol):
@@ -127,11 +128,11 @@ class ProtSchrodingerGridADT(EMProtocol):
         libraryGPF = os.path.join(fnGridDirAbs,"library.gpf")
         args += " -o %s"%libraryGPF
 
-        self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
-                    bioinformatics_plugin.getADTPath('Utilities24/prepare_gpf4.py')+args)
+        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+                    pwchem_plugin.getADTPath('Utilities24/prepare_gpf4.py')+args)
 
         args = "-p library.gpf -l library.glg"
-        self.runJob(bioinformatics_plugin.getAutodockPath("autogrid4"),args, cwd=fnGridDirAbs)
+        self.runJob(pwchem_plugin.getAutodockPath("autogrid4"),args, cwd=fnGridDirAbs)
         return fnGridDirAbs
 
     def preparationStep(self):

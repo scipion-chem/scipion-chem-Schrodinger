@@ -1,6 +1,6 @@
-================================
+==================================
 Schrodinger Maestro scipion plugin
-================================
+==================================
 
 Programs coming from Schrodinger
 
@@ -36,11 +36,17 @@ OR
 
 - **Binary files** 
 
-Atom_struct_utils plugin is a pure Python module, no binary files are required. 
+Atom_struct_utils plugin is a pure Python module, no binary files are required.
+
+The **Schrodinger software must be installed separately**, as it requires a license.
+You must either install it in the EM_ROOT (typically: SCIPION_HOME/software/em/Schrodinger2021-3)
+or define the Schrodinger path in scipion.conf as SCHRODINGER_HOME
 
 - **Tests**
 
 To check the installation, simply run the following Scipion test:
+
+scipion3 tests schrodingerScipion.tests.test_sitemap.TestSitemap
 
 ===============
 Buildbot status

@@ -27,6 +27,8 @@ from pyworkflow.gui.browser import FileHandler
 import pyworkflow.utils as pwutils
 import schrodingerScipion.objects
 from schrodingerScipion import Plugin
+from subprocess import Popen
+import os
 
 class SchrodingerDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
@@ -54,8 +56,10 @@ class SchrodingerDataViewer(pwviewer.Viewer):
         if issubclass(cls, schrodingerScipion.objects.SchrodingerAtomStruct) or \
            issubclass(cls, schrodingerScipion.objects.SchrodingerBindingSites) or \
            issubclass(cls, schrodingerScipion.objects.SchrodingerPoses):
-            pwutils.runJob(None, Plugin.getHome('maestro'), obj.getFileName(), env=Plugin.getEnviron())
-
+            #pwutils.runJob(None, Plugin.getHome('maestro'), obj.getFileName(), env=Plugin.getEnviron())
+            cmd = [Plugin.getHome('maestro'), os.path.abspath(obj.getFileName())]
+            cwd = '/'.join(obj.getFileName().split('/')[:-1])
+            Popen(cmd, cwd=cwd, env=Plugin.getEnviron())
         return views
 
 class MaestroView(pwviewer.CommandView):

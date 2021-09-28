@@ -24,3 +24,11 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+SCHRODINGER_HOME = 'SCHRODINGER_HOME' #Acceso by Plugin.getHome()
+
+ATTRIBUTES_MAPPING = {'SiteScore': 'score', 'Dscore': 'druggability', 'size': 'nPoints',
+                      'volume': 'volume', 'exposure': 'exposure', 'enclosure': 'enclosure',
+                      'contact': 'contact', 'phobic': 'hidrophobic', 'philic': 'hidrophilic',
+                      'balance': 'balance', 'don/acc': 'don/acc', 'class': 'class',
+                      'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues'}
