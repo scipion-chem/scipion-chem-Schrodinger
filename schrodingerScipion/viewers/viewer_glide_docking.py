@@ -93,7 +93,7 @@ class ProtSchrodingerGlideDockingViewer(ProtocolViewer):
             elif not pymol and 'outputPoses' in oAttr[0]:
                 outputLabels.append(oAttr[0])
         outputLabels.sort()
-        if pymol and not self.protocol.mergeOutput:
+        if pymol and len(outputLabels) > 1 and not self.protocol.mergeOutput:
             outputLabels = ['All'] + outputLabels
         return outputLabels
 
@@ -104,7 +104,6 @@ class ProtSchrodingerGlideDockingViewer(ProtocolViewer):
                 'displayPymolSingle': self._viewSinglePymol}
 
     def _viewSinglePymol(self, e=None):
-        #todo: develop a viewer for single poses
         ligandLabel = self.getEnumText('displayPymolSingle')
         mol = self.outputLigands[ligandLabel].clone()
         pmlFile = self.protocol._getExtraPath(ligandLabel)+'/{}.pml'.format(ligandLabel)
