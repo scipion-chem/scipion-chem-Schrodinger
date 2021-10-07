@@ -302,8 +302,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 self._defineSourceRelation(grid, outputSet)
                 self._defineSourceRelation(self.inputLibrary, outputSet)
                 if self.doConvertOutput:
-                    print('Converting output to {}: ', 'outputSmallMolecules_{}'.format(
-                        self.getEnumText('convertType'), gridId))
+                    print('Converting output to {}: outputSmallMolecules_{}'.
+                          format(self.getEnumText('convertType'), gridId))
                     self.convertOutput(outputSet, nameDir='outputSmallMolecules_{}'.format(gridId))
 
         if self.mergeOutput:
