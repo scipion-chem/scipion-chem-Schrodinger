@@ -68,7 +68,7 @@ class TestGlideDocking(BaseTest):
     def _runLigandPreparation(self):
         protPrepLigand = self.newProtocol(
             ProtSchrodingerLigPrep,
-            inputSmallMols=self.protImportSmallMols.outputSmallMols,
+            inputSmallMols=self.protImportSmallMols.outputSmallMolecules,
             ionization=1)
         self.launchProtocol(protPrepLigand)
         return protPrepLigand
@@ -113,7 +113,7 @@ class TestGlideDocking(BaseTest):
         protGlide = self.newProtocol(
             ProtSchrodingerGlideDocking,
             inputGridSet=gridProt.outputGrids,
-            inputLibrary=ligProt.outputSmallMols,
+            inputLibrary=ligProt.outputSmallMolecules,
             doConvertOutput=True, convertType=1)
 
         self.launchProtocol(protGlide)
