@@ -61,11 +61,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        label='Library of compounds:', allowsNull=False)
         form.addParam('mergeOutput', BooleanParam, default=False,
                       label='Merge output from different pockets: ')
-        form.addParam('doConvertOutput', BooleanParam, default=False,
-                      label='Convert output from maestro format: ')
-        form.addParam('convertType', EnumParam, condition='doConvertOutput',
+        form.addParam('convertType', EnumParam,
                       choices=['pdb', 'mol2', 'sdf'], default=0, display=EnumParam.DISPLAY_HLIST,
-                      label='Convert to: ',
+                      label='Convert output format to: ', expertLevel=LEVEL_ADVANCED,
                       help='Convert output molecules to this format')
         group = form.addGroup('Docking')
         group.addParam('dockingMethod', EnumParam, default=0, choices=['Flexible dock (confgen)', 'Rigid dock (rigid)',
@@ -298,13 +296,17 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     small = smallList[idx]
                     outputSet.append(small)
 
-                self._defineOutputs(**{'outputSmallMolecules_{}'.format(gridId): outputSet})
+                self.convertedDic = {}
+                print('Converting output to {}: outputSmallMolecules_{}'.
+                      format(self.getEnumText('convertType'), gridId))
+                nameOut = 'outputSmallMolecules_{}'.format(gridId)
+                self.convertOutput(outputSet, nameDir=nameOut)
+                # Updating mols with converted posFiles
+                self.updatePosFiles(outputSet, nameOut)
+
+                self._defineOutputs(**{nameOut: outputSet})
                 self._defineSourceRelation(grid, outputSet)
                 self._defineSourceRelation(self.inputLibrary, outputSet)
-                if self.doConvertOutput:
-                    print('Converting output to {}: outputSmallMolecules_{}'.
-                          format(self.getEnumText('convertType'), gridId))
-                    self.convertOutput(outputSet, nameDir='outputSmallMolecules_{}'.format(gridId))
 
         if self.mergeOutput:
             idxSorted = sortDockingResults(allSmallList)
@@ -313,12 +315,16 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 small = allSmallList[idx]
                 outputSet.append(small)
 
+            self.convertedDic = {}
+            print('Converting output to {}: outputSmallMolecules'.format(self.getEnumText('convertType')))
+            nameOut = 'outputSmallMolecules'
+            self.convertOutput(outputSet, nameDir=nameOut)
+            #Updating mols with converted posFiles
+            self.updatePosFiles(outputSet, nameOut)
+
             self._defineOutputs(outputSmallMolecules=outputSet)
             self._defineSourceRelation(self.inputGridSet, outputSet)
             self._defineSourceRelation(self.inputLibrary, outputSet)
-            if self.doConvertOutput:
-                print('Converting output to {}: outputSmallMolecules'.format(self.getEnumText('convertType')))
-                self.convertOutput(outputSet, nameDir="outputSmallMolecules")
 
 
     def _validate(self):
@@ -331,6 +337,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
     def convertOutput(self, molSet, nameDir):
         outDir = self._getExtraPath(nameDir)
         os.mkdir(outDir)
+        self.convertedDic[os.path.basename(outDir)] = {}
 
         nt = self.numberOfThreads.get()
         nMols = len(molSet) // nt
@@ -367,6 +374,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 args = fnAux + ' ' + os.path.abspath(fnOut)
                 subprocess.call([structConvertProg, *args.split()])
                 os.remove(fnAux)
+                self.convertedDic[os.path.basename(outDir)][mol.getObjId()] = fnOut
 
     def convert2Mol2(self, fnSmall, it):
         fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
@@ -379,3 +387,16 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
     def getAllLigandsFile(self, suffix=''):
         return 'allMoleculesFile{}.mol2'.format(suffix)
+
+    def getOriginalReceptorFile(self):
+        return self.inputGridSet.get().getProteinFile()
+
+    def updatePosFiles(self, outSet, outName):
+        newMols = []
+        for mol in outSet:
+            mol.setPoseFile(self.convertedDic[outName][mol.getObjId()])
+            newMols.append(mol.clone())
+
+        for mol in newMols:
+            outSet.update(mol)
+        return outSet
