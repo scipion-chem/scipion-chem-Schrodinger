@@ -95,14 +95,13 @@ class TestGlideDocking(BaseTest):
         self.launchProtocol(protFilter)
         return protFilter
 
-    def _runGridDefinition(self, filterProt, targetProt):
+    def _runGridDefinition(self, filterProt):
         protGrid = self.newProtocol(
             ProtSchrodingerGridSiteMap,
-            inputSchAtomStruct=targetProt.outputStructure,
-            innerAction=1, diameterNin=1.2,
-            outerAction=1, diameterNout=0.8)
-        protGrid.inputSetOfPockets.set(filterProt)
-        protGrid.inputSetOfPockets.setExtended("outputPockets")
+            innerAction=1, diameterNin=0.8,
+            outerAction=1, diameterNout=1.2)
+        protGrid.inputPockets.set(filterProt)
+        protGrid.inputPockets.setExtended("outputPockets")
 
         self.launchProtocol(protGrid)
         gridsOut = getattr(protGrid, 'outputGrids', None)
@@ -123,7 +122,7 @@ class TestGlideDocking(BaseTest):
         prepProt = self._runTargetPreparation(self.getPrepTargetWizardArgs())
         siteProt = self._runSitemap(prepProt)
         filterProt = self._runFilterSites(siteProt)
-        gridProt = self._runGridDefinition(filterProt, prepProt)
+        gridProt = self._runGridDefinition(filterProt)
 
         ligProt = self._runLigandPreparation()
         glideProt = self._runGlideDocking(ligProt, gridProt)
