@@ -147,7 +147,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
     def createOutputStep(self):
         i=1
         outGrids = SetOfSchrodingerGrids(filename=self._getPath('SchGrids.sqlite'))
-        for pocket in self.inputSetOfPockets.get():
+        for pocket in self.inputPockets.get():
             fnDir = self._getPath(self.getGridDir(pocket.getObjId()))
             if os.path.exists(fnDir):
                 fnBase = os.path.split(fnDir)[1]
