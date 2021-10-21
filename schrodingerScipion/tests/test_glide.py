@@ -120,6 +120,8 @@ class TestGlideDocking(BaseTest):
     def testGlide(self):
         siteProt = self._runSitemap(self.prepProt)
         gridProt = self._runGridDefinition(siteProt)
+
+        self._waitOutput(self.ligProt, 'outputSmallMolecules', sleepTime=5)
         glideProt = self._runGlideDocking(self.ligProt, gridProt)
 
 
