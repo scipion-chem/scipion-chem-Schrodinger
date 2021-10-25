@@ -251,14 +251,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             gridId = grid.getObjId()
             gridDir = 'grid_{}/'.format(gridId)
             fnStruct = grid.structureFile.get()
-            if hasattr(grid, "bindingSiteScore"):
-                bindingSiteScore = grid.bindingSiteScore.get()
-            else:
-                bindingSiteScore = None
-            if hasattr(grid, "bindingSiteDScore"):
-                bindingSiteDScore = grid.bindingSiteDScore.get()
-            else:
-                bindingSiteDScore = None
 
             smallList = []
             with open(self._getPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
@@ -268,17 +260,13 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     if i > 1:
                         tokens = line.split(',')
                         small = SmallMolecule(smallMolFilename=smallDict[tokens[0]])
-                        small.dockingScore = pwobj.Float(tokens[1])
+                        small._energy = pwobj.Float(tokens[1])
                         small.ligandEfficiency = pwobj.Float(tokens[2])
                         small.ligandEfficiencySA = pwobj.Float(tokens[3])
                         small.ligandEfficiencyLn = pwobj.Float(tokens[4])
                         small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
                         small.structFile = pwobj.String(fnStruct)
                         small.setGridId(gridId)
-                        if bindingSiteScore:
-                            small.bindingSiteScore = pwobj.Float(bindingSiteScore)
-                        if bindingSiteDScore:
-                            small.bindingSiteDScore = pwobj.Float(bindingSiteDScore)
                         smallList.append(small)
                     i += 1
 
@@ -304,6 +292,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 # Updating mols with converted posFiles
                 self.updatePosFiles(outputSet, nameOut)
 
+                outputSet.setDocked(True)
+                outputSet.proteinFile.set(self.getOriginalReceptorFile())
                 self._defineOutputs(**{nameOut: outputSet})
                 self._defineSourceRelation(grid, outputSet)
                 self._defineSourceRelation(self.inputLibrary, outputSet)
@@ -322,6 +312,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             #Updating mols with converted posFiles
             self.updatePosFiles(outputSet, nameOut)
 
+            outputSet.setDocked(True)
+            outputSet.proteinFile.set(self.getOriginalReceptorFile())
             self._defineOutputs(outputSmallMolecules=outputSet)
             self._defineSourceRelation(self.inputGridSet, outputSet)
             self._defineSourceRelation(self.inputLibrary, outputSet)

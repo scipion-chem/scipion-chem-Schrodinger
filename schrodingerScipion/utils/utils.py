@@ -52,7 +52,7 @@ def sortDockingResults(smallList):
     leSA = []
     leLn = []
     for small in smallList:
-        ds.append(small.dockingScore.get())
+        ds.append(small._energy.get())
         le.append(small.ligandEfficiency.get())
         leSA.append(small.ligandEfficiencySA.get())
         leLn.append(small.ligandEfficiencyLn.get())
@@ -66,7 +66,7 @@ def sortDockingResults(smallList):
     h = np.zeros(len(ds))
     i=0
     for small in smallList:
-        hds = np.sum(ds >= small.dockingScore.get()) * iN
+        hds = np.sum(ds >= small._energy.get()) * iN
         hle = np.sum(le >= small.ligandEfficiency.get()) * iN
         hleSA = np.sum(leSA >= small.ligandEfficiencySA.get()) * iN
         hleLn = np.sum(leLn >= small.ligandEfficiencyLn.get()) * iN
