@@ -166,16 +166,16 @@ class ProtSchrodingerLigPrep(EMProtocol):
 
     def createOutputStep(self):
         if len(self.outputSmallMolecules)>0:
-            self._defineOutputs(outputSmallMols=self.outputSmallMolecules)
+            self._defineOutputs(outputSmallMolecules=self.outputSmallMolecules)
             self._defineSourceRelation(self.inputSmallMols, self.outputSmallMolecules)
         if len(self.outputSmallMoleculesDropped)>0:
-            self._defineOutputs(outputSmallMolsDropped=self.outputSmallMoleculesDropped)
+            self._defineOutputs(outputSmallMoleculesDropped=self.outputSmallMoleculesDropped)
             self._defineSourceRelation(self.inputSmallMols, self.outputSmallMoleculesDropped)
 
     def saveMolecule(self, molFn, molSet):
         while self.saving:
             time.sleep(0.2)
         self.saving = True
-        smallMolecule = SmallMolecule(smallMolFilename=molFn)
+        smallMolecule = SmallMolecule(smallMolFilename=molFn, type='Schrodinger')
         molSet.append(smallMolecule.clone())
         self.saving = False

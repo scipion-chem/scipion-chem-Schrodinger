@@ -113,7 +113,7 @@ class ProtSchrodingerConvert(EMProtocol):
 
     def createOutputStep(self):
         if self.inputType.get() == 0:
-            self._defineOutputs(outputSmallMols=self.outputSmallMolecules)
+            self._defineOutputs(outputSmallMolecules=self.outputSmallMolecules)
         else:
             self._defineOutputs(outputStructure=self.target)
 

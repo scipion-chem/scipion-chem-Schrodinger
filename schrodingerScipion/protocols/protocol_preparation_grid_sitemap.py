@@ -47,12 +47,9 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputSetOfPockets', PointerParam, pointerClass="SetOfPockets",
+        form.addParam('inputPockets', PointerParam, pointerClass="SetOfPockets",
                       label='Sets of Pockets:', allowsNull=False,
                       help='Sets of known or predicted protein pockets to center the grid on')
-        form.addParam('inputSchAtomStruct', PointerParam, pointerClass="SchrodingerAtomStruct",
-                      label='Schrodinger Atom Structure target :', allowsNull=False,
-                      help='Target atomic structure prepared with Schrodinger, containing the necessary mae file')
 
         form.addSection(label='Parameters')
         group = form.addGroup('Inner box')
@@ -106,9 +103,11 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
+        self.inputMAEFile = self.inputPockets.get().getMAEFile()
+
         prepSteps = []
         makePath(self._getPath('grids'))
-        for pocket in self.inputSetOfPockets.get():
+        for pocket in self.inputPockets.get():
             pStep = self._insertFunctionStep('preparationStep', pocket.clone(), prerequisites=[])
             prepSteps.append(pStep)
 
@@ -148,7 +147,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
     def createOutputStep(self):
         i=1
         outGrids = SetOfSchrodingerGrids(filename=self._getPath('SchGrids.sqlite'))
-        for pocket in self.inputSetOfPockets.get():
+        for pocket in self.inputPockets.get():
             fnDir = self._getPath(self.getGridDir(pocket.getObjId()))
             if os.path.exists(fnDir):
                 fnBase = os.path.split(fnDir)[1]
@@ -181,7 +180,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         return maeOut
 
     def getInputMaeFile(self):
-        return self.inputSchAtomStruct.get().getFileName()
+        return self.inputMAEFile
 
     def getGridDir(self, pocketId):
         return 'grids/{}'.format(self.getGridName(pocketId))

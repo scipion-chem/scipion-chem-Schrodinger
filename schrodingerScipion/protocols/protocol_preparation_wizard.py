@@ -23,11 +23,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
-import sys
+import os, json
+from pwchem.utils import clean_PDB
 
-from pyworkflow.protocol.constants import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, BooleanParam, FloatParam, IntParam, EnumParam
+from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, FloatParam, IntParam, EnumParam
 from pyworkflow.utils.path import createLink
 from pwem.protocols import EMProtocol
 from pwem.objects.data import AtomStruct
@@ -40,12 +39,43 @@ class ProtSchrodingerPrepWizard(EMProtocol):
     _label = 'target preparation (prepwizard)'
     _program = ""
 
+    def _cleanStructureParams(self, form):
+        clean = form.addGroup("Clean atomic structure")
+        clean.addParam('cleanPDB', BooleanParam, default=False, label='Clean PDB: ')
+        clean.addParam("waters", BooleanParam,
+                       label='Remove waters', condition='cleanPDB',
+                       default=True, important=True,
+                       help='Remove all waters molecules from a pdb file')
+
+        clean.addParam("HETATM", BooleanParam,
+                       label='Remove ligands HETATM',
+                       default=True, important=True, condition='cleanPDB',
+                       help='Remove all ligands and HETATM contained in the protein')
+
+        clean.addParam("rchains", BooleanParam,
+                       label='Remove redundant chains',
+                       default=False, important=True, condition='cleanPDB',
+                       help='Remove redundant chains in the proteins')
+
+        clean.addParam("chain_name", StringParam,
+                       label="Conserved chain",
+                       important=True,
+                       condition="cleanPDB and rchains==True",
+                       help="Select the chain on which you want to carry out the "
+                            "molecular docking. You must know the protein and structure "
+                            "file that you loaded. \n\nFor example, the protein mdm2 "
+                            "(4ERF) has a C1 symmetry, which indicates that its chains "
+                            "are at least 95% equal, so you would write A, C or E "
+                            "(names of the chains).")
+
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct, SchrodingerAtomStruct",
+        form.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct, SchrodingerAtomStruct",
                        label='Atomic Structure:', allowsNull=False)
+        self._cleanStructureParams(form)
         form.addSection(label='Stage 1')
         form.addParam('stage1', BooleanParam, default=False, label='Stage 1 preparation:')
+
         form.addParam('fillSideChains', BooleanParam, default=True, condition='stage1',
                       label='Fill side chains:',
                       help='Fill missing side chains Prime')
@@ -120,16 +150,19 @@ class ProtSchrodingerPrepWizard(EMProtocol):
         self._insertFunctionStep('createOutput')
 
     def preparationStep(self):
-        prog=Plugin.getHome('utilities/prepwizard')
+        inputPDB = self.inputAtomStruct.get().getFileName()
+        if self.cleanPDB and isinstance(self.inputAtomStruct.get(), AtomStruct):
+            inputPDB = self.remove_WLHC()
 
-        if isinstance(self.inputStructure.get(),AtomStruct):
+        prog=Plugin.getHome('utilities/prepwizard')
+        if isinstance(self.inputAtomStruct.get(), AtomStruct):
             fnIn = self._getExtraPath("atomStructIn.pdb")
-            aStruct1 = AtomicStructHandler(self.inputStructure.get().getFileName())
+            aStruct1 = AtomicStructHandler(inputPDB)
             aStruct1.write(fnIn)
             fnIn='extra/atomStructIn.pdb'
         else:
             fnIn = self._getExtraPath("atomStructIn.mae")
-            createLink(self.inputStructure.get().getFileName(),fnIn)
+            createLink(inputPDB, fnIn)
             fnIn='extra/atomStructIn.mae'
 
         args='-WAIT'
@@ -200,10 +233,28 @@ class ProtSchrodingerPrepWizard(EMProtocol):
             maeFile.setFileName(fnMae)
 
             self._defineOutputs(outputStructure=maeFile)
-            self._defineSourceRelation(self.inputStructure, maeFile)
+            self._defineSourceRelation(self.inputAtomStruct, maeFile)
 
     def getJobName(self):
-      return self.inputStructure.get().getFileName().split('/')[-1].split('.')[0]
+      return self.inputAtomStruct.get().getFileName().split('/')[-1].split('.')[0]
+    
+    def remove_WLHC(self):
+        """ Clean the pdb file from waters and ligands
+        """
+        # Get a PDB format file to the protein structure
+        pdb_ini = self.inputAtomStruct.get().getFileName()
+        filename = os.path.splitext(os.path.basename(pdb_ini))[0]
+        fnPdb = self._getExtraPath('%s_clean.pdb' % filename)
+
+        if self.rchains.get():
+            chain = json.loads(self.chain_name.get())  # From wizard dictionary
+            chain_id = chain["Chain"].upper().strip()
+        else:
+            chain_id = None
+        cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
+                               self.waters.get(), self.HETATM.get(), chain_id)
+        return cleanedPDB
+
 
     def _citations(self):
         return ['Sastry2013']

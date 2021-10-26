@@ -39,100 +39,98 @@ class TestGlideDocking(BaseTest):
         setupTestProject(cls)
         cls._runImportPDB()
         cls._runImportSmallMols()
+        cls._waitOutput(cls.protImportPDB, 'outputPdb', sleepTime=5)
+        cls._waitOutput(cls.protImportSmallMols, 'outputSmallMolecules', sleepTime=5)
 
+        cls.prepProt = cls._runTargetPreparation(getPrepTargetWizardArgs())
+        cls.ligProt = cls._runLigandPreparation()
+        cls._waitOutput(cls.prepProt, 'outputStructure', sleepTime=5)
+        
     @classmethod
     def _runImportPDB(cls):
-        protImportPDB = cls.newProtocol(
+        cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
-            inputPdbData=1,
-            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1_noHETATM.pdb'))
-        cls.launchProtocol(protImportPDB)
-        cls.protImportPDB = protImportPDB
+            inputPdbData=0,
+            pdbId='4erf')
+        cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
     def _runImportSmallMols(cls):
-      protImportSmallMols = cls.newProtocol(
+      cls.protImportSmallMols = cls.newProtocol(
         ProtChemImportSmallMolecules,
         filesPath=cls.dsLig.getFile('mol2'))
-      cls.launchProtocol(protImportSmallMols)
-      cls.protImportSmallMols = protImportSmallMols
+      cls.launchProtocol(cls.protImportSmallMols)
+      cls.proj.launchProtocol(cls.protImportSmallMols, wait=False)
 
-    def _runTargetPreparation(self, kwargs):
-        protPrepWizard = self.newProtocol(
+    @classmethod
+    def _runTargetPreparation(cls, kwargs):
+        protPrepWizard = cls.newProtocol(
             ProtSchrodingerPrepWizard,
-            inputStructure=self.protImportPDB.outputPdb,
+            cleanPDB=True, waters=False, rchains=True,
+            chain_name='{"Chain": "C", "Number of residues": 93, "Number of chains": 3}',
             **kwargs)
-        self.launchProtocol(protPrepWizard)
+        protPrepWizard.inputAtomStruct.set(cls.protImportPDB)
+        protPrepWizard.inputAtomStruct.setExtended('outputPdb')
+        cls.proj.launchProtocol(protPrepWizard, wait=False)
         return protPrepWizard
 
-    def _runLigandPreparation(self):
-        protPrepLigand = self.newProtocol(
+    @classmethod
+    def _runLigandPreparation(cls):
+        protPrepLigand = cls.newProtocol(
             ProtSchrodingerLigPrep,
-            inputSmallMols=self.protImportSmallMols.outputSmallMols,
+            inputSmallMols=cls.protImportSmallMols.outputSmallMolecules,
             ionization=1)
-        self.launchProtocol(protPrepLigand)
+        cls.proj.launchProtocol(protPrepLigand, wait=False)
         return protPrepLigand
 
-    def _runSitemap(self, targetProt):
-        protSitemap = self.newProtocol(
+    @classmethod
+    def _runSitemap(cls, targetProt):
+        protSitemap = cls.newProtocol(
             ProtSchrodingerSiteMap,
             inputStructure=targetProt.outputStructure)
 
-        self.launchProtocol(protSitemap)
-        pocketsOut = getattr(protSitemap, 'outputPockets', None)
-        self.assertIsNotNone(pocketsOut)
+        cls.launchProtocol(protSitemap)
         return protSitemap
-    
-    def _runFilterSites(self, siteProt):
-        protFilter = self.newProtocol(
-            ProtSetFilter,
-            operation=ProtSetFilter.CHOICE_RANKED,
-            threshold=2,
-            rankingField='_score')
-        protFilter.inputSet.set(siteProt)
-        protFilter.inputSet.setExtended('outputPockets')
 
-        self.launchProtocol(protFilter)
-        return protFilter
-
-    def _runGridDefinition(self, filterProt, targetProt):
-        protGrid = self.newProtocol(
+    @classmethod
+    def _runGridDefinition(cls, filterProt):
+        protGrid = cls.newProtocol(
             ProtSchrodingerGridSiteMap,
-            inputSetOfPockets=filterProt.outputPockets,
-            inputSchAtomStruct=targetProt.outputStructure,
-            innerAction=1, diameterNin=1.2,
-            outerAction=1, diameterNout=0.8)
+            innerAction=1, diameterNin=0.8,
+            outerAction=1, diameterNout=1.2)
+        protGrid.inputPockets.set(filterProt)
+        protGrid.inputPockets.setExtended("outputPockets")
 
-        self.launchProtocol(protGrid)
-        gridsOut = getattr(protGrid, 'outputGrids', None)
-        self.assertIsNotNone(gridsOut)
+        cls.launchProtocol(protGrid)
         return protGrid
 
     def _runGlideDocking(self, ligProt, gridProt):
         protGlide = self.newProtocol(
             ProtSchrodingerGlideDocking,
-            inputGridSet=gridProt.outputGrids,
-            inputLibrary=ligProt.outputSmallMols,
             doConvertOutput=True, convertType=1)
+
+        protGlide.inputGridSet.set(gridProt)
+        protGlide.inputGridSet.setExtended('outputGrids')
+        protGlide.inputLibrary.set(ligProt)
+        protGlide.inputLibrary.setExtended('outputSmallMolecules')
 
         self.launchProtocol(protGlide)
         return protGlide
 
     def testGlide(self):
-        prepProt = self._runTargetPreparation(self.getPrepTargetWizardArgs())
-        siteProt = self._runSitemap(prepProt)
-        filterProt = self._runFilterSites(siteProt)
-        gridProt = self._runGridDefinition(filterProt, prepProt)
+        siteProt = self._runSitemap(self.prepProt)
+        gridProt = self._runGridDefinition(siteProt)
 
-        ligProt = self._runLigandPreparation()
-        glideProt = self._runGlideDocking(ligProt, gridProt)
+        self._waitOutput(self.ligProt, 'outputSmallMolecules', sleepTime=5)
+        glideProt = self._runGlideDocking(self.ligProt, gridProt)
 
-    def getPrepTargetWizardArgs(self):
-        args={'stage1':True, 'hydrogens': 1,
-              'stage2':True, 'propKa':True,
-              'stage3':True,
-              'stage4':True, 'ms':True}
-        return args
+
+def getPrepTargetWizardArgs():
+    args={'stage1':True, 'hydrogens': 1,
+          'stage2':True, 'propKa':True,
+          'stage3':True,
+          'stage4':True, 'ms':True}
+    return args
 
 
 

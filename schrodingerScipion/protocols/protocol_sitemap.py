@@ -36,7 +36,7 @@ from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerBindingSites, SchrodingerAtomStruct
 from pwchem.objects import BindingSite, SetOfBindingSites, SetOfPockets
 from pwchem.constants import *
-from pwchem.utils import writePDBLine, writeSurfPML
+from pwchem.utils import writePDBLine, writeSurfPML, splitPDBLine
 from ..utils.utils import parseLogPockets
 from ..objects import SitemapPocket
 
@@ -126,8 +126,8 @@ class ProtSchrodingerSiteMap(EMProtocol):
       pdbOut: name of the output (with or without .pdb)'''
       pdbName, pdbOut = self.getPDBName(pdbOut)
 
-      prog = Plugin.getHome('utilities/pdbconvert')
-      args = '-imae {} -opdb {}'.format(maeIn, pdbOut)
+      prog = Plugin.getHome('utilities/structconvert')
+      args = '{} {}'.format(maeIn, pdbOut)
       try:
           self.runJob(prog, args, cwd=self._getExtraPath())
       except CalledProcessError as exception:
@@ -142,7 +142,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
         return pdbFiles[0]
 
     def formatPocketStrLine(self, line, numId):
-      line = line.split()
+      line = splitPDBLine(line)
       replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
       pdbLine = writePDBLine(replacements)
       return pdbLine
