@@ -31,6 +31,7 @@ import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.utils import relabelAtomsMol2
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.utils.utils import putMol2Title, sortDockingResults
 from schrodingerScipion.objects import SchrodingerPoses
@@ -266,6 +267,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         small.ligandEfficiencyLn = pwobj.Float(tokens[4])
                         small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
                         small.structFile = pwobj.String(fnStruct)
+                        small.setMolClass('Schrodinger')
                         small.setGridId(gridId)
                         smallList.append(small)
                     i += 1
@@ -386,7 +388,10 @@ class ProtSchrodingerGlideDocking(EMProtocol):
     def updatePosFiles(self, outSet, outName):
         newMols = []
         for mol in outSet:
-            mol.setPoseFile(self.convertedDic[outName][mol.getObjId()])
+            posFile = self.convertedDic[outName][mol.getObjId()]
+            if os.path.splitext(posFile)[1] == '.mol2':
+                posFile = relabelAtomsMol2(posFile)
+            mol.setPoseFile(posFile)
             newMols.append(mol.clone())
 
         for mol in newMols:
