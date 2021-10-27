@@ -133,10 +133,7 @@ class SitemapPocket(ProteinPocket):
 
         #Build contact atoms
         if proteinFile != None:
-            cAtoms = self.buildContactAtoms(calculate=True)
-            self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
-            cResidues = self.getResiduesFromAtoms(cAtoms)
-            self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
+            self.calculateContacts()
 
     def __str__(self):
         s = 'SiteMap pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
