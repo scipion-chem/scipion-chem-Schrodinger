@@ -60,7 +60,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                            'PocketSize: the diameter * n of each pocket will be used. You can set n')
 
         line = group.addLine('Inner box (Angstroms)', condition='innerAction==0',
-                             help='The docked ligand mass center must be inside the inner box')
+                             help='The docked ligand mass center must be inside the inner box radius')
         line.addParam('innerX', IntParam, default=10, label='X')
         line.addParam('innerY', IntParam, default=10, label='Y')
         line.addParam('innerZ', IntParam, default=10, label='Z')
@@ -77,7 +77,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                             'PocketSize: the diameter * n of each pocket will be used. You can set n')
 
         line = group.addLine('Outer box (Angstroms)', condition='outerAction==0',
-                            help='The docked ligand atoms must be inside the outer box.')
+                            help='The docked ligand atoms must be inside the outer box radius.')
         line.addParam('outerX', IntParam, default=30, label='X')
         line.addParam('outerY', IntParam, default=30, label='Y')
         line.addParam('outerZ', IntParam, default=30, label='Z')
