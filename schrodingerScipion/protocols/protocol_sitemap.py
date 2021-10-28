@@ -82,7 +82,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
               pock.structureFile = pwobj.String(os.path.abspath(fnStructure))
               outPockets.append(pock)
 
-            pdbOutFile = outPockets.buildPocketsFiles()
+            pdbOutFile = outPockets.buildPDBhetatmFile()
             self._defineOutputs(outputPockets=outPockets)
             outStruct = AtomStruct(pdbOutFile)
             self._defineOutputs(outputAtomStruct=outStruct)
