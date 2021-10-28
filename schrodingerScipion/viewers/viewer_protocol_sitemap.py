@@ -63,6 +63,12 @@ class ViewerSitemap(pwviewer.ProtocolViewer):
                   label='Display output: ',
                   help='*PyMol*: display Set of Pockets and pockets as points / surface'
                   )
+    form.addParam('displayBBoxes', params.BooleanParam,
+                  default=False, label='Display pocket bounding boxes', condition='output==0',
+                  help='Display the bounding boxes in pymol to check the size for the localized docking')
+    form.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
+                  default=1.1, condition='displayBBoxes and output==0',
+                  help='The radius * n of each pocket will be used as grid radius')
 
   def _getVisualizeDict(self):
     return {
@@ -94,14 +100,22 @@ class ViewerSitemap(pwviewer.ProtocolViewer):
 
   #Display functions
   def _showAtomStructPyMolPoints(self):
+    bBox = self.displayBBoxes.get()
+    if bBox:
+      bBox = self.pocketRadiusN.get()
+
     outPockets = getattr(self.protocol, 'outputPockets')
     pymolV = PocketPointsViewer(project=self.getProject())
-    pymolV._visualize(outPockets)
+    pymolV._visualize(outPockets, bBox=bBox)
 
   def _showAtomStructPyMolSurf(self):
+    bBox = self.displayBBoxes.get()
+    if bBox:
+      bBox = self.pocketRadiusN.get()
+
     outPockets = getattr(self.protocol, 'outputPockets')
     pymolV = ContactSurfaceViewer(project=self.getProject())
-    pymolV._visualize(outPockets)
+    pymolV._visualize(outPockets, bBox=bBox)
 
   def _showAtomStructChimera(self):
     outAtomStruct = getattr(self.protocol, 'outputAtomStruct')
