@@ -87,12 +87,9 @@ class ProtSchrodingerSiteMap(EMProtocol):
             outStruct = AtomStruct(pdbOutFile)
             self._defineOutputs(outputAtomStruct=outStruct)
 
-            outSchStruct = SchrodingerAtomStruct()
-            outSchStruct.setFileName(self.getMaestroOutput())
-            self._defineOutputs(outputSchrodingerAtomStruct=outSchStruct)
 
     def _citations(self):
-        return ['Halgren2009']
+        return
 
 
 ########################## UTILS FUNCTIONS

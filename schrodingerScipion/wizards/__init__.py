@@ -1,1 +1,2 @@
 from .wizard_select_chain import GetChainsWizardSchrodinger
+from .wizard_select_ligand import GetLigandsWizard

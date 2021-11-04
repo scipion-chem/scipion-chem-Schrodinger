@@ -234,7 +234,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         self.runJob(glideProg, args, cwd=self._getPath(gridDir))
 
         self.runJob(propListerProg,
-                    '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" -p "glide ligand efficiency ln" -c -o %s %s'%\
+                    '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" '
+                    '-p "glide ligand efficiency ln" -c -o %s %s'%\
                     ("job_{}_pv.csv".format(gridId), "job_{}_pv.maegz".format(gridId)),
                     cwd=self._getPath(gridDir))
 

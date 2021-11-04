@@ -32,3 +32,48 @@ ATTRIBUTES_MAPPING = {'SiteScore': 'score', 'Dscore': 'druggability', 'size': 'n
                       'contact': 'contact', 'phobic': 'hidrophobic', 'philic': 'hidrophilic',
                       'balance': 'balance', 'don/acc': 'don/acc', 'class': 'class',
                       'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues'}
+
+MSJ_SYSPREP = '''task {
+  task = "desmond:auto"
+}
+
+build_geometry {
+  #add counterion
+  %s  
+  box = {
+     shape = %s
+     size = [%s %s %s]
+     %s
+     size_type = %s
+  }
+  override_forcefield = %s
+  rezero_system = %s
+  #add salt
+  %s  
+  #add solvent
+  %s
+}
+
+assign_forcefield {
+  forcefield = %s
+}
+
+# command example:
+# $SCHRODINGER/utilities/multisim -HOST <hostname> -JOBNAME desmond_trial -m desmond_trial.msj \
+desmond_trial.mae -o desmond_trial.cms
+'''
+
+ADD_COUNTERION = '''add_counterion = {
+     ion = %s
+     number = %s
+  }'''
+
+ADD_SALT = '''salt = {
+     concentration = %s
+     negative_ion = %s
+     positive_ion = %s
+  }'''
+
+ANGLES = 'angles = [%s %s %s]'
+
+SOLVENT = 'solvent = %s'
