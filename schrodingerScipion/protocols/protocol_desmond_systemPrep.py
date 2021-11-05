@@ -24,19 +24,14 @@
 # *
 # **************************************************************************
 
-import os, shutil, threading, subprocess
+import os
 
-from pyworkflow.protocol.constants import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, StringParam, EnumParam, BooleanParam, FloatParam, IntParam, STEPS_PARALLEL
-import pyworkflow.object as pwobj
+from pyworkflow.protocol.params import PointerParam, StringParam,\
+  EnumParam, BooleanParam, FloatParam, IntParam
 from pwem.protocols import EMProtocol
-from pyworkflow.utils.path import makePath
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import relabelAtomsMol2
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.constants import *
-from schrodingerScipion.utils.utils import putMol2Title, sortDockingResults
-from schrodingerScipion.objects import SchrodingerPoses, SchrodingerAtomStruct
+from schrodingerScipion.objects import SchrodingerAtomStruct
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
 glideProg = schrodinger_plugin.getHome('glide')
@@ -47,7 +42,6 @@ maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
 
 STRUCTURE, LIGAND = 0, 1
 
-
 class ProtSchrodingerDesmondSysPrep(EMProtocol):
     """Calls Desmond molecular dynamics for the preparation of the system via solvatation, the addition of ions
     and a force field"""
@@ -55,15 +49,17 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
     _program = ""
 
     _solventTypes = ['SPC', 'TIP3P', 'TIP4P', 'TIP4PEW', 'TIP4PD', 'TIP5P',
-                     'SPCE', 'TIP4P2005', 'DMSO', 'METHANOL', 'OCTANOL']
-    _boundaryShapes = ['Cubic', 'Orthorhombic', 'Triclinic',
-                       'Truncated octahedron', 'Rhombic dodecahedron xy-square', 'Rhombic dodecahedron xy-hexagon']
-    _cations = ['Na+', 'Li+', 'K+', 'Rb+', 'Cs+', 'Mg2+', 'Ca2+', 'Zn2+', 'Fe2+', 'Fe3+']
+                     'DMSO', 'METHANOL', 'OCTANOL']
+    _boundaryShapes = {'Cubic': 'cubic', 'Orthorhombic': 'orthorhombic', 'Triclinic': 'triclinic',
+                       'Truncated octahedron': 'truncated_octahedron',
+                       'Rhombic dodecahedron xy-square': 'dodecahedron_square',
+                       'Rhombic dodecahedron xy-hexagon': 'dodecahedron_hexagon'}
+    _saltCations = ['Na+', 'Li+', 'K+', 'Rb+', 'Cs+', 'Mg2+', 'Ca2+', 'Zn2+', 'Fe2+', 'Fe3+']
+    _cations = ['Na+', 'Li+', 'K+', 'Rb+', 'Cs+']
     _anions = ['F-', 'Cl-', 'Br-', 'I-']
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -86,7 +82,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
         group = form.addGroup('Boundary box')
         group.addParam('boundaryShape', EnumParam,
-                      choices=self._boundaryShapes, default=1,
+                      choices=list(self._boundaryShapes.keys()), default=1,
                       label='Solvent type: ',
                       help='Different water and other chemics models to use as solvent')
         group.addParam('boxMethod', EnumParam,
@@ -128,17 +124,21 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         group.addParam('placeIons', EnumParam, default=0,
                        label='Add ions: ', choices=['None', 'Neutralize', 'Add number'],
                        help='Whether to add ions to the system')
+        line = group.addLine('Solute charge:', condition='placeIons!=0')
+        line.addParam('solCharge', IntParam, default=0, condition='placeIons!=0',
+                       help='Charge of the solute before the addition of ions')
         line = group.addLine('Ion type:', condition='placeIons!=0',
                              help='Type of the ions to neutralize charges (Depending on the system charge)')
-        line.addParam('cationType', EnumParam, condition='placeIons!=0',
+        line.addParam('cationType', EnumParam, condition='placeIons!=0 and solCharge<0',
                        label='Cation to add: ', choices=self._cations,
-                       help='Whether to add cations to the system')
-        line.addParam('anionType', EnumParam, condition='placeIons!=0',
-                       label='Anion to add: ', choices=self._anions,
-                       help='Whether to add anions to the system')
-        group.addParam('ionNum', IntParam, condition='placeIons==2',
-                       label='Number of ions to add: ',
+                       help='Which cations to add in the system')
+        line.addParam('anionType', EnumParam, condition='placeIons!=0 and solCharge>0',
+                      label='Anion to add: ', choices=self._anions,
+                      help='Which anions to add in the system')
+        line.addParam('ionNum', IntParam, condition='placeIons==2',
+                       label='Number of counterions to add: ',
                        help='Number of ions to add, cations if the system charge is negative and viceversa')
+
 
         group = form.addGroup('Salt')
         group.addParam('addSalt', BooleanParam, default=False,
@@ -151,7 +151,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         line = group.addLine('Salt type:', condition='addSalt',
                              help='Type of the ions to neutralize charges (Depending on the system charge)')
         line.addParam('cationTypeSalt', EnumParam, condition='addSalt',
-                      label='Salt cation: ', choices=self._cations,
+                      label='Salt cation: ', choices=self._saltCations,
                       help='Cation type of the salt')
         line.addParam('anionTypeSalt', EnumParam, condition='addSalt',
                        label='Salt anion: ', choices=self._anions,
@@ -161,8 +161,6 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         group.addParam('ffType', EnumParam,
                       label='Force field: ', choices=['S-OPLS', 'OPLS_2005'], default=0,
                       help='Force field to use')
-
-        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -177,23 +175,25 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                 pdbFile = self.inputStruct.get().getFileName()
                 structName = os.path.splitext(os.path.basename(pdbFile))[0]
                 self.soluteFile = self._getExtraPath(structName + '.mae')
-                self.runJob(structConvertProg, '{} {}'.format(pdbFile, self.soluteFile))
+                if not os.path.exists(self.soluteFile):
+                    self.runJob(structConvertProg, '{} {}'.format(pdbFile, self.soluteFile))
 
         elif self.inputFrom.get() == LIGAND:
-            mol = self.getSpecifiedMol()
-            molMaeFile = self._getExtraPath(mol.getUniqueName() + '.maegz')
-            self.runJob(structConvertProg, '{} {}'.format(mol.getPoseFile(), molMaeFile))
+            self.soluteFile = self._getExtraPath('complexSolute.mae')
+            if not os.path.exists(self.soluteFile):
+                mol = self.getSpecifiedMol()
+                molMaeFile = self._getExtraPath(mol.getUniqueName() + '.maegz')
+                self.runJob(structConvertProg, '{} {}'.format(mol.getPoseFile(), molMaeFile))
 
-            if hasattr(mol, 'structFile'):
-                targetMaeFile = mol.structFile
-            else:
-                targetFile = self.inputSetOfMols.get().getProteinFile()
-                targetName = os.path.splitext(os.path.basename(targetFile))[0]
-                targetMaeFile = self._getExtraPath(targetName + '.maegz')
-                self.runJob(structConvertProg, '{} {}'.format(targetFile, targetMaeFile))
+                if hasattr(mol, 'structFile'):
+                    targetMaeFile = mol.structFile
+                else:
+                    targetFile = self.inputSetOfMols.get().getProteinFile()
+                    targetName = os.path.splitext(os.path.basename(targetFile))[0]
+                    targetMaeFile = self._getExtraPath(targetName + '.maegz')
+                    self.runJob(structConvertProg, '{} {}'.format(targetFile, targetMaeFile))
 
-            self.soluteFile = self._getExtraPath('complexSolute.maegz')
-            self.runJob('zcat', '{} {} > {}'.format(molMaeFile, targetMaeFile, self.soluteFile))
+                self.runJob('zcat', '{} {} > {}'.format(molMaeFile, targetMaeFile, self.soluteFile))
 
 
     def systemPreparationStep(self):
@@ -227,23 +227,26 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         defining the input parameters'''
         addIonsArg = ''
         if self.placeIons.get() != 0:
-            #todo: check if cation or anion
             if self.placeIons.get() == 1:
                 number = 'neutralize_system'
             else:
                 number = self.ionNum.get()
-            addIonsArg = ADD_COUNTERION % (self.getEnumText('cationType')[:-1], number)
 
-        boxArgs = [self.getEnumText('boundaryShape').lower()]
-        if self.boundaryShape.get() in [1, 2]:
-            boxArgs += [self.distA.get(), self.distB.get(), self.distC.get()]
-        else:
-            boxArgs += [self.distA.get(), '', '']
+            if self.solCharge.get() < 0:
+                addIonsArg = ADD_COUNTERION % (self.getEnumText('cationType')[:-1], number)
+            elif self.solCharge.get() > 0:
+                addIonsArg = ADD_COUNTERION % (self.getEnumText('cationType')[:-1], number)
 
-        if self.boundaryShape.get() == 2:
-            boxArgs += [ANGLES % (self.angleA.get(), self.angleB.get(), self.angleC.get())]
+
+        boxArgs = [self._boundaryShapes[self.getEnumText('boundaryShape')]]
+        if self.boundaryShape.get() == 1:
+            boxArgs += [SIZE_LIST % (self.distA.get(), self.distB.get(), self.distC.get())]
+
+        elif self.boundaryShape.get() == 2:
+            boxArgs += [ANGLES % (self.distA.get(), self.distB.get(), self.distC.get(),
+                                  self.angleA.get(), self.angleB.get(), self.angleC.get())]
         else:
-            boxArgs += ['']
+            boxArgs += [SIZE_SINGLE % self.distA.get()]
 
         boxArgs += [self.getEnumText('boxMethod').lower()]
 

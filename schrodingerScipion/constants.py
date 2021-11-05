@@ -42,8 +42,7 @@ build_geometry {
   %s  
   box = {
      shape = %s
-     size = [%s %s %s]
-     %s
+     size = %s
      size_type = %s
   }
   override_forcefield = %s
@@ -74,6 +73,8 @@ ADD_SALT = '''salt = {
      positive_ion = %s
   }'''
 
-ANGLES = 'angles = [%s %s %s]'
-
 SOLVENT = 'solvent = %s'
+
+SIZE_SINGLE = '%s'
+SIZE_LIST = '[%s %s %s]'
+ANGLES = '[%s %s %s %s %s %s]'
