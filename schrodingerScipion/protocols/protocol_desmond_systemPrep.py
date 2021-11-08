@@ -125,7 +125,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                        label='Add ions: ', choices=['None', 'Neutralize', 'Add number'],
                        help='Whether to add ions to the system')
         line = group.addLine('Solute charge:', condition='placeIons!=0')
-        line.addParam('solCharge', IntParam, default=0, condition='placeIons!=0',
+        line.addParam('solCharge', IntParam, default=0, condition='placeIons!=0', readOnly=True,
                        help='Charge of the solute before the addition of ions')
         line = group.addLine('Ion type:', condition='placeIons!=0',
                              help='Type of the ions to neutralize charges (Depending on the system charge)')
