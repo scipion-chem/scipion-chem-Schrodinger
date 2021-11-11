@@ -34,11 +34,7 @@ from schrodingerScipion.constants import *
 from schrodingerScipion.objects import SchrodingerAtomStruct
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
-glideProg = schrodinger_plugin.getHome('glide')
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
-structCatProg = schrodinger_plugin.getHome('utilities/structcat')
-propListerProg = schrodinger_plugin.getHome('utilities/proplister')
-maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
 
 STRUCTURE, LIGAND = 0, 1
 
@@ -108,7 +104,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                        default=90.0, label='C: ')
         group.addParam('minimize', BooleanParam, default=False,
                       label='Minimize volume: ',
-                      help='Minimize volume of the resulting box')
+                      help='Minimize volume of the resulting box by rotating the solute to fit better in the box')
 
         group = form.addGroup('Solvation model')
         group.addParam('solvate', BooleanParam, default=True,
@@ -198,7 +194,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
     def systemPreparationStep(self):
         maeFile = self.soluteFile
-        sysName = maeFile .split('/')[-1].split('.')[0]
+        sysName = maeFile.split('/')[-1].split('.')[0]
 
         msjFile = self._getExtraPath('{}.msj'.format(sysName))
         msjStr = self.buildMSJ_str()

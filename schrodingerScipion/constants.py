@@ -33,6 +33,8 @@ ATTRIBUTES_MAPPING = {'SiteScore': 'score', 'Dscore': 'druggability', 'size': 'n
                       'balance': 'balance', 'don/acc': 'don/acc', 'class': 'class',
                       'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues'}
 
+#################################### SYSTEM PREPARATION ############
+
 MSJ_SYSPREP = '''task {
   task = "desmond:auto"
 }
@@ -78,3 +80,65 @@ SOLVENT = 'solvent = %s'
 SIZE_SINGLE = '%s'
 SIZE_LIST = '[%s %s %s]'
 ANGLES = '[%s %s %s %s %s %s]'
+
+################################ SYSTEM RELAXATION ##################
+
+MSJ_SYSRELAX = '''task {
+  task = "desmond:auto"
+  set_family = {
+    desmond = {
+      checkpt.write_last_step = no
+    }
+  }
+}
+
+simulate {
+  annealing   = off
+  dir         = %s
+  glue        = %s
+  time        = %s
+  timestep    = [0.001 0.001 0.003]
+  temperature = %s
+  #Pressure
+  %s
+  #Tension
+  %s
+  ensemble = {
+    class  = %s
+    method = %s
+    thermostat.tau = %s
+    #barostat tau
+    %s 
+    #Browian delta max
+    %s
+  }
+  
+  #restrains
+  %s   
+  
+  randomize_velocity.interval = %s
+  eneseq.interval             = 0.3
+
+  trajectory {
+  center = solute
+  first = 0.0
+  format = dtr
+  interval = %s
+  periodicfix = true
+  }
+}
+
+# command example:
+# $SCHRODINGER/utilities/multisim -HOST <hostname> -JOBNAME desmond_trial -m desmond_trial.msj desmond_trial.mae 
+#-o desmond_trial.cms 
+'''
+
+PRESSURE = '''pressure = [%s %s]'''
+TENSION = '''surface_tension = %s'''
+BAROSTAT = '''barostat.tau = %s'''
+
+BROWNIAN = '''brownie.delta_max = %s'''
+
+RESTRAINS = '''restrain    = { atom = %s force_constant = %s }'''
+
+
