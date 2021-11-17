@@ -25,10 +25,8 @@
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.browser import FileHandler
 import pyworkflow.utils as pwutils
-import schrodingerScipion.objects
 from schrodingerScipion import Plugin
 from subprocess import Popen
-import os
 from schrodingerScipion.objects import *
 
 class SchrodingerDataViewer(pwviewer.Viewer):

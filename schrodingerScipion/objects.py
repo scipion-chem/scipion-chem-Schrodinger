@@ -50,13 +50,13 @@ class SchrodingerSystem(data.EMFile):
     def getTrajectoryDirName(self):
         with open(self.getFileName()) as fCMS:
             cmsSTR = fCMS.read()
-            trDirs = re.findall(r'[a-z0-9_-]*_trj', cmsSTR)
+            trDirs = re.findall(r'[\w-]*_trj', cmsSTR)
         return trDirs[0]
 
     def getCMSFileName(self):
         with open(self.getFileName()) as fCMS:
             cmsSTR = fCMS.read()
-            fName = re.findall(r'[a-z0-9_-]*\.cms', cmsSTR)
+            fName = re.findall(r'[\w-]*\.cms', cmsSTR)
         return fName[0]
 
     def changeTrajectoryDirName(self, newDirPath, trjPath=None):

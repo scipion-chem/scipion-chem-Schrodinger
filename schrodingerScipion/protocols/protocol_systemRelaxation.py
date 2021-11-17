@@ -214,7 +214,7 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
 
             cmsStruct = SchrodingerSystem()
             cmsStruct.setFileName(mergedFile)
-            cmsStruct.changeTrajectoryDirName(outTrjDir, trjPath=self._getTmpPath())
+            cmsStruct.changeTrajectoryDirName(outTrjDir, trjPath=self._getPath())
             cmsStruct.changeCMSFileName(outFile)
 
         else:
@@ -224,7 +224,7 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
             cmsStruct.changeCMSFileName(outFile)
 
         os.rename(self._getTmpPath('relaxation_multisim.log'), self._getExtraPath(sysName+'_multisim.log'))
-        print('cmsStruct: ', cmsStruct)
+        os.rename(self._getTmpPath('relaxation.msj'), self._getPath('relaxation.msj'))
         self._defineOutputs(outputSystem=cmsStruct)
 
 
