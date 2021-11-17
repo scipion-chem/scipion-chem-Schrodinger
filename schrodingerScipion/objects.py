@@ -23,7 +23,7 @@
 # *
 # **************************************************************************
 
-import os
+import os, re
 import pwem.objects.data as data
 from pwchem.objects import ProteinPocket
 from pwchem.constants import *
@@ -38,6 +38,59 @@ class SchrodingerAtomStruct(data.EMFile):
 
     def getExtension(self):
         return os.path.splitext(self.getFileName())[1]
+
+class SchrodingerSystem(data.EMFile):
+    """An system atom structure (prepared for MD) in the file format of Maestro"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+
+    def getExtension(self):
+        return os.path.splitext(self.getFileName())[1]
+
+    def getTrajectoryDirName(self):
+        with open(self.getFileName()) as fCMS:
+            cmsSTR = fCMS.read()
+            trDirs = re.findall(r'[a-z0-9_-]*_trj', cmsSTR)
+        return trDirs[0]
+
+    def getCMSFileName(self):
+        with open(self.getFileName()) as fCMS:
+            cmsSTR = fCMS.read()
+            fName = re.findall(r'[a-z0-9_-]*\.cms', cmsSTR)
+        return fName[0]
+
+    def changeTrajectoryDirName(self, newDirPath, trjPath=None):
+        '''Change the name of the trajectory directory specified in the CMS file'''
+        dirName = self.getTrajectoryDirName()
+        if trjPath==None:
+            trjPath = os.path.dirname(self.getFileName())
+        dirPath = os.path.join(trjPath, dirName)
+
+        newDirName = newDirPath.split('/')[-1]
+        with open(self.getFileName()) as fCMS:
+            cmsSTR = fCMS.read()
+        cmsSTR = cmsSTR.replace(dirName, newDirName)
+
+        with open(self.getFileName(), 'w') as fCMS:
+            fCMS.write(cmsSTR)
+
+        os.rename(dirPath, newDirPath)
+
+    def changeCMSFileName(self, newCMSPath):
+        '''The name of the CMS is found inside itself. Change it in the file along with the file itself'''
+        newCMSName = newCMSPath.split('/')[-1]
+        fName = self.getCMSFileName()
+        with open(self.getFileName()) as fCMS:
+            cmsSTR = fCMS.read()
+        cmsSTR = cmsSTR.replace(fName, newCMSName)
+
+        with open(self.getFileName(), 'w') as fCMS:
+            fCMS.write(cmsSTR)
+
+        os.rename(self.getFileName(), newCMSPath)
+        self.setFileName(newCMSPath)
+
+
 
 class SchrodingerGrid(data.EMFile):
     """A search grid in the file format of Maestro"""

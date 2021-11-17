@@ -29,15 +29,17 @@ import schrodingerScipion.objects
 from schrodingerScipion import Plugin
 from subprocess import Popen
 import os
+from schrodingerScipion.objects import *
 
 class SchrodingerDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
-        schrodingerScipion.objects.SchrodingerAtomStruct,
-        schrodingerScipion.objects.SchrodingerBindingSites,
-        schrodingerScipion.objects.SchrodingerPoses
+        SchrodingerAtomStruct,
+        SchrodingerBindingSites,
+        SchrodingerPoses,
+        SchrodingerSystem
     ]
 
     def __init__(self, **kwargs):
@@ -53,9 +55,10 @@ class SchrodingerDataViewer(pwviewer.Viewer):
         cls = type(obj)
 
         # For now handle both types of SetOfTiltSeries together
-        if issubclass(cls, schrodingerScipion.objects.SchrodingerAtomStruct) or \
-           issubclass(cls, schrodingerScipion.objects.SchrodingerBindingSites) or \
-           issubclass(cls, schrodingerScipion.objects.SchrodingerPoses):
+        if issubclass(cls, SchrodingerAtomStruct) or \
+           issubclass(cls, SchrodingerBindingSites) or \
+           issubclass(cls, SchrodingerPoses) or \
+           issubclass(cls, SchrodingerSystem):
             #pwutils.runJob(None, Plugin.getHome('maestro'), obj.getFileName(), env=Plugin.getEnviron())
             cmd = [Plugin.getHome('maestro'), os.path.abspath(obj.getFileName())]
             cwd = '/'.join(obj.getFileName().split('/')[:-1])

@@ -31,7 +31,7 @@ from pyworkflow.protocol.params import PointerParam, StringParam,\
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.constants import *
-from schrodingerScipion.objects import SchrodingerAtomStruct
+from schrodingerScipion.objects import SchrodingerAtomStruct, SchrodingerSystem
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
@@ -142,7 +142,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                        help='Add a salt into the system')
         group.addParam('saltConc', FloatParam, condition='addSalt',
                        default=0.15,
-                       label='Salt concentration: ',
+                       label='Salt concentration (M): ',
                        help='Salt concentration')
         line = group.addLine('Salt type:', condition='addSalt',
                              help='Type of the ions to neutralize charges (Depending on the system charge)')
@@ -207,7 +207,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                                                           cmsFile, sysName)
         self.runJob(multisimProg, args, cwd=self._getExtraPath())
 
-        cmsStruct = SchrodingerAtomStruct()
+        cmsStruct = SchrodingerSystem()
         cmsStruct.setFileName(self._getExtraPath(cmsFile))
         self._defineOutputs(outputSystem=cmsStruct)
 

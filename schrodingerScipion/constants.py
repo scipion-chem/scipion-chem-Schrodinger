@@ -83,7 +83,7 @@ ANGLES = '[%s %s %s %s %s %s]'
 
 ################################ SYSTEM RELAXATION ##################
 
-MSJ_SYSRELAX = '''task {
+MSJ_SYSRELAX_INIT = '''task {
   task = "desmond:auto"
   set_family = {
     desmond = {
@@ -91,13 +91,15 @@ MSJ_SYSRELAX = '''task {
     }
   }
 }
+'''
 
+MSJ_SYSRELAX_SIM = '''
 simulate {
   annealing   = off
   dir         = %s
   glue        = %s
   time        = %s
-  timestep    = [0.001 0.001 0.003]
+  timestep    = %s
   temperature = %s
   #Pressure
   %s
@@ -127,12 +129,9 @@ simulate {
   periodicfix = true
   }
 }
-
-# command example:
-# $SCHRODINGER/utilities/multisim -HOST <hostname> -JOBNAME desmond_trial -m desmond_trial.msj desmond_trial.mae 
-#-o desmond_trial.cms 
 '''
 
+TIMESTEP = '''[%s %s %s]'''
 PRESSURE = '''pressure = [%s %s]'''
 TENSION = '''surface_tension = %s'''
 BAROSTAT = '''barostat.tau = %s'''
@@ -140,5 +139,26 @@ BAROSTAT = '''barostat.tau = %s'''
 BROWNIAN = '''brownie.delta_max = %s'''
 
 RESTRAINS = '''restrain    = { atom = %s force_constant = %s }'''
+
+# Desmond standard NPT relaxation protocol
+# All times are in the unit of ps.
+# Energy is in the unit of kcal/mol.
+# 1) "Brownian Dynamics NVT, T = 10 K, small timesteps, and restraints on solute heavy atoms, 100ps"
+# 2) "NVT, T = 10 K, small timesteps, and restraints on solute heavy atoms, 12ps"
+# 3) "NPT, T = 10 K, and restraints on solute heavy atoms, 12ps"
+# 4) "NPT, T = 300 K and restraints on solute heavy atoms, 12ps"
+# 5) "NPT, T = 300 K and no restraints, 24ps"
+DESMOND_NPT_RELAX = '''\
+{'simTime': 100.0, "bondedT": 0.001, "nearT": 0.001, "farT": 0.003, 'temperature': 10.0, 'deltaMax': 0.1,\
+'ensemType': 'Minimization (Brownian)', 'restrains': 'Solute_heavy_atom'}
+{'simTime': 12.0, "bondedT": 0.001, "nearT": 0.001, "farT": 0.003, 'temperature': 10.0,\
+'ensemType': 'NVT', 'thermostat': 'Langevin', 'restrains': 'Solute_heavy_atom'}
+{'simTime': 12.0, 'temperature': 10.0, 'ensemType': 'NPT', 'thermostat': 'Langevin', 'barostat': 'Langevin', \
+'presRelaxCons': 50.0, 'restrains': 'Solute_heavy_atom'}
+{'simTime': 12.0, 'temperature': 300.0, 'ensemType': 'NPT', 'thermostat': 'Langevin', 'barostat': 'Langevin', \
+'presRelaxCons': 50.0, 'restrains': 'Solute_heavy_atom'}
+{'simTime': 24.0, 'temperature': 300.0, 'ensemType': 'NPT', 'thermostat': 'Langevin', 'barostat': 'Langevin', \
+'presRelaxCons': 2.0}
+'''
 
 
