@@ -95,7 +95,7 @@ MSJ_SYSRELAX_INIT = '''task {
 
 MSJ_SYSRELAX_SIM = '''
 simulate {
-  annealing   = off
+  annealing   = %s
   dir         = %s
   glue        = %s
   time        = %s

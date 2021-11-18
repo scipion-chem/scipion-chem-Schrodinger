@@ -47,6 +47,9 @@ class SchrodingerSystem(data.EMFile):
     def getExtension(self):
         return os.path.splitext(self.getFileName())[1]
 
+    def getDirName(self):
+        return os.path.dirname(self.getFileName())
+
     def getTrajectoryDirName(self):
         with open(self.getFileName()) as fCMS:
             cmsSTR = fCMS.read()
@@ -63,7 +66,7 @@ class SchrodingerSystem(data.EMFile):
         '''Change the name of the trajectory directory specified in the CMS file'''
         dirName = self.getTrajectoryDirName()
         if trjPath==None:
-            trjPath = os.path.dirname(self.getFileName())
+            trjPath = self.getDirName()
         dirPath = os.path.join(trjPath, dirName)
 
         newDirName = newDirPath.split('/')[-1]

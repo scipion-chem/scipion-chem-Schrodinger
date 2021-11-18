@@ -25,6 +25,8 @@
 # **************************************************************************
 
 import os
+import random as rd
+from subprocess import check_call
 
 from pyworkflow.protocol.params import PointerParam, StringParam,\
   EnumParam, BooleanParam, FloatParam, IntParam
@@ -34,6 +36,7 @@ from schrodingerScipion.constants import *
 from schrodingerScipion.objects import SchrodingerAtomStruct, SchrodingerSystem
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
+jobControlProg = schrodinger_plugin.getHome('jobcontrol')
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 
 STRUCTURE, LIGAND = 0, 1
@@ -195,6 +198,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
     def systemPreparationStep(self):
         maeFile = self.soluteFile
         sysName = maeFile.split('/')[-1].split('.')[0]
+        jobName = sysName + '_' + str(rd.randint(1000000, 9999999))
 
         msjFile = self._getExtraPath('{}.msj'.format(sysName))
         msjStr = self.buildMSJ_str()
@@ -204,7 +208,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         cmsFile = sysName+'-out.cms'
 
         args = ' -m {} {} -o {} -WAIT -JOBNAME {}'.format(msjFile.split('/')[-1], os.path.abspath(maeFile),
-                                                          cmsFile, sysName)
+                                                          cmsFile, jobName)
         self.runJob(multisimProg, args, cwd=self._getExtraPath())
 
         cmsStruct = SchrodingerSystem()
@@ -271,5 +275,28 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
             return None
         else:
             return myMol
+
+    def getJobName(self):
+        files = os.listdir(self._getExtraPath())
+        for f in files:
+            if f.endswith('.msj'):
+                return f.replace('.msj', '')
+
+    def getSchJobId(self):
+        jobId = None
+        jobListFile = os.path.abspath(self._getTmpPath('jobList.txt'))
+        if self.getJobName():
+            check_call(jobControlProg + ' -list {} | grep {} > {}'.
+                       format(self.getJobName(), self.getJobName(), jobListFile), shell=True)
+            with open(jobListFile) as f:
+                jobId = f.read().split('\n')[0].split()[0]
+        return jobId
+
+    def setAborted(self):
+        super().setAborted()
+        jobId = self.getSchJobId()
+        if jobId:
+            print('Killing job: {} with jobName {}'.format(jobId, self.getJobName()))
+            check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
 
 

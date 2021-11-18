@@ -24,14 +24,16 @@
 # *
 # **************************************************************************
 
-import os
+import random as rd
+from subprocess import check_call
 from pyworkflow.protocol.params import *
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.constants import *
-from schrodingerScipion.objects import SchrodingerAtomStruct, SchrodingerSystem
+from schrodingerScipion.objects import SchrodingerSystem
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
+jobControlProg = schrodinger_plugin.getHome('jobcontrol')
 mergeScript = schrodinger_plugin.getHome('internal/bin/trj_merge.py')
 
 class ProtSchrodingerDesmondSysRelax(EMProtocol):
@@ -50,12 +52,13 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
     _barostats = ['Martyna-Tobias-Klein', 'Langevin', 'None']
     _coupleStyle = ['Isotropic', 'Semi-isotropic', 'Anisotropic', 'Constant area']
     _restrainTypes = ['None', 'Ligand', 'Protein', 'Solute_heavy_atom', 'Solute']
-    _paramNames = ['simTime', 'bondedT', 'nearT', 'farT', 'velResamp', 'glueSolute', 'trajInterval',
-                   'temperature', 'deltaMax', 'tempRelaxCons',
+    _paramNames = ['simTime', 'annealTemps', 'bondedT', 'nearT', 'farT', 'velResamp', 'glueSolute', 'trajInterval',
+                   'temperature', 'deltaMax', 'tempRelaxCons', 'annealing',
                    'pressure', 'presRelaxCons', 'surfTension', 'restrainForce']
     _enumParamNames = ['ensemType', 'thermostat', 'barostat', 'coupleStyle', 'restrains']
 
     _defParams = {'simTime': 100, 'bondedT': 0.002, 'nearT': 0.002, 'farT': 0.006,
+                  'annealTemps': '[300, 0]', 'annealing': False,
                   'velResamp': 1.0, 'glueSolute': True, 'trajInterval': 5.0,
                   'temperature': 300.0, 'deltaMax': 0.1, 'tempRelaxCons': 0.1, 'pressure': 1.01325,
                   'presRelaxCons': 2.0, 'surfTension': 0.0, 'restrainForce': 50.0,
@@ -89,28 +92,28 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
 
         form.addSection('Relaxation')
         group = form.addGroup('Simulation time')
-        group.addParam('simTime', FloatParam, default=100.0,
+        group.addParam('simTime', FloatParam, default=self._defParams['simTime'],
                        label='Relaxation time (ps):',
                        help='Time of the simulation step (ns)')
         line = group.addLine('Time steps: ',
                              help='Time steps for the simulation (bonded / near / far) (ps)')
-        line.addParam('bondedT', FloatParam, default=0.002,
+        line.addParam('bondedT', FloatParam, default=self._defParams['bondedT'],
                       label='Bonded: ')
-        line.addParam('nearT', FloatParam, default=0.002,
+        line.addParam('nearT', FloatParam, default=self._defParams['nearT'],
                       label='Near: ')
-        line.addParam('farT', FloatParam, default=0.006,
+        line.addParam('farT', FloatParam, default=self._defParams['farT'],
                       label='Far: ')
 
-        group.addParam('velResamp', FloatParam, default=1.0,
+        group.addParam('velResamp', FloatParam, default=self._defParams['velResamp'],
                        label='Velocity resampling (ps):', expertLevel=LEVEL_ADVANCED,
                        help='Velocities of the particles are resampled every x ps')
 
         group = form.addGroup('Trajectory')
-        group.addParam('glueSolute', BooleanParam, default=True,
+        group.addParam('glueSolute', BooleanParam, default=self._defParams['glueSolute'],
                       label='Glue close solute molecules: ', expertLevel=LEVEL_ADVANCED,
                       help='Glue close solute molecules together. Does not affect energy, only for visualization'
                            ' of the trajectory')
-        group.addParam('trajInterval', FloatParam, default=5.0,
+        group.addParam('trajInterval', FloatParam, default=self._defParams['trajInterval'],
                        label='Interval time (ps):',
                        help='Time between each frame recorded in the simulation (ns)')
 
@@ -122,23 +125,30 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
         line = group.addLine('Temperature settings: ', condition='ensemType!=0',
                              help='Temperature during the simulation (K)\nThermostat type\n'
                                   'Relaxation time constant for thermostat (ps)')
-        line.addParam('temperature', FloatParam, default=300.0,
+        line.addParam('annealing', BooleanParam, default=self._defParams['annealing'],
+                      label='Annealing: ')
+        line.addParam('temperature', FloatParam, default=self._defParams['temperature'], condition='not annealing',
                        label='Temperature: ')
         line.addParam('thermostat', EnumParam, default=0, condition='ensemType!=5',
                        label='Thermostat type: ', choices=self._thermostats, expertLevel=LEVEL_ADVANCED)
-        line.addParam('deltaMax', FloatParam, default=0.1, condition='ensemType==5',
+        line.addParam('deltaMax', FloatParam, default=self._defParams['deltaMax'], condition='ensemType==5',
                       label='Max displacement: ', expertLevel=LEVEL_ADVANCED)
-        line.addParam('tempRelaxCons', FloatParam, default=0.1,
+        line.addParam('tempRelaxCons', FloatParam, default=self._defParams['tempRelaxCons'],
                        label='Temperature relax constant: ', expertLevel=LEVEL_ADVANCED)
+        group.addParam('annealTemps', StringParam, default=self._defParams['annealTemps'], condition='annealing',
+                      label='Annealing pairs [temperature, Starting Time]: ',
+                      help='Temperatures and starting time (ps) of each of the annealing steps. '
+                           'Temperature between steps is interpolated. '
+                           'Format: pairs of temperature duration comma separated [300, 10], [280, 5]')
 
         line = group.addLine('Pressure settings: ', condition='ensemType not in [0, 1, 5]',
                              help='Pressure during the simulation (bar)\nBarostat type\n'
                                   'Relaxation time constant for barostat (ps)')
-        line.addParam('pressure', FloatParam, default=1.01325,
+        line.addParam('pressure', FloatParam, default=self._defParams['pressure'],
                        label='   Pressure:   ')
         line.addParam('barostat', EnumParam, default=0,
                        label='  Barostat type:   ', choices=self._barostats, expertLevel=LEVEL_ADVANCED)
-        line.addParam('presRelaxCons', FloatParam, default=2.0,
+        line.addParam('presRelaxCons', FloatParam, default=self._defParams['presRelaxCons'],
                        label='   Pressure relax constant:   ', expertLevel=LEVEL_ADVANCED)
         line = group.addLine('Pressure coupling: ', condition='ensemType not in [0, 1, 5]',
                              help='Pressure coupling style', expertLevel=LEVEL_ADVANCED)
@@ -147,14 +157,14 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
 
         line = group.addLine('Tension settings: ', condition='ensemType==4',
                              help='Surface tension during the simulation (bar·Å)')
-        line.addParam('surfTension', FloatParam, default=0.0,
+        line.addParam('surfTension', FloatParam, default=self._defParams['surfTension'],
                       label='Surface tension: ')
 
         group = form.addGroup('Restrains')
         group.addParam('restrains', EnumParam, default=0,
                        label='Restrains: ', choices=self._restrainTypes,
                        help='Restrain movement of specific groups of atoms')
-        group.addParam('restrainForce', FloatParam, default=50.0,
+        group.addParam('restrainForce', FloatParam, default=self._defParams['restrainForce'],
                        label='Restrain force constant: ', condition='restrains!=0',
                        help='Restrain force applied to the selection (kcal/mol/Å2)')
 
@@ -186,14 +196,16 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
 
     def relaxationStep(self):
         maeFile = self.inputStruct.get().getFileName()
-        msjFile = self._getTmpPath('relaxation.msj')
+        self.jobName = 'relaxation_' + str(rd.randint(1000000, 9999999))
+        msjFile = self._getTmpPath('{}.msj'.format(self.jobName))
         msjStr = self.buildMSJ_str()
         with open(msjFile, 'w') as f:
             f.write(msjStr)
+        self.createGUISummary()
 
         unmergedFile = 'unmerged-relaxation.cms'
         args = ' -m {} {} -o {} -WAIT -JOBNAME {}'.format(os.path.abspath(msjFile), os.path.abspath(maeFile),
-                                                          unmergedFile, 'relaxation')
+                                                          unmergedFile, self.jobName)
         self.runJob(multisimProg, args, cwd=self._getTmpPath())
 
     def createOutputStep(self):
@@ -223,13 +235,49 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
             cmsStruct.changeTrajectoryDirName(outTrjDir, trjPath=self._getTmpPath())
             cmsStruct.changeCMSFileName(outFile)
 
-        os.rename(self._getTmpPath('relaxation_multisim.log'), self._getExtraPath(sysName+'_multisim.log'))
-        os.rename(self._getTmpPath('relaxation.msj'), self._getPath('relaxation.msj'))
+        os.rename(self._getTmpPath('{}_multisim.log'.format(self.getJobName())),
+                  self._getExtraPath(sysName+'_multisim.log'))
+        os.rename(self._getTmpPath('{}.msj'.format(self.getJobName())), self._getPath('relaxation.msj'))
         self._defineOutputs(outputSystem=cmsStruct)
 
+#######################################
+
+    def _summary(self):
+        fnSummary = self._getExtraPath("summary.txt")
+        if not os.path.exists(fnSummary):
+            summary = ["No summary information yet."]
+        else:
+            fhSummary = open(fnSummary, "r")
+            summary = []
+            for line in fhSummary.readlines():
+                summary.append(line.rstrip())
+            fhSummary.close()
+        return summary
 
     def _validate(self):
         errors = []
+        if not self.workFlowSteps.get():
+            msjDic = self.createMSJDic()
+            errors += self.validateAnneal(msjDic)
+        else:
+            workSteps = self.workFlowSteps.get().split('\n')
+            workSteps.remove('')
+            for wStep in workSteps:
+                msjDic = eval(wStep)
+                msjDic = self.addDefaultForMissing(msjDic)
+                errors += self.validateAnneal(msjDic)
+
+        return errors
+
+    def validateAnneal(self, msjDic):
+        errors = []
+        if msjDic['annealing']:
+            annealTemps = msjDic['annealTemps'].replace('(', '[').replace(']', ']')
+            annealStages = re.findall(r'\[\d+[.]?\d*, \d+\]', annealTemps)
+            for aSt in annealStages:
+                if eval(aSt)[1] > msjDic['simTime']:
+                    errors.append('Annealing starting time {} should not be larger than total simulation time {}\n'.
+                                  format(eval(aSt)[1], msjDic['simTime']))
         return errors
 
     ############# UTILS
@@ -267,8 +315,15 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
         if msjDic['restrains'] != 'None':
           restrainArg = RESTRAINS % (msjDic['restrains'].lower(), msjDic['restrainForce'])
 
-        msj_str = MSJ_SYSRELAX_SIM % (os.path.abspath(self._getTmpPath()),
-                                      glueArg, msjDic['simTime'], timeStepArg, msjDic['temperature'], pressureArg,
+        if not msjDic['annealing']:
+            annealArg = 'off'
+            tempArg = msjDic['temperature']
+        else:
+            annealArg = 'on'
+            tempArg = self.parseAnnealing(msjDic['annealTemps'])
+
+        msj_str = MSJ_SYSRELAX_SIM % (annealArg, os.path.abspath(self._getTmpPath()),
+                                      glueArg, msjDic['simTime'], timeStepArg, tempArg, pressureArg,
                                       tensionArg, ensemType, method, msjDic['tempRelaxCons'], barostatArg, brownianArg,
                                       restrainArg, msjDic['velResamp'], msjDic['trajInterval'])
         return msj_str
@@ -312,20 +367,45 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
                 print('Something is wrong with parameter ', pName)
         return msjDic
 
-    def createSummary(self):
+    def createGUISummary(self):
+        with open(self._getExtraPath("summary.txt"), 'w') as f:
+            if self.workFlowSteps.get():
+                f.write(self.createSummary())
+            else:
+                f.write(self.createSummary(self.createMSJDic()))
+
+    def createSummary(self, msjDic=None):
         '''Creates the displayed summary from the internal state of the steps'''
         sumStr = ''
-        for i, dicLine in enumerate(self.workFlowSteps.get().split('\n')):
-            if dicLine != '':
-                msjDic = eval(dicLine)
-                msjDic = self.addDefaultForMissing(msjDic)
-                method, ensemType = self.getMethodEnsemType(msjDic)
-                sumStr += '{}) Sim. time: {} ps, {} K, {} ensemble with {} method'.\
-                  format(i+1, msjDic['simTime'], msjDic['temperature'], ensemType, method)
+        if not msjDic:
+            for i, dicLine in enumerate(self.workFlowSteps.get().split('\n')):
+                if dicLine != '':
+                    msjDic = eval(dicLine)
+                    msjDic = self.addDefaultForMissing(msjDic)
+                    method, ensemType = self.getMethodEnsemType(msjDic)
+                    sumStr += '{}) Sim. time: {} ps, {} ensemble with {} method'.\
+                      format(i+1, msjDic['simTime'], ensemType, method)
 
-                if msjDic['restrains'] != 'None':
-                    sumStr += ', restrain on {}'.format(msjDic['restrains'])
-                sumStr += '\n'
+                    if msjDic['restrains'] != 'None':
+                        sumStr += ', restrain on {}'.format(msjDic['restrains'])
+                    if msjDic['annealing']:
+                        sumStr += ', annealing on'
+                    else:
+                        sumStr += ', {} K'.format(msjDic['temperature'])
+                    sumStr += '\n'
+        else:
+            msjDic = self.addDefaultForMissing(msjDic)
+            method, ensemType = self.getMethodEnsemType(msjDic)
+            sumStr += 'Sim. time: {} ps, {} ensemble with {} method'. \
+              format(msjDic['simTime'], ensemType, method)
+
+            if msjDic['restrains'] != 'None':
+              sumStr += ', restrain on {}'.format(msjDic['restrains'])
+            if msjDic['annealing']:
+              sumStr += ', annealing on'
+            else:
+              sumStr += ', {} K'.format(msjDic['temperature'])
+            sumStr += '\n'
         return sumStr
 
     def countSteps(self):
@@ -367,6 +447,40 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
 
         trjDirs.sort(key=natural_keys)
         return trjDirs
+
+    def parseAnnealing(self, annealTemps):
+        tempArg = ' [\n'
+        annealTemps = annealTemps.replace('(', '[').replace(']', ']')
+        annealStages = re.findall(r'\[\d+[.]?\d*, \d+\]', annealTemps)
+        for aSt in annealStages:
+            tempArg += '    [{} {}]\n'.format(eval(aSt)[0], eval(aSt)[1])
+        return tempArg + ']'
+
+    def getJobName(self):
+        files = os.listdir(self._getTmpPath())
+        for f in files:
+            if f.endswith('.msj'):
+                return f.replace('.msj', '')
+
+    def getSchJobId(self):
+        jobId = None
+        jobListFile = os.path.abspath(self._getTmpPath('jobList.txt'))
+        if self.getJobName():
+            check_call(jobControlProg + ' -list {} | grep {} > {}'.
+                       format(self.getJobName(), self.getJobName(), jobListFile), shell=True)
+            with open(jobListFile) as f:
+                jobId = f.read().split('\n')[0].split()[0]
+        return jobId
+
+    def setAborted(self):
+        super().setAborted()
+        jobId = self.getSchJobId()
+        if jobId:
+            print('Killing job: {} with jobName {}'.format(jobId, self.getJobName()))
+            check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
+
+
+
 
 
 
