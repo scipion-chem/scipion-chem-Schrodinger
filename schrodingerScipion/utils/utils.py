@@ -143,4 +143,5 @@ def maeLineSplit(maeLine):
                 ele += a
                 if a == '"':
                     stri = True
+    elements.append(ele)
     return elements

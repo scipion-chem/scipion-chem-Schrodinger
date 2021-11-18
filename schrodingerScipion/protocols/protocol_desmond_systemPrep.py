@@ -235,7 +235,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
             if self.solCharge.get() < 0:
                 addIonsArg = ADD_COUNTERION % (self.getEnumText('cationType')[:-1], number)
             elif self.solCharge.get() > 0:
-                addIonsArg = ADD_COUNTERION % (self.getEnumText('cationType')[:-1], number)
+                addIonsArg = ADD_COUNTERION % (self.getEnumText('anionType')[:-1], number)
 
 
         boxArgs = [self._boundaryShapes[self.getEnumText('boundaryShape')]]
