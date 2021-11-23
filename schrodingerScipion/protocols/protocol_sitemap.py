@@ -84,9 +84,6 @@ class ProtSchrodingerSiteMap(EMProtocol):
 
             pdbOutFile = outPockets.buildPDBhetatmFile()
             self._defineOutputs(outputPockets=outPockets)
-            outStruct = AtomStruct(pdbOutFile)
-            self._defineOutputs(outputAtomStruct=outStruct)
-
 
     def _citations(self):
         return
