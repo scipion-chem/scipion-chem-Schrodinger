@@ -31,7 +31,7 @@ from pwchem.viewers import PyMolViewer, PocketPointsViewer, ContactSurfaceViewer
 from pwem.viewers import ChimeraView
 from ..viewers import SchrodingerDataViewer
 
-VOLUME_PYMOL, VOLUME_PYMOL_SURF = 1, 2
+VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
 
 class ViewerSitemap(pwviewer.ProtocolViewer):
   _label = 'Viewer pockets'
@@ -42,37 +42,22 @@ class ViewerSitemap(pwviewer.ProtocolViewer):
 
   def _defineParams(self, form):
     form.addSection(label='Visualization of consensus pockets')
-    form.addParam('output', params.EnumParam,
-                  choices=['SetOfPockets', 'AtomStructure', 'SchrodingerAtomStructure'],
-                  default=0, display=params.EnumParam.DISPLAY_HLIST,
-                  label='Output to display: ',
-                  help='Scipion output to visualize'
-                  )
-
-    form.addParam('displayOutput', params.LabelParam,
-                  condition='output!=0',
-                  label='Display output: ',
-                  help='*AtomStruct*: display output AtomStruct using Chimera.\n '
-                       '*SchrodingerAtomStructure*: display output using Maestro.'
-                  )
-
     form.addParam('displayPyMol', params.EnumParam,
                   choices=['PyMol (Pocket Points)', 'PyMol (Contact Surface)'],
-                  default=0, condition='output==0',
+                  default=0,
                   display=params.EnumParam.DISPLAY_HLIST,
                   label='Display output: ',
                   help='*PyMol*: display Set of Pockets and pockets as points / surface'
                   )
     form.addParam('displayBBoxes', params.BooleanParam,
-                  default=False, label='Display pocket bounding boxes', condition='output==0',
+                  default=False, label='Display pocket bounding boxes',
                   help='Display the bounding boxes in pymol to check the size for the localized docking')
     form.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
-                  default=1.1, condition='displayBBoxes and output==0',
+                  default=1.1, condition='displayBBoxes',
                   help='The radius * n of each pocket will be used as grid radius')
 
   def _getVisualizeDict(self):
     return {
-      'displayOutput': self._showOutput,
       'displayPyMol': self._showStandardPockets,
     }
 
@@ -83,19 +68,11 @@ class ViewerSitemap(pwviewer.ProtocolViewer):
   # ShowAtomStructs
   # =========================================================================
 
-  def _showOutput(self, paramName=None):
-    if self.output.get() == 1:
-      return self._showAtomStructChimera()
-
-    elif self.output.get() == 2:
-      return self._showSchAtomStructMaestro()
-
-
   def _showStandardPockets(self, paramName=None):
-    if self.displayPyMol == VOLUME_PYMOL-1:
+    if self.displayPyMol == VOLUME_PYMOL:
       return self._showAtomStructPyMolPoints()
 
-    elif self.displayPyMol == VOLUME_PYMOL_SURF-1:
+    elif self.displayPyMol == VOLUME_PYMOL_SURF:
       return self._showAtomStructPyMolSurf()
 
   #Display functions
@@ -116,12 +93,3 @@ class ViewerSitemap(pwviewer.ProtocolViewer):
     outPockets = getattr(self.protocol, 'outputPockets')
     pymolV = ContactSurfaceViewer(project=self.getProject())
     pymolV._visualize(outPockets, bBox=bBox)
-
-  def _showAtomStructChimera(self):
-    outAtomStruct = getattr(self.protocol, 'outputAtomStruct')
-    ChimeraView(outAtomStruct.getFileName()).show()
-
-  def _showSchAtomStructMaestro(self):
-    outSchAtomStruct = getattr(self.protocol, 'outputSchrodingerAtomStruct')
-    SchV = SchrodingerDataViewer(project=self.getProject())
-    SchV._visualize(outSchAtomStruct)
