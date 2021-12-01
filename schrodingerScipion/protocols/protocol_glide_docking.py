@@ -268,6 +268,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
                         small.structFile = pwobj.String(fnStruct)
                         small.setMolClass('Schrodinger')
+                        small.setDockId(self.getObjId())
                         small.setGridId(gridId)
                         smallList.append(small)
                     i += 1
