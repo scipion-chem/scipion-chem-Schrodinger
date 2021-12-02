@@ -37,7 +37,7 @@ import pyworkflow.utils as pwutils
 from .bibtex import _bibtexStr
 from .constants import *
 
-_logo = 'schrodinger.png'
+_logo = 'SchrodingerLogo.png'
 _version = '2021-3'
 
 class Plugin(pwem.Plugin):
@@ -91,6 +91,13 @@ class Plugin(pwem.Plugin):
     def runSchrodinger(cls, protocol, program, args, cwd=None):
         """ Run rdkit command from a given protocol. """
         protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+
+    @classmethod
+    def runSchrodingerScript(cls, protocol, script, args, cwd=None):
+        """ Run rdkit command from a given protocol. """
+        runProg = cls.getHome('run')
+        args = '{} {}'.format(script, args)
+        protocol.runJob(runProg, args, env=cls.getEnviron(), cwd=cwd)
 
     # ---------------------------------- Utils functions  -----------------------
     @staticmethod

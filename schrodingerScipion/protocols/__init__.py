@@ -36,3 +36,5 @@ from .protocol_sitemap import ProtSchrodingerSiteMap
 from .protocol_preparation_grid_sitemap import ProtSchrodingerGridSiteMap
 from .protocol_preparation_grid_adt import ProtSchrodingerGridADT
 from .protocol_prepareForWeb import ProtSchrodingerPrepareForWeb
+from .protocol_desmond_systemPrep import ProtSchrodingerDesmondSysPrep
+from .protocol_systemRelaxation import ProtSchrodingerDesmondSysRelax
