@@ -40,4 +40,4 @@ class BBoxViewer(pwviewer.Viewer):
       pmlFile = obj.getBBoxPml()
 
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
+    return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
