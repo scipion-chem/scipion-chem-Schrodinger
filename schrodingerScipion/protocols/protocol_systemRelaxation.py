@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import random as rd
+import glob
 from subprocess import check_call
 from pyworkflow.protocol.params import *
 from pwem.protocols import EMProtocol
@@ -70,16 +71,6 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
         EMProtocol.__init__(self, **kwargs)
 
     def _defineParams(self, form):
-        form.addHidden(USE_GPU, BooleanParam, default=True,
-                       label="Use GPU for execution",
-                       help="This protocol has both CPU and GPU implementation.\
-                                 Select the one you want to use.")
-
-        form.addHidden(GPU_LIST, StringParam, default='0',
-                       expertLevel=LEVEL_ADVANCED,
-                       label="Choose GPU IDs",
-                       help="Add a list of GPU devices that can be used")
-
         form.addSection(label='Input')
 
         form.addParam('inputStruct', PointerParam, pointerClass='SchrodingerSystem',
@@ -195,18 +186,30 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def relaxationStep(self):
-        maeFile = self.inputStruct.get().getFileName()
-        self.jobName = 'relaxation_' + str(rd.randint(1000000, 9999999))
-        msjFile = self._getTmpPath('{}.msj'.format(self.jobName))
-        msjStr = self.buildMSJ_str()
-        with open(msjFile, 'w') as f:
-            f.write(msjStr)
-        self.createGUISummary()
-
+        lastCheckFile = self.findLastCheckPoint()
         unmergedFile = 'unmerged-relaxation.cms'
-        args = ' -m {} {} -o {} -WAIT -JOBNAME {}'.format(os.path.abspath(msjFile), os.path.abspath(maeFile),
-                                                          unmergedFile, self.jobName)
+        self.jobName = self.getCurrentJobName()
+        msjFile = self._getTmpPath('{}.msj'.format(self.jobName))
+
+        if not lastCheckFile:
+            maeFile = self.inputStruct.get().getFileName()
+
+            msjStr = self.buildMSJ_str()
+            with open(msjFile, 'w') as f:
+                f.write(msjStr)
+            self.createGUISummary()
+
+            args = ' -m {} {} -o {} -WAIT -JOBNAME {}'.format(os.path.abspath(msjFile), os.path.abspath(maeFile),
+                                                              unmergedFile, self.jobName)
+
+        else:
+            lastTGZ = self.findLastDataTgz()
+            args = ' -RESTART {} -d {} -o {} -WAIT -JOBNAME {}'.\
+              format(os.path.abspath(lastCheckFile), os.path.abspath(lastTGZ),
+                     unmergedFile, self.jobName)
+
         self.runJob(multisimProg, args, cwd=self._getTmpPath())
+
 
     def createOutputStep(self):
         #Managing trajectories and names
@@ -479,7 +482,29 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
             print('Killing job: {} with jobName {}'.format(jobId, self.getJobName()))
             check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
 
+    def findLastCheckPoint(self):
+        CP_files = glob.glob(self._getTmpPath('*_checkpoint'))
+        if CP_files:
+            return natural_sort(CP_files)[-1]
+        return CP_files
 
+    def findLastDataTgz(self):
+        data_files = glob.glob(self._getTmpPath('*-out.tgz'))
+        if data_files:
+            return natural_sort(data_files)[-1]
+        return data_files
+
+    def getCurrentJobName(self):
+        msj_file = glob.glob(self._getTmpPath('relaxation*.msj'))
+        if msj_file:
+            return os.path.basename(msj_file[-1]).replace('.msj', '')
+        else:
+            return 'relaxation_' + str(rd.randint(1000000, 9999999))
+
+def natural_sort(l):
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+    return sorted(l, key=alphanum_key)
 
 
 
