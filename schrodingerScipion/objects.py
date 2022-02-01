@@ -50,6 +50,9 @@ class SchrodingerSystem(data.EMFile):
     def getDirName(self):
         return os.path.dirname(self.getFileName())
 
+    def getBaseName(self):
+        return os.path.basename(os.path.splitext(self.getFileName())[0])
+
     def getTrajectoryDirName(self):
         with open(self.getFileName()) as fCMS:
             cmsSTR = fCMS.read()

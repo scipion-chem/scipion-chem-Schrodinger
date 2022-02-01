@@ -222,7 +222,7 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
             mergedFile = self._getPath(sysName + '-out.cms')
             args = ' {} {} -o {} -concat 0 {}'.format(unmergedFile, ' '.join(trjDirs),
                                                       os.path.abspath(self._getPath(sysName)), self.trajInterval.get())
-            schrodinger_plugin.runSchrodingerScript(self, mergeScript, args, cwd=os.path.abspath(self._getTmpPath()))
+            schrodinger_plugin.runJobSchrodingerScript(self, mergeScript, args, cwd=os.path.abspath(self._getTmpPath()))
 
             cmsStruct = SchrodingerSystem()
             cmsStruct.setFileName(mergedFile)

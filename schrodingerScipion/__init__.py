@@ -32,6 +32,7 @@ This package contains protocols interfacing Schrodinger's Maestro
 
 import glob
 import os, fnmatch
+from subprocess import Popen, run
 import pwem
 import pyworkflow.utils as pwutils
 from .bibtex import _bibtexStr
@@ -59,7 +60,8 @@ class Plugin(pwem.Plugin):
         environ.update({
             'SCHRODINGER': cls.getHome(''),
             'PATH': cls.getHome(''),
-            'LD_LIBRARY_PATH': cls.getMMshareDir('lib/Linux-x86_64')+':'+cls.getHome('internal/lib'),
+            'LD_LIBRARY_PATH': '{}:{}:{}'.format(cls.getMMshareDir('lib/Linux-x86_64'), cls.getHome('internal/lib'),
+                                                 cls.getHome('internal/lib/ssl')),
             'PYTHONPATH': cls.getSitePackages()
         }, position=pos)
         return environ
@@ -71,6 +73,10 @@ class Plugin(pwem.Plugin):
             return None
         else:
             return os.path.join(fileList[0],fn)
+
+    @classmethod
+    def getSchrodingerPython(cls):
+        return cls.getHome('internal/bin/python3')
 
     @classmethod
     def getSitePackages(cls):
@@ -86,15 +92,24 @@ class Plugin(pwem.Plugin):
         fnDir = os.path.split(schrodingerScipion.__file__)[0]
         return os.path.join(fnDir,path)
 
+    @classmethod
+    def runSchrodingerScript(cls, program, args, cwd=None, popen=False):
+        """ Run Schrodinger python command from a given protocol. """
+        runProg = cls.getHome('run')
+        schArgs = ' {} {}'.format(program, args)
+        if popen:
+            Popen(runProg + schArgs, env=cls.getEnviron(), cwd=cwd, shell=True)
+        else:
+            run(runProg + schArgs, env=cls.getEnviron(), cwd=cwd, shell=True)
 
     @classmethod
     def runSchrodinger(cls, protocol, program, args, cwd=None):
-        """ Run rdkit command from a given protocol. """
+        """ Run Schrodinger command from a given protocol. """
         protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
-    def runSchrodingerScript(cls, protocol, script, args, cwd=None):
-        """ Run rdkit command from a given protocol. """
+    def runJobSchrodingerScript(cls, protocol, script, args, cwd=None):
+        """ Run Schrodinger command from a given protocol. """
         runProg = cls.getHome('run')
         args = '{} {}'.format(script, args)
         protocol.runJob(runProg, args, env=cls.getEnviron(), cwd=cwd)
