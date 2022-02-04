@@ -46,7 +46,7 @@ class AddRelaxStepWizard(pwizard.Wizard):
         numSteps = protocol.countSteps()
 
         try:
-            if protocol.insertStep.get() != '':
+            if protocol.insertStep.get().strip() != '':
                 index = int(protocol.insertStep.get())
             else:
                 index = numSteps + 1
@@ -76,7 +76,7 @@ class DeleteRelaxStepWizard(pwizard.Wizard):
     def show(self, form, *params):
         protocol = form.protocol
         try:
-            index = int(protocol.deleteStep.get())
+            index = int(protocol.deleteStep.get().strip())
             if protocol.countSteps() >= index > 0:
                 workSteps = protocol.workFlowSteps.get().split('\n')
                 del workSteps[index - 1]
@@ -98,7 +98,7 @@ class WatchRelaxStepWizard(pwizard.Wizard):
     def show(self, form, *params):
         protocol = form.protocol
         try:
-            index = int(protocol.watchStep.get())
+            index = int(protocol.watchStep.get().strip())
             if protocol.countSteps() >= index > 0:
                 workSteps = protocol.workFlowSteps.get().split('\n')
                 msjDic = eval(workSteps[index - 1])

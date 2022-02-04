@@ -29,6 +29,7 @@ import glob
 from subprocess import check_call
 from pyworkflow.protocol.params import *
 from pwem.protocols import EMProtocol
+from pwchem.utils import natural_sort
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.constants import *
 from schrodingerScipion.objects import SchrodingerSystem
@@ -85,7 +86,7 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
         group = form.addGroup('Simulation time')
         group.addParam('simTime', FloatParam, default=self._defParams['simTime'],
                        label='Relaxation time (ps):',
-                       help='Time of the simulation step (ns)')
+                       help='Time of the simulation step (ps)')
         line = group.addLine('Time steps: ',
                              help='Time steps for the simulation (bonded / near / far) (ps)')
         line.addParam('bondedT', FloatParam, default=self._defParams['bondedT'],
@@ -106,7 +107,7 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
                            ' of the trajectory')
         group.addParam('trajInterval', FloatParam, default=self._defParams['trajInterval'],
                        label='Interval time (ps):',
-                       help='Time between each frame recorded in the simulation (ns)')
+                       help='Time between each frame recorded in the simulation (ps)')
 
         group = form.addGroup('Ensemble')
         group.addParam('ensemType', EnumParam, default=0,
@@ -500,11 +501,6 @@ class ProtSchrodingerDesmondSysRelax(EMProtocol):
             return os.path.basename(msj_file[-1]).replace('.msj', '')
         else:
             return 'relaxation_' + str(rd.randint(1000000, 9999999))
-
-def natural_sort(l):
-    convert = lambda text: int(text) if text.isdigit() else text.lower()
-    alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
-    return sorted(l, key=alphanum_key)
 
 
 
