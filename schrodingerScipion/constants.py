@@ -81,9 +81,9 @@ SIZE_SINGLE = '%s'
 SIZE_LIST = '[%s %s %s]'
 ANGLES = '[%s %s %s %s %s %s]'
 
-################################ SYSTEM RELAXATION ##################
+################################ SYSTEM SIMULATION ##################
 
-MSJ_SYSRELAX_INIT = '''task {
+MSJ_SYSMD_INIT = '''task {
   task = "desmond:auto"
   set_family = {
     desmond = {
@@ -93,7 +93,7 @@ MSJ_SYSRELAX_INIT = '''task {
 }
 '''
 
-MSJ_SYSRELAX_SIM = '''
+MSJ_SYSMD_SIM = '''
 simulate {
   annealing   = %s
   dir         = %s
@@ -148,17 +148,17 @@ RESTRAINS = '''restrain    = { atom = %s force_constant = %s }'''
 # 3) "NPT, T = 10 K, and restraints on solute heavy atoms, 12ps"
 # 4) "NPT, T = 300 K and restraints on solute heavy atoms, 12ps"
 # 5) "NPT, T = 300 K and no restraints, 24ps"
-DESMOND_NPT_RELAX = '''\
+DESMOND_NPT_MD = '''\
 {'simTime': 100.0, "bondedT": 0.001, "nearT": 0.001, "farT": 0.003, 'temperature': 10.0, 'deltaMax': 0.1,\
 'ensemType': 'Minimization (Brownian)', 'restrains': 'Solute_heavy_atom'}
 {'simTime': 12.0, "bondedT": 0.001, "nearT": 0.001, "farT": 0.003, 'temperature': 10.0,\
 'ensemType': 'NVT', 'thermostat': 'Langevin', 'restrains': 'Solute_heavy_atom'}
 {'simTime': 12.0, 'temperature': 10.0, 'ensemType': 'NPT', 'thermostat': 'Langevin', 'barostat': 'Langevin', \
-'presRelaxCons': 50.0, 'restrains': 'Solute_heavy_atom'}
+'presMDCons': 50.0, 'restrains': 'Solute_heavy_atom'}
 {'simTime': 12.0, 'temperature': 300.0, 'ensemType': 'NPT', 'thermostat': 'Langevin', 'barostat': 'Langevin', \
-'presRelaxCons': 50.0, 'restrains': 'Solute_heavy_atom'}
+'presMDCons': 50.0, 'restrains': 'Solute_heavy_atom'}
 {'simTime': 24.0, 'temperature': 300.0, 'ensemType': 'NPT', 'thermostat': 'Langevin', 'barostat': 'Langevin', \
-'presRelaxCons': 2.0}
+'presMDCons': 2.0}
 '''
 
 

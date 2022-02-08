@@ -28,7 +28,7 @@ import os
 
 import pyworkflow.viewer as pwviewer
 import pyworkflow.protocol.params as params
-from schrodingerScipion.protocols import ProtSchrodingerDesmondSysRelax
+from schrodingerScipion.protocols import ProtSchrodingerDesmondMD
 from schrodingerScipion import Plugin as schPlugin
 
 from .viewers_data import MaestroView
@@ -36,7 +36,7 @@ from .viewers_data import MaestroView
 class DesmondSimulationViewer(pwviewer.ProtocolViewer):
     """ Visualize the output of Desmond simulation """
     _label = 'Viewer Desmond Simulation'
-    _targets = [ProtSchrodingerDesmondSysRelax]
+    _targets = [ProtSchrodingerDesmondMD]
 
     def __init__(self, **args):
         super().__init__(**args)

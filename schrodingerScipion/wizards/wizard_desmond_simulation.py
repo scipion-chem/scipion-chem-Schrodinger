@@ -33,13 +33,13 @@ information such as name and number of residues.
 """
 
 # Imports
-from schrodingerScipion.protocols.protocol_systemRelaxation import *
+from schrodingerScipion.protocols.protocol_desmond_simulation import *
 from ..constants import *
 import pyworkflow.wizard as pwizard
 
-class AddRelaxStepWizard(pwizard.Wizard):
+class AddSimulationStepWizard(pwizard.Wizard):
     """Add a step of the workflow in the defined position"""
-    _targets = [(ProtSchrodingerDesmondSysRelax, ['insertStep'])]
+    _targets = [(ProtSchrodingerDesmondMD, ['insertStep'])]
 
     def show(self, form, *params):
         protocol = form.protocol
@@ -69,9 +69,9 @@ class AddRelaxStepWizard(pwizard.Wizard):
             print('Incorrect index')
 
 
-class DeleteRelaxStepWizard(pwizard.Wizard):
+class DeleteSimulationStepWizard(pwizard.Wizard):
     """Delete the step of the workflow defined by the index"""
-    _targets = [(ProtSchrodingerDesmondSysRelax, ['deleteStep'])]
+    _targets = [(ProtSchrodingerDesmondMD, ['deleteStep'])]
 
     def show(self, form, *params):
         protocol = form.protocol
@@ -91,9 +91,9 @@ class DeleteRelaxStepWizard(pwizard.Wizard):
         except:
             print('Incorrect index')
 
-class WatchRelaxStepWizard(pwizard.Wizard):
+class WatchSimulationStepWizard(pwizard.Wizard):
     """Watch the parameters of the step of the workflow defined by the index"""
-    _targets = [(ProtSchrodingerDesmondSysRelax, ['watchStep'])]
+    _targets = [(ProtSchrodingerDesmondMD, ['watchStep'])]
 
     def show(self, form, *params):
         protocol = form.protocol
@@ -122,12 +122,12 @@ class WatchRelaxStepWizard(pwizard.Wizard):
 
 class AddDefaultStepsWizard(pwizard.Wizard):
     """Delete the step of the workflow defined by the index"""
-    _targets = [(ProtSchrodingerDesmondSysRelax, ['defSteps'])]
+    _targets = [(ProtSchrodingerDesmondMD, ['defSteps'])]
 
     def show(self, form, *params):
         protocol = form.protocol
         if protocol.defSteps.get() == protocol.DESMOND_NPT:
-            form.setVar('workFlowSteps', DESMOND_NPT_RELAX)
+            form.setVar('workFlowSteps', DESMOND_NPT_MD)
             newSum = protocol.createSummary()
             form.setVar('summarySteps', newSum)
         elif protocol.defSteps.get() == protocol.NONE:
