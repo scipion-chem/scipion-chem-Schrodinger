@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, shutil
+import os, shutil, subprocess
 from subprocess import CalledProcessError
 
 from pyworkflow.protocol.params import MultiPointerParam, STEPS_PARALLEL, PointerParam, BooleanParam, \
@@ -35,6 +35,8 @@ from pwem.protocols import EMProtocol
 from schrodingerScipion.objects import SchrodingerGrid, SetOfSchrodingerGrids
 
 from schrodingerScipion import Plugin as schrodinger_plugin
+
+structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 
 class ProtSchrodingerGridSiteMap(EMProtocol):
     """Calls glide to prepare a grid with an input that is a set of binding sites"""
@@ -51,7 +53,6 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                       label='Sets of Pockets:', allowsNull=False,
                       help='Sets of known or predicted protein pockets to center the grid on')
 
-        form.addSection(label='Parameters')
         group = form.addGroup('Inner box')
         group.addParam('innerAction', EnumParam, default=0, label='Determine inner box: ',
                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
@@ -155,7 +156,8 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                 if os.path.exists(fnGrid):
                     SchGrid = SchrodingerGrid(filename=fnGrid, **self.getGridArgs(pocket))
                     SchGrid.structureFile = String(self.getInputMaeFile())
-                    SchGrid.pocketScore = Float(pocket.getScore())
+                    if str(pocket.getScore()) != 'None':
+                        SchGrid.pocketScore = Float(pocket.getScore())
                     SchGrid.setObjId(i)
                     # gridFile.bindingSiteDScore = Float(dscore)
 

@@ -23,21 +23,32 @@
 # *
 # **************************************************************************
 
-import os, re
+import os, re, subprocess
 import pwem.objects.data as data
 from pwchem.objects import ProteinPocket
 from pwchem.constants import *
 from pyworkflow.object import (Float, Integer, List, String)
+from schrodingerScipion import Plugin as schrodinger_plugin
 from .utils.utils import parseLogProperties
 from .constants import ATTRIBUTES_MAPPING as AM
 
-class SchrodingerAtomStruct(data.EMFile):
+structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
+
+class SchrodingerAtomStruct(data.AtomStruct):
     """An AtomStruct in the file format of Maestro"""
     def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
+        super().__init__(**kwargs)
 
     def getExtension(self):
         return os.path.splitext(self.getFileName())[1]
+
+    def convert2PDB(self, outPDB=None, cwd=None):
+        if not outPDB:
+            outPDB = self.getFileName().replace(self.getExtension(), '.pdb')
+        command = '{} {} {}'.format(structConvertProg, os.path.abspath(self.getFileName()), outPDB)
+        subprocess.check_call(command, shell=True, cwd=cwd)
+        return outPDB
+
 
 class SchrodingerSystem(data.EMFile):
     """An system atom structure (prepared for MD) in the file format of Maestro"""
@@ -162,7 +173,7 @@ class SetOfSchrodingerGrids(data.EMSet):
             toWrite += PML_BBOX_STR_EACH.format([1, 0, 1], grid.getCenter(), grid.getOuterBox(),
                                                 'OuterBox_' + str(grid.getObjId()))
         with open(pmlFile, 'w') as f:
-            f.write(PML_BBOX_STR.format(self.getProteinFile(), toWrite))
+            f.write(PML_BBOX_STR.format(os.path.abspath(self.getProteinFile()), toWrite))
 
 
 
@@ -199,7 +210,7 @@ class SitemapPocket(ProteinPocket):
         return s
 
     def getStructureMaeFile(self):
-        return self.structureFile.get()
+        return self._maeFile.get()
 
     def setStructureMaeFile(self, value):
-        self.structureFile.set(value)
+        self._maeFile.set(value)

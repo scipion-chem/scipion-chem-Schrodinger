@@ -79,7 +79,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
             outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
             for oFile in pocketFiles:
               pock = SitemapPocket(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog))
-              pock.structureFile = pwobj.String(os.path.abspath(fnStructure))
+              pock._maeFile = pwobj.String(os.path.abspath(fnStructure))
               outPockets.append(pock)
 
             pdbOutFile = outPockets.buildPDBhetatmFile()
