@@ -23,21 +23,91 @@
 # *
 # **************************************************************************
 
-import os
+import os, re, subprocess
 import pwem.objects.data as data
 from pwchem.objects import ProteinPocket
 from pwchem.constants import *
 from pyworkflow.object import (Float, Integer, List, String)
+from schrodingerScipion import Plugin as schrodinger_plugin
 from .utils.utils import parseLogProperties
 from .constants import ATTRIBUTES_MAPPING as AM
 
-class SchrodingerAtomStruct(data.EMFile):
+structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
+
+class SchrodingerAtomStruct(data.AtomStruct):
     """An AtomStruct in the file format of Maestro"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def getExtension(self):
+        return os.path.splitext(self.getFileName())[1]
+
+    def convert2PDB(self, outPDB=None, cwd=None):
+        if not outPDB:
+            outPDB = self.getFileName().replace(self.getExtension(), '.pdb')
+        command = '{} {} {}'.format(structConvertProg, os.path.abspath(self.getFileName()), outPDB)
+        subprocess.check_call(command, shell=True, cwd=cwd)
+        return outPDB
+
+
+class SchrodingerSystem(data.EMFile):
+    """An system atom structure (prepared for MD) in the file format of Maestro"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 
     def getExtension(self):
         return os.path.splitext(self.getFileName())[1]
+
+    def getDirName(self):
+        return os.path.dirname(self.getFileName())
+
+    def getBaseName(self):
+        return os.path.basename(os.path.splitext(self.getFileName())[0])
+
+    def getTrajectoryDirName(self):
+        with open(self.getFileName()) as fCMS:
+            cmsSTR = fCMS.read()
+            trDirs = re.findall(r'[\w-]*_trj', cmsSTR)
+        return trDirs[0]
+
+    def getCMSFileName(self):
+        with open(self.getFileName()) as fCMS:
+            cmsSTR = fCMS.read()
+            fName = re.findall(r'[\w-]*\.cms', cmsSTR)
+        return fName[0]
+
+    def changeTrajectoryDirName(self, newDirPath, trjPath=None):
+        '''Change the name of the trajectory directory specified in the CMS file'''
+        dirName = self.getTrajectoryDirName()
+        if trjPath==None:
+            trjPath = self.getDirName()
+        dirPath = os.path.join(trjPath, dirName)
+
+        newDirName = newDirPath.split('/')[-1]
+        with open(self.getFileName()) as fCMS:
+            cmsSTR = fCMS.read()
+        cmsSTR = cmsSTR.replace(dirName, newDirName)
+
+        with open(self.getFileName(), 'w') as fCMS:
+            fCMS.write(cmsSTR)
+
+        os.rename(dirPath, newDirPath)
+
+    def changeCMSFileName(self, newCMSPath):
+        '''The name of the CMS is found inside itself. Change it in the file along with the file itself'''
+        newCMSName = newCMSPath.split('/')[-1]
+        fName = self.getCMSFileName()
+        with open(self.getFileName()) as fCMS:
+            cmsSTR = fCMS.read()
+        cmsSTR = cmsSTR.replace(fName, newCMSName)
+
+        with open(self.getFileName(), 'w') as fCMS:
+            fCMS.write(cmsSTR)
+
+        os.rename(self.getFileName(), newCMSPath)
+        self.setFileName(newCMSPath)
+
+
 
 class SchrodingerGrid(data.EMFile):
     """A search grid in the file format of Maestro"""
@@ -103,7 +173,7 @@ class SetOfSchrodingerGrids(data.EMSet):
             toWrite += PML_BBOX_STR_EACH.format([1, 0, 1], grid.getCenter(), grid.getOuterBox(),
                                                 'OuterBox_' + str(grid.getObjId()))
         with open(pmlFile, 'w') as f:
-            f.write(PML_BBOX_STR.format(self.getProteinFile(), toWrite))
+            f.write(PML_BBOX_STR.format(os.path.abspath(self.getProteinFile()), toWrite))
 
 
 
@@ -133,17 +203,14 @@ class SitemapPocket(ProteinPocket):
 
         #Build contact atoms
         if proteinFile != None:
-            cAtoms = self.buildContactAtoms(calculate=True)
-            self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
-            cResidues = self.getResiduesFromAtoms(cAtoms)
-            self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
+            self.calculateContacts()
 
     def __str__(self):
         s = 'SiteMap pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
         return s
 
     def getStructureMaeFile(self):
-        return self.structureFile.get()
+        return self._maeFile.get()
 
     def setStructureMaeFile(self, value):
-        self.structureFile.set(value)
+        self._maeFile.set(value)

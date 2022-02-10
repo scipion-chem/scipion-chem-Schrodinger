@@ -67,6 +67,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                       label='Convert output format to: ', expertLevel=LEVEL_ADVANCED,
                       help='Convert output molecules to this format')
         group = form.addGroup('Docking')
+        group.addParam('posesPerLig', IntParam, default=5,
+                       label='No. Poses to report per ligand: ')
         group.addParam('dockingMethod', EnumParam, default=0, choices=['Flexible dock (confgen)', 'Rigid dock (rigid)',
                                                                       'Refine (do not dock, mininplace)',
                                                                       'Score in place (do not dock, inplace)'],
@@ -75,17 +77,15 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        label='Docking precision',
                        help='You may use a low to high strategy. HTVS takes about 2 s/ligand, SP about 10s, and XP about 10 min.')
         group.addParam('maxkeep', IntParam, default=5000, expertLevel=LEVEL_ADVANCED,
-                       label='No. Poses to keep per ligand:',
+                       label='No. Poses to keep per ligand (dock):',
                        help='Number of poses per ligand to keep in initial phase of docking.')
         group.addParam('scoreCutoff', FloatParam, default=100.0, expertLevel=LEVEL_ADVANCED,
                        label='Score cutoff:',
                        help='Scoring window for keeping initial poses.')
         group.addParam('maxref', IntParam, default=-1, expertLevel=LEVEL_ADVANCED,
-                       label='No. Poses to keep per ligand:',
+                       label='No. Poses to keep per ligand (em):',
                        help='Number of poses to keep per ligand for energy minimization. '
                             'If set to -1, the default value is 400, except for XP precision that is 800.')
-        group.addParam('posesPerLig', IntParam, default=5, expertLevel=LEVEL_ADVANCED,
-                       label='No. Poses to report per ligand:')
 
         form.addSection(label='Ligand sampling')
         form.addParam('sampleNinversions', BooleanParam, default=True, condition='dockingMethod==0',
@@ -234,7 +234,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         self.runJob(glideProg, args, cwd=self._getPath(gridDir))
 
         self.runJob(propListerProg,
-                    '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" -p "glide ligand efficiency ln" -c -o %s %s'%\
+                    '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" '
+                    '-p "glide ligand efficiency ln" -c -o %s %s'%\
                     ("job_{}_pv.csv".format(gridId), "job_{}_pv.maegz".format(gridId)),
                     cwd=self._getPath(gridDir))
 
@@ -268,6 +269,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
                         small.structFile = pwobj.String(fnStruct)
                         small.setMolClass('Schrodinger')
+                        small.setDockId(self.getObjId())
                         small.setGridId(gridId)
                         smallList.append(small)
                     i += 1

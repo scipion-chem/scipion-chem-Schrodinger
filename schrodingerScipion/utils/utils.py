@@ -99,3 +99,49 @@ def parseLogProperties(fnLog, idx=None):
                     pDic = dict(zip(keys, values))
                 pId += 1
     return pDic
+
+def getChargeFromMAE(maeFile):
+    charge = 0
+    with open(maeFile) as f:
+        keys, values = False, False
+        for line in f:
+            if keys:
+                kList.append(line.strip())
+            if values and not line.strip().endswith('{') and not line.strip() == ':::':
+                elements = maeLineSplit(line)
+                newCharge = float(elements[chargeIdx])
+                charge += newCharge
+
+            if line.strip().endswith('{'):
+                keys, values = True, False
+                kList = []
+            elif line.strip() == ':::':
+                if keys:
+                    keys = False
+                    if 'i_m_formal_charge' in kList:
+                        values = True
+                        chargeIdx = kList.index('i_m_formal_charge')
+                elif values:
+                    values = False
+    return charge
+
+def maeLineSplit(maeLine):
+    '''Some elements are strings surrounded by "" but with spaces in between,
+        accounting for several elements of the list when they are actually just 1'''
+    elements = []
+    stri, ele = False, ''
+    for a in maeLine.strip():
+        if stri:
+            ele += a
+            if a == '"':
+                stri = False
+        else:
+            if a == ' ':
+                elements.append(ele)
+                ele = ''
+            else:
+                ele += a
+                if a == '"':
+                    stri = True
+    elements.append(ele)
+    return elements
