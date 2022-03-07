@@ -34,11 +34,9 @@ import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerBindingSites, SchrodingerAtomStruct
-from pwchem.objects import BindingSite, SetOfBindingSites, SetOfPockets
+from pwchem.objects import BindingSite, SetOfBindingSites, SetOfPockets, ProteinPocket
 from pwchem.constants import *
 from pwchem.utils import writePDBLine, writeSurfPML, splitPDBLine
-from ..utils.utils import parseLogPockets
-from ..objects import SitemapPocket
 
 class ProtSchrodingerSiteMap(EMProtocol):
     """Calls sitemap to predict possible binding sites"""
@@ -78,7 +76,8 @@ class ProtSchrodingerSiteMap(EMProtocol):
             proteinFile, pocketFiles = self.createOutputPDBFile()
             outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
             for oFile in pocketFiles:
-              pock = SitemapPocket(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog))
+              pock = ProteinPocket(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog),
+                                   pClass='SiteMap')
               pock._maeFile = pwobj.String(os.path.abspath(fnStructure))
               outPockets.append(pock)
 
