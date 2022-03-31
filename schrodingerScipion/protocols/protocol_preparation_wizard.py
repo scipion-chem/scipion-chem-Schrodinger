@@ -248,7 +248,7 @@ class ProtSchrodingerPrepWizard(EMProtocol):
 
         if self.rchains.get():
             chain = json.loads(self.chain_name.get())  # From wizard dictionary
-            chain_id = chain["Chain"].upper().strip()
+            chain_id = chain["chain"].upper().strip()
         else:
             chain_id = None
         cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
