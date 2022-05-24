@@ -33,7 +33,7 @@ information such as name and number of residues.
 """
 
 # Imports
-from pwchem.wizards import SelectChainWizard
+from pwem.wizards import SelectChainWizard
 from schrodingerScipion.protocols.protocol_preparation_wizard import ProtSchrodingerPrepWizard
 
 SelectChainWizard().addTarget(protocol=ProtSchrodingerPrepWizard,

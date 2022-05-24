@@ -25,9 +25,6 @@
 # *
 # **************************************************************************
 
-SCHRODINGER_HOME = 'SCHRODINGER_HOME' #Acceso by Plugin.getHome()
-
-
 #################################### SYSTEM PREPARATION ############
 
 MSJ_SYSPREP = '''task {

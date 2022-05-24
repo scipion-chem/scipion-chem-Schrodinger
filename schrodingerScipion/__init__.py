@@ -39,14 +39,14 @@ from .bibtex import _bibtexStr
 from .constants import *
 
 _logo = 'SchrodingerLogo.png'
-_version = '2021-3'
+SCHRODINGER_DIC = {'name': 'schrodinger', 'version': '2021-3', 'home': 'SCHRODINGER_HOME'}
 
 class Plugin(pwem.Plugin):
-    _homeVar = SCHRODINGER_HOME
+    _homeVar = SCHRODINGER_DIC['home']
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(SCHRODINGER_HOME, 'Schrodinger{}'.format(_version))
+        cls._defineEmVar(SCHRODINGER_DIC['home'], 'Schrodinger{}'.format(SCHRODINGER_DIC['version']))
 
     @classmethod
     def defineBinaries(cls, env):

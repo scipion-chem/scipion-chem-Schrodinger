@@ -67,7 +67,7 @@ class TestGlideDocking(BaseTest):
         protPrepWizard = cls.newProtocol(
             ProtSchrodingerPrepWizard,
             cleanPDB=True, waters=False, rchains=True,
-            chain_name='{"Chain": "C", "Number of residues": 93, "Number of chains": 3}',
+            chain_name='{"model": 0, "chain": "C", "residues": 93}',
             **kwargs)
         protPrepWizard.inputAtomStruct.set(cls.protImportPDB)
         protPrepWizard.inputAtomStruct.setExtended('outputPdb')
