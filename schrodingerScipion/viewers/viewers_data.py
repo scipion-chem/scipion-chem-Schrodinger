@@ -36,7 +36,6 @@ class SchrodingerDataViewer(pwviewer.Viewer):
     _targets = [
         SchrodingerAtomStruct,
         SchrodingerBindingSites,
-        SchrodingerPoses,
         SchrodingerSystem
     ]
 
@@ -55,7 +54,6 @@ class SchrodingerDataViewer(pwviewer.Viewer):
         # For now handle both types of SetOfTiltSeries together
         if issubclass(cls, SchrodingerAtomStruct) or \
            issubclass(cls, SchrodingerBindingSites) or \
-           issubclass(cls, SchrodingerPoses) or \
            issubclass(cls, SchrodingerSystem):
             cwd = '/'.join(obj.getFileName().split('/')[:-1])
             views.append(MaestroView(os.path.abspath(obj.getFileName()), cwd=cwd))

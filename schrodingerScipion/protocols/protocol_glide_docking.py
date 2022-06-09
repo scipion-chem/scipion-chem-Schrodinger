@@ -34,7 +34,6 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.utils.utils import putMol2Title, sortDockingResults
-from schrodingerScipion.objects import SchrodingerPoses
 
 glideProg = schrodinger_plugin.getHome('glide')
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
@@ -250,6 +249,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             if not fnBase in smallDict:
                 smallDict[fnBase] = fnSmall
 
+        if self.mergeOutput:
+            allMaeFile = self.mergeMAEfiles()
+
         allSmallList = []
         fnStruct = self.inputGridSet.get().getFirstItem().structureFile.get()
         for gridDir in self.getGridDirs(complete=True):
@@ -269,8 +271,10 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         small.ligandEfficiencySA = pwobj.Float(tokens[3])
                         small.ligandEfficiencyLn = pwobj.Float(tokens[4])
                         small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
-                        print('PoseFile: ', "%d@%s"%(i, fnPv))
-                        small.structFile = pwobj.String(fnStruct)
+                        if not self.mergeOutput:
+                            small.maeFile = pwobj.String(fnPv)
+                        else:
+                            small.maeFile = pwobj.String(allMaeFile)
                         small.setMolClass('Schrodinger')
                         small.setDockId(self.getObjId())
                         small.setGridId(gridId)
@@ -278,10 +282,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     i += 1
 
             allSmallList += smallList
-
-            mae = SchrodingerPoses(filename=fnPv)
-            self._defineOutputs(**{'outputPoses_{}'.format(gridId): mae})
-            self._defineSourceRelation(self.inputLibrary, mae)
 
             if not self.mergeOutput:
                 idxSorted = sortDockingResults(smallList)
@@ -319,6 +319,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
             outputSet.setDocked(True)
             outputSet.proteinFile.set(self.getOriginalReceptorFile())
+            outputSet.structFile = pwobj.String(fnStruct)
             self._defineOutputs(outputSmallMolecules=outputSet)
             self._defineSourceRelation(self.inputGridSet, outputSet)
             self._defineSourceRelation(self.inputLibrary, outputSet)
@@ -414,3 +415,14 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     if os.path.exists(self._getPath(dir, "job_{}_pv.maegz".format(gridId))):
                         gridDirs.append(dir)
         return gridDirs
+
+    def mergeMAEfiles(self):
+        maeFiles = []
+        for gridDir in self.getGridDirs(complete=True):
+            gridId = gridDir.split('_')[1]
+            maeFiles.append(gridDir + '/job_{}_pv.maegz'.format(gridId))
+
+        outName = 'allMolecules.maegz'
+        command = 'zcat {} | gzip -c > {}'.format(' '.join(maeFiles), outName)
+        self.runJob('', command, cwd=self._getPath())
+        return self._getPath(outName)
