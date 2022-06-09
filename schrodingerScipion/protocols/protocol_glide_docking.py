@@ -60,7 +60,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        label='Grid to analyze:', allowsNull=False)
         form.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Library of compounds:', allowsNull=False)
-        form.addParam('mergeOutput', BooleanParam, default=False,
+        form.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
                       label='Merge output from different pockets: ')
         form.addParam('convertType', EnumParam,
                       choices=['pdb', 'mol2', 'sdf'], default=0, display=EnumParam.DISPLAY_HLIST,
@@ -233,11 +233,14 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         args = "-WAIT -RESTART -LOCAL job_{}.inp".format(gridId)
         self.runJob(glideProg, args, cwd=self._getPath(gridDir))
 
-        self.runJob(propListerProg,
-                    '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" '
-                    '-p "glide ligand efficiency ln" -c -o %s %s'%\
-                    ("job_{}_pv.csv".format(gridId), "job_{}_pv.maegz".format(gridId)),
-                    cwd=self._getPath(gridDir))
+        if os.path.exists(self._getPath(gridDir, "job_{}_pv.maegz".format(gridId))):
+            self.runJob(propListerProg,
+                        '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" '
+                        '-p "glide ligand efficiency ln" -c -o %s %s'%\
+                        ("job_{}_pv.csv".format(gridId), "job_{}_pv.maegz".format(gridId)),
+                        cwd=self._getPath(gridDir))
+        else:
+            print('Failed to find ligands for grid {}'.format(gridId))
 
     def createOutput(self):
         smallDict = {}
@@ -245,18 +248,17 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             fnSmall = small.getFileName()
             fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
             if not fnBase in smallDict:
-                smallDict[fnBase]=fnSmall
+                smallDict[fnBase] = fnSmall
 
         allSmallList = []
-        for grid in self.inputGridSet.get():
-
-            gridId = grid.getObjId()
+        fnStruct = self.inputGridSet.get().getFirstItem().structureFile.get()
+        for gridDir in self.getGridDirs(complete=True):
+            gridId = gridDir.split('_')[1]
             gridDir = 'grid_{}/'.format(gridId)
-            fnStruct = grid.structureFile.get()
 
             smallList = []
+            fnPv = self._getPath(gridDir + 'job_{}_pv.maegz'.format(gridId))
             with open(self._getPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
-                fnPv = self._getPath(gridDir + 'job_{}_pv.maegz'.format(gridId))
                 i = 0
                 for line in fhCsv.readlines():
                     if i > 1:
@@ -267,6 +269,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         small.ligandEfficiencySA = pwobj.Float(tokens[3])
                         small.ligandEfficiencyLn = pwobj.Float(tokens[4])
                         small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
+                        print('PoseFile: ', "%d@%s"%(i, fnPv))
                         small.structFile = pwobj.String(fnStruct)
                         small.setMolClass('Schrodinger')
                         small.setDockId(self.getObjId())
@@ -278,7 +281,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
             mae = SchrodingerPoses(filename=fnPv)
             self._defineOutputs(**{'outputPoses_{}'.format(gridId): mae})
-            self._defineSourceRelation(grid, mae)
             self._defineSourceRelation(self.inputLibrary, mae)
 
             if not self.mergeOutput:
@@ -299,7 +301,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 outputSet.setDocked(True)
                 outputSet.proteinFile.set(self.getOriginalReceptorFile())
                 self._defineOutputs(**{nameOut: outputSet})
-                self._defineSourceRelation(grid, outputSet)
                 self._defineSourceRelation(self.inputLibrary, outputSet)
 
         if self.mergeOutput:
@@ -359,12 +360,13 @@ class ProtSchrodingerGlideDocking(EMProtocol):
     def convertOutputStep(self, curMolSet, outDir, it):
         for i, mol in enumerate(curMolSet):
             fnAux = os.path.abspath(self._getExtraPath("tmp_%d_%d.mae" % (it, i)))
-            n, fnRaw = mol.poseFile.get().split('@')
+            poseId, fnRaw = mol.poseFile.get().split('@')
+            mol.setPoseId(poseId)
             fnOut = os.path.join(outDir, '{}.{}'.format(
                 mol.getUniqueName(), self.getEnumText('convertType')))
 
             if not os.path.exists(fnOut):
-                args = "-n %s %s -o %s" % (n, os.path.abspath(fnRaw), fnAux)
+                args = "-n %s %s -o %s" % (poseId, os.path.abspath(fnRaw), fnAux)
                 subprocess.call([maeSubsetProg, *args.split()])
 
                 args = fnAux + ' ' + os.path.abspath(fnOut)
@@ -394,8 +396,21 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             if os.path.splitext(posFile)[1] == '.mol2':
                 posFile = relabelAtomsMol2(posFile)
             mol.setPoseFile(posFile)
+            mol.setPoseId(posFile.split('_')[-2])
             newMols.append(mol.clone())
 
         for mol in newMols:
             outSet.update(mol)
         return outSet
+
+    def getGridDirs(self, complete=False):
+        gridDirs = []
+        for dir in os.listdir(self._getPath()):
+            if dir.startswith('grid_'):
+                if not complete:
+                    gridDirs.append(dir)
+                else:
+                    gridId = dir.split('_')[1]
+                    if os.path.exists(self._getPath(dir, "job_{}_pv.maegz".format(gridId))):
+                        gridDirs.append(dir)
+        return gridDirs
