@@ -42,7 +42,7 @@ class SchrodingerAtomStruct(data.AtomStruct):
 
     def convert2PDB(self, outPDB=None, cwd=None):
         if not outPDB:
-            outPDB = self.getFileName().replace(self.getExtension(), '.pdb')
+            outPDB = os.path.abspath(self.getFileName().replace(self.getExtension(), '.pdb'))
         command = '{} {} {}'.format(structConvertProg, os.path.abspath(self.getFileName()), outPDB)
         subprocess.check_call(command, shell=True, cwd=cwd)
         return outPDB
