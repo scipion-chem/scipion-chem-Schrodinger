@@ -153,34 +153,34 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
     def combineLigandsFilesStep(self):
         nt = self.numberOfThreads.get()
-        allLigandsFile = self._getTmpPath(self.getAllLigandsFile())
+        allLigandsFile = self.getAllLigandsFile()
         with open(allLigandsFile, 'w') as f:
             for it in range(nt):
-                with open(self._getTmpPath(self.getAllLigandsFile(suffix=it))) as fLig:
+                with open(self.getAllLigandsFile(suffix=it)) as fLig:
                     f.write(fLig.read())
 
 
     def createLigandsFile(self, ligSet, it):
-        curAllLigandsFile = self._getTmpPath(self.getAllLigandsFile(suffix=it))
+        curAllLigandsFile = self.getAllLigandsFile(suffix=it)
         with open(curAllLigandsFile, 'w') as fh:
             for small in ligSet:
                 fnSmall = small.getFileName()
                 if not fnSmall.endswith('.mol2'):
                     fnSmall = self.convert2Mol2(fnSmall, it)
-
+                putMol2Title(fnSmall)
                 with open(fnSmall) as fhLigand:
                     fh.write(fhLigand.read())
 
     def dockingStep(self, grid):
         gridId = grid.getObjId()
-        gridDir = 'grid_{}/'.format(gridId)
+        gridDir = self._getExtraPath('grid_{}/'.format(gridId))
 
-        makePath(self._getPath(gridDir))
-        fnGrid = self._getPath(gridDir + "grid.zip")
+        makePath(gridDir)
+        fnGrid = os.path.join(gridDir, "grid.zip")
         if not os.path.exists(fnGrid): # Prepared to resume
             shutil.copy(grid.getFileName(), fnGrid)
 
-        fnIn = self._getPath(gridDir + 'job_{}.inp'.format(gridId))
+        fnIn = os.path.join(gridDir, 'job_{}.inp'.format(gridId))
         if not os.path.exists(fnIn): # Prepared to resume
             with open(fnIn, 'w') as fhIn:
                 fhIn.write("GRIDFILE %s\n" % ("grid.zip"))
@@ -227,17 +227,17 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         fhIn.write("MAXREF %d\n" % 400)
                 fhIn.write("POSES_PER_LIG %d\n"%self.posesPerLig.get())
 
-                fhIn.write("LIGANDFILE ../tmp/{}\n".format(self.getAllLigandsFile()))
+                fhIn.write("LIGANDFILE {}\n".format(os.path.abspath(self.getAllLigandsFile())))
 
         args = "-WAIT -RESTART -LOCAL job_{}.inp".format(gridId)
-        self.runJob(glideProg, args, cwd=self._getPath(gridDir))
+        self.runJob(glideProg, args, cwd=gridDir)
 
-        if os.path.exists(self._getPath(gridDir, "job_{}_pv.maegz".format(gridId))):
+        if os.path.exists(os.path.join(gridDir, "job_{}_pv.maegz".format(gridId))):
             self.runJob(propListerProg,
                         '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" '
                         '-p "glide ligand efficiency ln" -c -o %s %s'%\
                         ("job_{}_pv.csv".format(gridId), "job_{}_pv.maegz".format(gridId)),
-                        cwd=self._getPath(gridDir))
+                        cwd=gridDir)
         else:
             print('Failed to find ligands for grid {}'.format(gridId))
 
@@ -259,13 +259,14 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             gridDir = 'grid_{}/'.format(gridId)
 
             smallList = []
-            fnPv = self._getPath(gridDir + 'job_{}_pv.maegz'.format(gridId))
-            with open(self._getPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
+            fnPv = self._getExtraPath(gridDir + 'job_{}_pv.maegz'.format(gridId))
+            with open(self._getExtraPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
                 i = 0
                 for line in fhCsv.readlines():
                     if i > 1:
                         tokens = line.split(',')
-                        small = SmallMolecule(smallMolFilename=smallDict[tokens[0]])
+                        fnBase = os.path.splitext(os.path.split(tokens[0])[1])[0]
+                        small = SmallMolecule(smallMolFilename=smallDict[fnBase])
                         small._energy = pwobj.Float(tokens[1])
                         small.ligandEfficiency = pwobj.Float(tokens[2])
                         small.ligandEfficiencySA = pwobj.Float(tokens[3])
@@ -376,16 +377,15 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 self.convertedDic[os.path.basename(outDir)][mol.getObjId()] = fnOut
 
     def convert2Mol2(self, fnSmall, it):
-        fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
+        baseName = os.path.splitext(os.path.basename(fnSmall))[0]
         args = fnSmall
-        fnSmall = self._getTmpPath('ligand{}.mol2'.format(it))
+        fnSmall = self._getTmpPath('{}.mol2'.format(baseName))
         args += " %s" % fnSmall
         subprocess.call([structConvertProg, *args.split()])
-        putMol2Title(fnSmall, fnBase)
         return fnSmall
 
     def getAllLigandsFile(self, suffix=''):
-        return 'allMoleculesFile{}.mol2'.format(suffix)
+        return self._getTmpPath('allMoleculesFile{}.mol2'.format(suffix))
 
     def getOriginalReceptorFile(self):
         return self.inputGridSet.get().getProteinFile()
@@ -406,13 +406,13 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
     def getGridDirs(self, complete=False):
         gridDirs = []
-        for dir in os.listdir(self._getPath()):
+        for dir in os.listdir(self._getExtraPath()):
             if dir.startswith('grid_'):
                 if not complete:
                     gridDirs.append(dir)
                 else:
                     gridId = dir.split('_')[1]
-                    if os.path.exists(self._getPath(dir, "job_{}_pv.maegz".format(gridId))):
+                    if os.path.exists(self._getExtraPath(dir, "job_{}_pv.maegz".format(gridId))):
                         gridDirs.append(dir)
         return gridDirs
 
@@ -424,5 +424,5 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
         outName = 'allMolecules.maegz'
         command = 'zcat {} | gzip -c > {}'.format(' '.join(maeFiles), outName)
-        self.runJob('', command, cwd=self._getPath())
-        return self._getPath(outName)
+        self.runJob('', command, cwd=self._getExtraPath())
+        return self._getExtraPath(outName)

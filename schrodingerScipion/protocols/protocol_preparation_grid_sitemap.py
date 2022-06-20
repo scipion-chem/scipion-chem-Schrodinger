@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, shutil, subprocess
+import os, shutil, glob
 from subprocess import CalledProcessError
 
 from pyworkflow.protocol.params import MultiPointerParam, STEPS_PARALLEL, PointerParam, BooleanParam, \
@@ -66,7 +66,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         line.addParam('innerY', IntParam, default=10, label='Y')
         line.addParam('innerZ', IntParam, default=10, label='Z')
 
-        group.addParam('diameterNin', FloatParam, default=0.3, condition='innerAction==1',
+        group.addParam('diameterNin', FloatParam, default=0.8, condition='innerAction==1',
                        label='Size of inner box vs diameter: ',
                        help='The diameter * n of each pocket will be used as inner box side')
 
@@ -104,30 +104,39 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        self.inputMAEFile = self.inputPockets.get().getMAEFile()
-
+        cStep = self._insertFunctionStep('convertStep', prerequisites=[])
         prepSteps = []
-        makePath(self._getPath('grids'))
         for pocket in self.inputPockets.get():
-            pStep = self._insertFunctionStep('preparationStep', pocket.clone(), prerequisites=[])
+            pStep = self._insertFunctionStep('preparationStep', pocket.clone(), prerequisites=[cStep])
             prepSteps.append(pStep)
 
         self._insertFunctionStep('createOutputStep', prerequisites=prepSteps)
+
+    def convertStep(self):
+        maeFile = self.inputPockets.get().getMAEFile()
+        if not maeFile:
+            pdbFile = self.inputPockets.get().getProteinFile()
+            maeFile = self._getExtraPath('inputReceptor.maegz')
+            prog = schrodinger_plugin.getHome('utilities/prepwizard')
+            args = ' -WAIT -noprotassign -noimpref -noepik {} {}'. \
+                format(os.path.abspath(pdbFile), os.path.abspath(maeFile))
+            self.runJob(prog, args, cwd=self._getExtraPath())
+        else:
+            ext = os.path.splitext(maeFile)[1]
+            shutil.copy(maeFile, self._getExtraPath('inputReceptor{}'.format(ext)))
 
     def preparationStep(self, pocket):
         x, y, z = pocket.calculateMassCenter()
 
         fnGridDir = self.getGridDir(pocket.getObjId())
         gridName = self.getGridName(pocket.getObjId())
-        makePath(self._getPath(fnGridDir))
-        fnTargetLocal = "%s/%s.maegz" % (self._getPath(fnGridDir), gridName)
-        shutil.copy(self.getInputMaeFile(), fnTargetLocal)
+        makePath(fnGridDir)
 
-        fnJob = '%s/%s.inp' % (self._getPath(fnGridDir), gridName)
+        fnJob = os.path.abspath(os.path.join(fnGridDir, gridName)) + '.inp'
         fh = open(fnJob, 'w')
         fh.write("GRIDFILE %s.zip\n" % gridName)
         fh.write("OUTPUTDIR %s\n" % fnGridDir)
-        fh.write("RECEP_FILE %s\n" % fnTargetLocal.split('/')[-1])
+        fh.write("RECEP_FILE %s\n" % os.path.abspath(self.getInputMaeFile()))
         fh.write("REC_MAECHARGES True\n")
         fh.write("HBOND_DONOR_AROMH %s\n" % self.HbondDonorAromH.get())
         if self.HbondDonorAromH.get():
@@ -143,13 +152,13 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         fh.close()
 
         args = "-WAIT -LOCAL %s.inp" % (gridName)
-        self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=self._getPath(fnGridDir))
+        self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=fnGridDir)
 
     def createOutputStep(self):
-        i=1
         outGrids = SetOfSchrodingerGrids(filename=self._getPath('SchGrids.sqlite'))
         for pocket in self.inputPockets.get():
-            fnDir = self._getPath(self.getGridDir(pocket.getObjId()))
+            gridId = pocket.getObjId()
+            fnDir = self.getGridDir(gridId)
             if os.path.exists(fnDir):
                 fnBase = os.path.split(fnDir)[1]
                 fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
@@ -158,11 +167,9 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                     SchGrid.structureFile = String(self.getInputMaeFile())
                     if str(pocket.getScore()) != 'None':
                         SchGrid.pocketScore = Float(pocket.getScore())
-                    SchGrid.setObjId(i)
+                    SchGrid.setObjId(gridId)
                     # gridFile.bindingSiteDScore = Float(dscore)
-
-                    outGrids.append(SchGrid.clone())
-                    i+=1
+                    outGrids.append(SchGrid)
 
         outGrids.buildBBoxesPML()
         self._defineOutputs(outputGrids=outGrids)
@@ -182,10 +189,11 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         return maeOut
 
     def getInputMaeFile(self):
-        return self.inputMAEFile
+        maeFile = glob.glob(self._getExtraPath('inputReceptor.mae*'))[0]
+        return maeFile
 
     def getGridDir(self, pocketId):
-        return 'grids/{}'.format(self.getGridName(pocketId))
+        return self._getExtraPath(self.getGridName(pocketId))
 
     def getGridName(self, pocketId):
         return 'grid_{}'.format(pocketId)

@@ -140,26 +140,26 @@ class ProtSchrodingerLigPrep(EMProtocol):
 
                 args += " -isd tmp/%s" % (fnRoot + '.sdf')
 
-            fnMae = "extra/%s.maegz" % fnRoot
-            if not os.path.exists(fnMae):
-                args+=" -omae %s"%fnMae
+            fnSDF = "extra/%s.sdf" % fnRoot
+            if not os.path.exists(fnSDF):
+                args+=" -osd %s"%fnSDF
                 self.runJob(progLigPrep,args,cwd=self._getPath())
 
-            if os.path.exists(self._getPath(fnMae)):
-                fnOmae="extra/o%s.maegz"%fnRoot
-                args = "%s %s -split-nstructures 1"%(fnMae,fnOmae)
+            if os.path.exists(self._getPath(fnSDF)):
+                fnOsdf="extra/o%s.sdf"%fnRoot
+                args = "%s %s -split-nstructures 1"%(fnSDF,fnOsdf)
                 self.runJob(progStructConvert, args, cwd=self._getPath())
-                for fn in glob.glob(self._getExtraPath("o%s*.maegz"%fnRoot)):
+                for fn in glob.glob(self._getExtraPath("o%s*.sdf"%fnRoot)):
                     fnDir, fnOut = os.path.split(fn)
                     fnOut = self._getExtraPath(fnOut[1:])
                     moveFile(fn,fnOut)
                     self.saveMolecule(fnOut, self.outputSmallMolecules)
-                if len(glob.glob(self._getExtraPath("%s-*.maegz"%fnRoot))) > 0:
-                    cleanPath(self._getPath(fnMae))
+                if len(glob.glob(self._getExtraPath("%s-*.sdf"%fnRoot))) > 0:
+                    cleanPath(self._getPath(fnSDF))
             else:
                 self.saveMolecule(fnSmall, self.outputSmallMoleculesDropped)
         else:
-            for fn in glob.glob(self._getExtraPath("%s*.maegz"%fnRoot)):
+            for fn in glob.glob(self._getExtraPath("%s*.sdf"%fnRoot)):
                 print("Reading %s"%fn)
                 self.saveMolecule(fn, self.outputSmallMolecules)
 
