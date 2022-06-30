@@ -25,7 +25,7 @@
 
 import os, re, subprocess
 import pwem.objects.data as data
-from pwchem.objects import ProteinPocket
+from pwchem.objects import StructROI
 from pwchem.constants import *
 from pyworkflow.object import (Float, Integer, List, String)
 from schrodingerScipion import Plugin as schrodinger_plugin

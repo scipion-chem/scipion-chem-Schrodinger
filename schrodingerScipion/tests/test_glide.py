@@ -98,8 +98,8 @@ class TestGlideDocking(BaseTest):
             ProtSchrodingerGridSiteMap,
             innerAction=1, diameterNin=0.8,
             outerAction=1, diameterNout=1.2)
-        protGrid.inputPockets.set(filterProt)
-        protGrid.inputPockets.setExtended("outputPockets")
+        protGrid.inputStructROIs.set(filterProt)
+        protGrid.inputStructROIs.setExtended("outputStructROIs")
 
         cls.launchProtocol(protGrid)
         return protGrid

@@ -24,9 +24,9 @@
 # *
 # **************************************************************************
 from ..protocols import ProtSchrodingerSiteMap
-from pwchem.viewers import ViewerGeneralPockets
+from pwchem.viewers import ViewerGeneralStructROIs
 
-class ViewerSitemap(ViewerGeneralPockets):
+class ViewerSitemap(ViewerGeneralStructROIs):
   _label = 'Viewer pockets SiteMap'
   _targets = [ProtSchrodingerSiteMap]
 

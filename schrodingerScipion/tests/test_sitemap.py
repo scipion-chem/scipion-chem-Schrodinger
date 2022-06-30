@@ -59,7 +59,7 @@ class TestSitemap(BaseTest):
             inputStructure=targetProt.outputStructure)
 
         self.launchProtocol(protSitemap)
-        pdbOut = getattr(protSitemap, 'outputPockets', None)
+        pdbOut = getattr(protSitemap, 'outputStructROIs', None)
         self.assertIsNotNone(pdbOut)
 
     def testSitemap(self):

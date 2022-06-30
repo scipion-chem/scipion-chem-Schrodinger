@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, shutil, threading, subprocess
+import os, shutil, threading, subprocess, time
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, FloatParam, IntParam, STEPS_PARALLEL
@@ -32,17 +32,19 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2
+from pwchem import Plugin as pwchemPlugin
 from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.utils.utils import putMol2Title, sortDockingResults
+from schrodingerScipion.utils.utils import putSDFTitle, sortDockingResults
 
 glideProg = schrodinger_plugin.getHome('glide')
+progLigPrep = schrodinger_plugin.getHome('ligprep')
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 structCatProg = schrodinger_plugin.getHome('utilities/structcat')
 propListerProg = schrodinger_plugin.getHome('utilities/proplister')
 maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
 
 class ProtSchrodingerGlideDocking(EMProtocol):
-    """Calls glide to perform a docking of a set of compounds in a pocket defined by a grid.
+    """Calls glide to perform a docking of a set of compounds in a structural region defined by a grid.
        It is assumed that the input library of ligands is already prepared.
 
        The dockinsScore is the Glide Docking Score and it is measured in kcal/mol"""
@@ -60,7 +62,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         form.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Library of compounds:', allowsNull=False)
         form.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
-                      label='Merge output from different pockets: ')
+                      label='Merge output from different structural ROIs: ')
         form.addParam('convertType', EnumParam,
                       choices=['pdb', 'mol2', 'sdf'], default=0, display=EnumParam.DISPLAY_HLIST,
                       label='Convert output format to: ', expertLevel=LEVEL_ADVANCED,
@@ -158,6 +160,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             for it in range(nt):
                 with open(self.getAllLigandsFile(suffix=it)) as fLig:
                     f.write(fLig.read())
+                #os.remove(self.getAllLigandsFile(suffix=it))
 
 
     def createLigandsFile(self, ligSet, it):
@@ -165,9 +168,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         with open(curAllLigandsFile, 'w') as fh:
             for small in ligSet:
                 fnSmall = small.getFileName()
-                if not fnSmall.endswith('.mol2'):
-                    fnSmall = self.convert2Mol2(fnSmall, it)
-                putMol2Title(fnSmall)
+                if not fnSmall.endswith('.sdf'):
+                    fnSmall = self.convert2SDF(fnSmall, it)
+                putSDFTitle(fnSmall)
                 with open(fnSmall) as fhLigand:
                     fh.write(fhLigand.read())
 
@@ -376,16 +379,27 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 os.remove(fnAux)
                 self.convertedDic[os.path.basename(outDir)][mol.getObjId()] = fnOut
 
-    def convert2Mol2(self, fnSmall, it):
+    def convert2SDF(self, fnSmall, it):
         baseName = os.path.splitext(os.path.basename(fnSmall))[0]
-        args = fnSmall
-        fnSmall = self._getTmpPath('{}.mol2'.format(baseName))
-        args += " %s" % fnSmall
-        subprocess.call([structConvertProg, *args.split()])
-        return fnSmall
+        outFile = os.path.abspath(self._getTmpPath('{}.sdf'.format(baseName)))
+        if fnSmall.endswith('.pdbqt'):
+            #Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+            outDir = os.path.abspath(self._getTmpPath())
+            args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
+                                                                               os.path.abspath(outDir), baseName)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
+            auxFile = os.path.abspath(os.path.join(outDir, '{}_AD4.sdf'.format(baseName)))
+            args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, outFile)
+            subprocess.check_call([progLigPrep, *args.split()])
+        else:
+            args = "{} {}".format(fnSmall, outFile)
+            subprocess.check_call([structConvertProg, *args.split()])
+        while not os.path.exists(outFile):
+            time.sleep(0.2)
+        return outFile
 
     def getAllLigandsFile(self, suffix=''):
-        return self._getTmpPath('allMoleculesFile{}.mol2'.format(suffix))
+        return self._getExtraPath('allMoleculesFile{}.sdf'.format(suffix))
 
     def getOriginalReceptorFile(self):
         return self.inputGridSet.get().getProteinFile()

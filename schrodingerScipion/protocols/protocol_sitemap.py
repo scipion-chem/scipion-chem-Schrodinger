@@ -26,17 +26,15 @@
 import os, shutil
 from subprocess import CalledProcessError
 
-from pwem.objects import AtomStruct
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, IntParam, StringParam
-from pyworkflow.utils.path import createLink
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
-from schrodingerScipion.objects import SchrodingerBindingSites, SchrodingerAtomStruct
-from pwchem.objects import BindingSite, SetOfBindingSites, SetOfPockets, ProteinPocket
-from pwchem.constants import *
-from pwchem.utils import writePDBLine, writeSurfPML, splitPDBLine
+
+from pwchem import Plugin as pwchemPlugin
+from pwchem.objects import SetOfStructROIs, StructROI
+from pwchem.utils import writePDBLine, splitPDBLine
 
 class ProtSchrodingerSiteMap(EMProtocol):
     """Calls sitemap to predict possible binding sites"""
@@ -59,9 +57,19 @@ class ProtSchrodingerSiteMap(EMProtocol):
 
     def convertStep(self):
       if not hasattr(self.inputStructure.get(), '_maeFile'):
-          pdbFile = self.inputStructure.get().getFileName()
+          inFile = self.inputStructure.get().getFileName()
+          if inFile.endswith('.pdbqt'):
+              outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
+              args = ' -i "{}" -of pdb --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
+                                                                             os.path.abspath(outDir), outName)
+              pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+              pdbFile = os.path.abspath(os.path.join(outDir, '{}.pdb'.format(outName)))
+          else:
+              pdbFile = inFile
+
           maeFile = self.getInputMaeFile()
           prog = Plugin.getHome('utilities/prepwizard')
+          print('Program: ', prog)
           args = ' -WAIT -noprotassign -noimpref -noepik {} {}'.\
             format(os.path.abspath(pdbFile), os.path.abspath(maeFile))
           self.runJob(prog, args, cwd=self._getExtraPath())
@@ -81,15 +89,15 @@ class ProtSchrodingerSiteMap(EMProtocol):
         fnLog = self.getOutputLogFile()
         if os.path.exists(fnBinding):
             proteinFile, pocketFiles = self.createOutputPDBFile()
-            outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
+            outPockets = SetOfStructROIs(filename=self._getPath('structROIs.sqlite'))
             for oFile in pocketFiles:
-              pock = ProteinPocket(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog),
+              pock = StructROI(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog),
                                    pClass='SiteMap')
               pock._maeFile = pwobj.String(os.path.abspath(fnStructure))
               outPockets.append(pock)
 
             pdbOutFile = outPockets.buildPDBhetatmFile()
-            self._defineOutputs(outputPockets=outPockets)
+            self._defineOutputs(outputStructROIs=outPockets)
 
     def _citations(self):
         return
