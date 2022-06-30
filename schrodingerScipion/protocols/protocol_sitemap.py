@@ -26,17 +26,15 @@
 import os, shutil
 from subprocess import CalledProcessError
 
-from pwem.objects import AtomStruct
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, IntParam, StringParam
-from pyworkflow.utils.path import createLink
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
-from schrodingerScipion.objects import SchrodingerBindingSites, SchrodingerAtomStruct
-from pwchem.objects import BindingSite, SetOfBindingSites, SetOfPockets, ProteinPocket
-from pwchem.constants import *
-from pwchem.utils import writePDBLine, writeSurfPML, splitPDBLine
+
+from pwchem import Plugin as pwchemPlugin
+from pwchem.objects import SetOfStructROIs, StructROI
+from pwchem.utils import writePDBLine, splitPDBLine
 
 class ProtSchrodingerSiteMap(EMProtocol):
     """Calls sitemap to predict possible binding sites"""
@@ -45,7 +43,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct",
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
                        label='Atomic Structure:', allowsNull=False)
         form.addParam('jobName', StringParam, label='Job Name:', default='', expertLevel=LEVEL_ADVANCED)
         form.addParam('maxsites', IntParam, expertLevel=LEVEL_ADVANCED, default=5,
@@ -53,42 +51,66 @@ class ProtSchrodingerSiteMap(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
+        self._insertFunctionStep('convertStep')
         self._insertFunctionStep('sitemapStep')
         self._insertFunctionStep('createOutput')
+
+    def convertStep(self):
+      if not hasattr(self.inputStructure.get(), '_maeFile'):
+          inFile = self.inputStructure.get().getFileName()
+          if inFile.endswith('.pdbqt'):
+              outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
+              args = ' -i "{}" -of pdb --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
+                                                                             os.path.abspath(outDir), outName)
+              pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+              pdbFile = os.path.abspath(os.path.join(outDir, '{}.pdb'.format(outName)))
+          else:
+              pdbFile = inFile
+
+          maeFile = self.getInputMaeFile()
+          prog = Plugin.getHome('utilities/prepwizard')
+          print('Program: ', prog)
+          args = ' -WAIT -noprotassign -noimpref -noepik {} {}'.\
+            format(os.path.abspath(pdbFile), os.path.abspath(maeFile))
+          self.runJob(prog, args, cwd=self._getExtraPath())
 
     def sitemapStep(self):
         prog=Plugin.getHome('sitemap')
 
-        fnIn = self._getExtraPath("atomStructIn") + self.inputStructure.get().getExtension()
-        createLink(self.getInputFileName(), fnIn)
-        fnIn = os.path.join('extra', os.path.split(fnIn)[1])
-
+        fnIn = os.path.abspath(self.getInputMaeFile())
         args='-WAIT -prot %s -j %s -keepvolpts' % (fnIn, self.getJobName())
         args+=" -maxsites %d"%self.maxsites.get()
 
-        self.runJob(prog, args, cwd=self._getPath())
+        self.runJob(prog, args, cwd=self._getExtraPath())
 
     def createOutput(self):
         fnBinding = self.getMaestroOutput()
-        fnStructure = self.getInputFileName()
+        fnStructure = self.getInputMaeFile()
         fnLog = self.getOutputLogFile()
         if os.path.exists(fnBinding):
             proteinFile, pocketFiles = self.createOutputPDBFile()
-            outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
+            outPockets = SetOfStructROIs(filename=self._getPath('structROIs.sqlite'))
             for oFile in pocketFiles:
-              pock = ProteinPocket(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog),
+              pock = StructROI(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog),
                                    pClass='SiteMap')
               pock._maeFile = pwobj.String(os.path.abspath(fnStructure))
               outPockets.append(pock)
 
             pdbOutFile = outPockets.buildPDBhetatmFile()
-            self._defineOutputs(outputPockets=outPockets)
+            self._defineOutputs(outputStructROIs=outPockets)
 
     def _citations(self):
         return
 
 
 ########################## UTILS FUNCTIONS
+    def getInputMaeFile(self):
+        if not hasattr(self.inputStructure.get(), '_maeFile'):
+            maeFile = self._getExtraPath('inputReceptor.mae')
+        else:
+            maeFile = self.inputStructure.get()._maeFile.get()
+        return maeFile
+
     def getJobName(self):
       if self.jobName.get() != '':
         return self.jobName.get()
@@ -98,20 +120,20 @@ class ProtSchrodingerSiteMap(EMProtocol):
     def createOutputPDBFile(self):
       maeFile = os.path.abspath(self.getMaestroOutput())
       pdbOutFile = self.getJobName()+'_out.pdb'
-      pdbFiles = self.maestro2pdb(maeFile, pdbOutFile, outDir=self._getExtraPath())
+      pdbFiles = self.maestro2pdb(maeFile, pdbOutFile, outDir=self._getPath())
 
       # Creates a pdb with the HETATM corresponding to pocket points
       pdbFiles, proteinFile = self.mergePDBFiles(pdbFiles, pdbOutFile)
       return proteinFile, pdbFiles
 
     def getMaestroOutput(self):
-        return self._getPath("{}_out.maegz".format(self.getJobName()))
+        return self._getExtraPath("{}_out.maegz".format(self.getJobName()))
 
     def getInputFileName(self):
         return self.inputStructure.get().getFileName()
 
     def getOutputLogFile(self):
-        return self._getPath('{}.log'.format(self.getJobName()))
+        return self._getExtraPath('{}.log'.format(self.getJobName()))
 
     def maestro2pdb(self, maeIn, pdbOut, outDir):
       '''Convert a maestro file (.mae) to a pdb file(s)
@@ -122,7 +144,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
       prog = Plugin.getHome('utilities/structconvert')
       args = '{} {}'.format(maeIn, pdbOut)
       try:
-          self.runJob(prog, args, cwd=self._getExtraPath())
+          self.runJob(prog, args, cwd=self._getPath())
       except CalledProcessError as exception:
           # ask to Schrodinger why it returns a code 2 if it worked properly
           if exception.returncode != 2:
@@ -147,7 +169,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
             fileId = pFile.split('-')[1].split('.')[0]
             with open(pFile) as fpdb:
                 for line in fpdb:
-                    if line.startswith('TITLE'):
+                    if line.startswith('TITLE') and '_site_' in line:
                       numId = line.split('_site_')[1].strip()
                       idsDic[fileId] = numId
                     elif line.startswith('ATOM'):
@@ -156,7 +178,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
                       newLine = self.formatPocketStrLine(line, numId)
                       hetatmLines += newLine
 
-        with open(self._getExtraPath(pdbOutFile), 'w') as f:
+        with open(self._getPath(pdbOutFile), 'w') as f:
           f.write(atomLines)
           f.write(hetatmLines)
           f.write('\nTER')

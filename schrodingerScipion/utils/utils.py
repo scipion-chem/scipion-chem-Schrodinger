@@ -30,21 +30,30 @@ from pyworkflow.utils.path import moveFile
 import pyworkflow.object as pwobj
 
 def putMol2Title(fn, title=""):
-    i=0
-    fhIn = open(fn)
-    fhOut = open(fn+".aux",'w')
-    for line in fhIn.readlines():
-        if i!=1:
-            fhOut.write(line)
-        else:
-            if title!="":
-                fhOut.write(title+"\n")
-            else:
-                fhOut.write(os.path.splitext(os.path.split(fn)[1])[0]+"\n")
-        i+=1
-    fhIn.close()
-    fhOut.close()
-    moveFile(fn+".aux",fn)
+    with open(fn) as fhIn:
+        with open(fn + ".aux", 'w') as fhOut:
+            for i, line in enumerate(fhIn.readlines()):
+                if i!=1:
+                    fhOut.write(line)
+                else:
+                    if title!="":
+                        fhOut.write(title+"\n")
+                    else:
+                        fhOut.write(os.path.splitext(os.path.split(fn)[1])[0]+"\n")
+    moveFile(fn+".aux", fn)
+
+def putSDFTitle(fn, title=''):
+    with open(fn) as fhIn:
+        with open(fn + ".aux", 'w') as fhOut:
+            for i, line in enumerate(fhIn.readlines()):
+                if i != 0:
+                    fhOut.write(line)
+                else:
+                    if title != "":
+                        fhOut.write(title + "\n")
+                    else:
+                        fhOut.write(os.path.splitext(os.path.split(fn)[1])[0] + "\n")
+    moveFile(fn + ".aux", fn)
 
 def sortDockingResults(smallList):
     ds = []

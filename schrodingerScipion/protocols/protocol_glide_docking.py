@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, shutil, threading, subprocess
+import os, shutil, threading, subprocess, time
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, FloatParam, IntParam, STEPS_PARALLEL
@@ -32,17 +32,19 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2
+from pwchem import Plugin as pwchemPlugin
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.utils.utils import putMol2Title, sortDockingResults
 
 glideProg = schrodinger_plugin.getHome('glide')
+progLigPrep = schrodinger_plugin.getHome('ligprep')
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 structCatProg = schrodinger_plugin.getHome('utilities/structcat')
 propListerProg = schrodinger_plugin.getHome('utilities/proplister')
 maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
 
 class ProtSchrodingerGlideDocking(EMProtocol):
-    """Calls glide to perform a docking of a set of compounds in a pocket defined by a grid.
+    """Calls glide to perform a docking of a set of compounds in a structural region defined by a grid.
        It is assumed that the input library of ligands is already prepared.
 
        The dockinsScore is the Glide Docking Score and it is measured in kcal/mol"""
@@ -60,11 +62,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         form.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Library of compounds:', allowsNull=False)
         form.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
-                      label='Merge output from different pockets: ')
-        form.addParam('convertType', EnumParam,
-                      choices=['pdb', 'mol2', 'sdf'], default=0, display=EnumParam.DISPLAY_HLIST,
-                      label='Convert output format to: ', expertLevel=LEVEL_ADVANCED,
-                      help='Convert output molecules to this format')
+                      label='Merge output from different structural ROIs: ')
         group = form.addGroup('Docking')
         group.addParam('posesPerLig', IntParam, default=5,
                        label='No. Poses to report per ligand: ')
@@ -153,34 +151,35 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
     def combineLigandsFilesStep(self):
         nt = self.numberOfThreads.get()
-        allLigandsFile = self._getTmpPath(self.getAllLigandsFile())
+        allLigandsFile = self.getAllLigandsFile()
         with open(allLigandsFile, 'w') as f:
             for it in range(nt):
-                with open(self._getTmpPath(self.getAllLigandsFile(suffix=it))) as fLig:
+                with open(self.getAllLigandsFile(suffix=it)) as fLig:
                     f.write(fLig.read())
+                #os.remove(self.getAllLigandsFile(suffix=it))
 
 
     def createLigandsFile(self, ligSet, it):
-        curAllLigandsFile = self._getTmpPath(self.getAllLigandsFile(suffix=it))
+        curAllLigandsFile = self.getAllLigandsFile(suffix=it)
         with open(curAllLigandsFile, 'w') as fh:
             for small in ligSet:
                 fnSmall = small.getFileName()
                 if not fnSmall.endswith('.mol2'):
-                    fnSmall = self.convert2Mol2(fnSmall, it)
-
+                    fnSmall = self.convert2mol2(fnSmall, it)
+                putMol2Title(fnSmall)
                 with open(fnSmall) as fhLigand:
                     fh.write(fhLigand.read())
 
     def dockingStep(self, grid):
         gridId = grid.getObjId()
-        gridDir = 'grid_{}/'.format(gridId)
+        gridDir = self._getExtraPath('grid_{}/'.format(gridId))
 
-        makePath(self._getPath(gridDir))
-        fnGrid = self._getPath(gridDir + "grid.zip")
+        makePath(gridDir)
+        fnGrid = os.path.join(gridDir, "grid.zip")
         if not os.path.exists(fnGrid): # Prepared to resume
             shutil.copy(grid.getFileName(), fnGrid)
 
-        fnIn = self._getPath(gridDir + 'job_{}.inp'.format(gridId))
+        fnIn = os.path.join(gridDir, 'job_{}.inp'.format(gridId))
         if not os.path.exists(fnIn): # Prepared to resume
             with open(fnIn, 'w') as fhIn:
                 fhIn.write("GRIDFILE %s\n" % ("grid.zip"))
@@ -227,17 +226,17 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         fhIn.write("MAXREF %d\n" % 400)
                 fhIn.write("POSES_PER_LIG %d\n"%self.posesPerLig.get())
 
-                fhIn.write("LIGANDFILE ../tmp/{}\n".format(self.getAllLigandsFile()))
+                fhIn.write("LIGANDFILE {}\n".format(os.path.abspath(self.getAllLigandsFile())))
 
         args = "-WAIT -RESTART -LOCAL job_{}.inp".format(gridId)
-        self.runJob(glideProg, args, cwd=self._getPath(gridDir))
+        self.runJob(glideProg, args, cwd=gridDir)
 
-        if os.path.exists(self._getPath(gridDir, "job_{}_pv.maegz".format(gridId))):
+        if os.path.exists(os.path.join(gridDir, "job_{}_pv.maegz".format(gridId))):
             self.runJob(propListerProg,
                         '-p "title" -p "docking score" -p "glide ligand efficiency" -p "glide ligand efficiency sa" '
                         '-p "glide ligand efficiency ln" -c -o %s %s'%\
                         ("job_{}_pv.csv".format(gridId), "job_{}_pv.maegz".format(gridId)),
-                        cwd=self._getPath(gridDir))
+                        cwd=gridDir)
         else:
             print('Failed to find ligands for grid {}'.format(gridId))
 
@@ -247,7 +246,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             fnSmall = small.getFileName()
             fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
             if not fnBase in smallDict:
-                smallDict[fnBase] = fnSmall
+                smallDict[fnBase] = small.clone()
 
         if self.mergeOutput:
             allMaeFile = self.mergeMAEfiles()
@@ -259,13 +258,16 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             gridDir = 'grid_{}/'.format(gridId)
 
             smallList = []
-            fnPv = self._getPath(gridDir + 'job_{}_pv.maegz'.format(gridId))
-            with open(self._getPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
+            fnPv = self._getExtraPath(gridDir + 'job_{}_pv.maegz'.format(gridId))
+            with open(self._getExtraPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
                 i = 0
                 for line in fhCsv.readlines():
                     if i > 1:
                         tokens = line.split(',')
-                        small = SmallMolecule(smallMolFilename=smallDict[tokens[0]])
+                        fnBase = os.path.splitext(os.path.split(tokens[0])[1])[0]
+                        small = SmallMolecule()
+                        small.copy(smallDict[fnBase])
+                        small.cleanObjId()
                         small._energy = pwobj.Float(tokens[1])
                         small.ligandEfficiency = pwobj.Float(tokens[2])
                         small.ligandEfficiencySA = pwobj.Float(tokens[3])
@@ -292,7 +294,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
                 self.convertedDic = {}
                 print('Converting output to {}: outputSmallMolecules_{}'.
-                      format(self.getEnumText('convertType'), gridId))
+                      format('mol2', gridId))
                 nameOut = 'outputSmallMolecules_{}'.format(gridId)
                 self.convertOutput(outputSet, nameDir=nameOut)
                 # Updating mols with converted posFiles
@@ -311,7 +313,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 outputSet.append(small)
 
             self.convertedDic = {}
-            print('Converting output to {}: outputSmallMolecules'.format(self.getEnumText('convertType')))
+            print('Converting output to mol2: outputSmallMolecules')
             nameOut = 'outputSmallMolecules'
             self.convertOutput(outputSet, nameDir=nameOut)
             #Updating mols with converted posFiles
@@ -364,7 +366,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             poseId, fnRaw = mol.poseFile.get().split('@')
             mol.setPoseId(poseId)
             fnOut = os.path.join(outDir, '{}.{}'.format(
-                mol.getUniqueName(), self.getEnumText('convertType')))
+                mol.getUniqueName(), 'mol2'))
 
             if not os.path.exists(fnOut):
                 args = "-n %s %s -o %s" % (poseId, os.path.abspath(fnRaw), fnAux)
@@ -375,17 +377,29 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 os.remove(fnAux)
                 self.convertedDic[os.path.basename(outDir)][mol.getObjId()] = fnOut
 
-    def convert2Mol2(self, fnSmall, it):
-        fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
-        args = fnSmall
-        fnSmall = self._getTmpPath('ligand{}.mol2'.format(it))
-        args += " %s" % fnSmall
-        subprocess.call([structConvertProg, *args.split()])
-        putMol2Title(fnSmall, fnBase)
-        return fnSmall
+    def convert2mol2(self, fnSmall, it):
+        baseName = os.path.splitext(os.path.basename(fnSmall))[0]
+        outFile = os.path.abspath(self._getTmpPath('{}.mol2'.format(baseName)))
+        if fnSmall.endswith('.pdbqt'):
+            #Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+            # 3) Switch to mol2 to manage atom labels
+            outDir = os.path.abspath(self._getTmpPath())
+            args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
+                                                                               os.path.abspath(outDir), baseName)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
+            auxFile = os.path.abspath(os.path.join(outDir, '{}_AD4.sdf'.format(baseName)))
+            fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
+            args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, fnSmall)
+            subprocess.check_call([progLigPrep, *args.split()])
+        
+        args = "{} {}".format(fnSmall, outFile)
+        subprocess.check_call([structConvertProg, *args.split()])
+        while not os.path.exists(outFile):
+            time.sleep(0.2)
+        return outFile
 
     def getAllLigandsFile(self, suffix=''):
-        return 'allMoleculesFile{}.mol2'.format(suffix)
+        return self._getExtraPath('allMoleculesFile{}.mol2'.format(suffix))
 
     def getOriginalReceptorFile(self):
         return self.inputGridSet.get().getProteinFile()
@@ -406,13 +420,13 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
     def getGridDirs(self, complete=False):
         gridDirs = []
-        for dir in os.listdir(self._getPath()):
+        for dir in os.listdir(self._getExtraPath()):
             if dir.startswith('grid_'):
                 if not complete:
                     gridDirs.append(dir)
                 else:
                     gridId = dir.split('_')[1]
-                    if os.path.exists(self._getPath(dir, "job_{}_pv.maegz".format(gridId))):
+                    if os.path.exists(self._getExtraPath(dir, "job_{}_pv.maegz".format(gridId))):
                         gridDirs.append(dir)
         return gridDirs
 
@@ -424,5 +438,5 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
         outName = 'allMolecules.maegz'
         command = 'zcat {} | gzip -c > {}'.format(' '.join(maeFiles), outName)
-        self.runJob('', command, cwd=self._getPath())
-        return self._getPath(outName)
+        self.runJob('', command, cwd=self._getExtraPath())
+        return self._getExtraPath(outName)
