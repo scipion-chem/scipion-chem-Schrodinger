@@ -54,7 +54,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                       help='Sets of known or predicted protein structural ROIs to center the grid on')
 
         group = form.addGroup('Inner box')
-        group.addParam('innerAction', EnumParam, default=0, label='Determine inner box: ',
+        group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
                       help='How to set the inner box.'
                            'Manually: you will manually set the same x,y,z for every ROI'
@@ -71,7 +71,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                        help='The diameter * n of each ROI will be used as inner box side')
 
         group = form.addGroup('Outer box')
-        group.addParam('outerAction', EnumParam, default=0, label='Determine outer box: ',
+        group.addParam('outerAction', EnumParam, default=1, label='Determine outer box: ',
                        choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
                        help='How to set the outer box.'
                             'Manually: you will manually set the same x,y,z for every structural ROI'

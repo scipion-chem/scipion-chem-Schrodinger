@@ -34,7 +34,7 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2
 from pwchem import Plugin as pwchemPlugin
 from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.utils.utils import putSDFTitle, sortDockingResults
+from schrodingerScipion.utils.utils import putMol2Title, sortDockingResults
 
 glideProg = schrodinger_plugin.getHome('glide')
 progLigPrep = schrodinger_plugin.getHome('ligprep')
@@ -63,10 +63,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        label='Library of compounds:', allowsNull=False)
         form.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
                       label='Merge output from different structural ROIs: ')
-        form.addParam('convertType', EnumParam,
-                      choices=['pdb', 'mol2', 'sdf'], default=0, display=EnumParam.DISPLAY_HLIST,
-                      label='Convert output format to: ', expertLevel=LEVEL_ADVANCED,
-                      help='Convert output molecules to this format')
         group = form.addGroup('Docking')
         group.addParam('posesPerLig', IntParam, default=5,
                        label='No. Poses to report per ligand: ')
@@ -168,9 +164,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         with open(curAllLigandsFile, 'w') as fh:
             for small in ligSet:
                 fnSmall = small.getFileName()
-                if not fnSmall.endswith('.sdf'):
-                    fnSmall = self.convert2SDF(fnSmall, it)
-                putSDFTitle(fnSmall)
+                if not fnSmall.endswith('.mol2'):
+                    fnSmall = self.convert2mol2(fnSmall, it)
+                putMol2Title(fnSmall)
                 with open(fnSmall) as fhLigand:
                     fh.write(fhLigand.read())
 
@@ -250,7 +246,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             fnSmall = small.getFileName()
             fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
             if not fnBase in smallDict:
-                smallDict[fnBase] = fnSmall
+                smallDict[fnBase] = small.clone()
 
         if self.mergeOutput:
             allMaeFile = self.mergeMAEfiles()
@@ -269,7 +265,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     if i > 1:
                         tokens = line.split(',')
                         fnBase = os.path.splitext(os.path.split(tokens[0])[1])[0]
-                        small = SmallMolecule(smallMolFilename=smallDict[fnBase])
+                        small = SmallMolecule()
+                        small.copy(smallDict[fnBase])
+                        small.cleanObjId()
                         small._energy = pwobj.Float(tokens[1])
                         small.ligandEfficiency = pwobj.Float(tokens[2])
                         small.ligandEfficiencySA = pwobj.Float(tokens[3])
@@ -296,7 +294,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
                 self.convertedDic = {}
                 print('Converting output to {}: outputSmallMolecules_{}'.
-                      format(self.getEnumText('convertType'), gridId))
+                      format('mol2', gridId))
                 nameOut = 'outputSmallMolecules_{}'.format(gridId)
                 self.convertOutput(outputSet, nameDir=nameOut)
                 # Updating mols with converted posFiles
@@ -315,7 +313,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 outputSet.append(small)
 
             self.convertedDic = {}
-            print('Converting output to {}: outputSmallMolecules'.format(self.getEnumText('convertType')))
+            print('Converting output to mol2: outputSmallMolecules')
             nameOut = 'outputSmallMolecules'
             self.convertOutput(outputSet, nameDir=nameOut)
             #Updating mols with converted posFiles
@@ -368,7 +366,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             poseId, fnRaw = mol.poseFile.get().split('@')
             mol.setPoseId(poseId)
             fnOut = os.path.join(outDir, '{}.{}'.format(
-                mol.getUniqueName(), self.getEnumText('convertType')))
+                mol.getUniqueName(), 'mol2'))
 
             if not os.path.exists(fnOut):
                 args = "-n %s %s -o %s" % (poseId, os.path.abspath(fnRaw), fnAux)
@@ -379,27 +377,29 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 os.remove(fnAux)
                 self.convertedDic[os.path.basename(outDir)][mol.getObjId()] = fnOut
 
-    def convert2SDF(self, fnSmall, it):
+    def convert2mol2(self, fnSmall, it):
         baseName = os.path.splitext(os.path.basename(fnSmall))[0]
-        outFile = os.path.abspath(self._getTmpPath('{}.sdf'.format(baseName)))
+        outFile = os.path.abspath(self._getTmpPath('{}.mol2'.format(baseName)))
         if fnSmall.endswith('.pdbqt'):
             #Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+            # 3) Switch to mol2 to manage atom labels
             outDir = os.path.abspath(self._getTmpPath())
             args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
                                                                                os.path.abspath(outDir), baseName)
             pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
             auxFile = os.path.abspath(os.path.join(outDir, '{}_AD4.sdf'.format(baseName)))
-            args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, outFile)
+            fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
+            args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, fnSmall)
             subprocess.check_call([progLigPrep, *args.split()])
-        else:
-            args = "{} {}".format(fnSmall, outFile)
-            subprocess.check_call([structConvertProg, *args.split()])
+        
+        args = "{} {}".format(fnSmall, outFile)
+        subprocess.check_call([structConvertProg, *args.split()])
         while not os.path.exists(outFile):
             time.sleep(0.2)
         return outFile
 
     def getAllLigandsFile(self, suffix=''):
-        return self._getExtraPath('allMoleculesFile{}.sdf'.format(suffix))
+        return self._getExtraPath('allMoleculesFile{}.mol2'.format(suffix))
 
     def getOriginalReceptorFile(self):
         return self.inputGridSet.get().getProteinFile()
