@@ -63,7 +63,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputFrom', EnumParam, default=STRUCTURE,
-                      label='Input from: ', choices=['AtomStructure', 'SetOfSmallMolecules'],
+                      label='Input from: ', choices=['AtomStruct', 'SetOfSmallMolecules'],
                       help='Type of input you want to use')
         form.addParam('inputStruct', PointerParam, pointerClass='SchrodingerAtomStruct, AtomStruct',
                       label='Input structure to be prepared for MD:', allowsNull=False, condition='inputFrom==0',
