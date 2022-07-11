@@ -37,37 +37,14 @@ from schrodingerScipion.protocols.protocol_desmond_systemPrep import *
 from schrodingerScipion.utils.utils import getChargeFromMAE
 
 import pyworkflow.wizard as pwizard
-import pyworkflow.object as pwobj
-from pyworkflow.gui.tree import ListTreeProviderString
-from pyworkflow.gui import dialog
 from subprocess import check_call
 
-class GetLigandsWizard(pwizard.Wizard):
-    """Lists the Ligands in a SetOFSmallMolecules and choose one"""
-    _targets = [(ProtSchrodingerDesmondSysPrep, ['inputLigand'])]
+from pwchem.wizards import SelectElementWizard
 
-    def getListOfMols(self, protocol):
-        molsList = []
-        if hasattr(protocol, 'inputSetOfMols') and protocol.inputSetOfMols.get() is not None:
-            for mol in protocol.inputSetOfMols.get():
-                molsList.append(mol.getUniqueName())
-        return molsList
-
-    def show(self, form, *params):
-        protocol = form.protocol
-        try:
-            listOfMols = self.getListOfMols(protocol)
-        except Exception as e:
-            print("ERROR: ", e)
-            return
-
-        finalMolsList = []
-        for i in listOfMols:
-            finalMolsList.append(pwobj.String(i))
-        provider = ListTreeProviderString(finalMolsList)
-        dlg = dialog.ListDialog(form.root, "Small Molecules", provider,
-                                "Select one of molecules (Pocket_MolName-Conformer_Position)")
-        form.setVar('inputLigand', dlg.values[0].get())
+SelectElementWizard().addTarget(protocol=ProtSchrodingerDesmondSysPrep,
+                               targets=['inputLigand'],
+                               inputs=['inputSetOfMols'],
+                               outputs=['inputLigand'])
 
 class GetSoluteCharge(pwizard.Wizard):
     """Calculates the charge of the input atom structure"""

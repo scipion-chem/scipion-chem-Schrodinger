@@ -267,7 +267,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
     def getSpecifiedMol(self):
         myMol = None
         for mol in self.inputSetOfMols.get():
-          if mol.getUniqueName() == self.inputLigand.get():
+          if mol.__str__() == self.inputLigand.get():
             myMol = mol.clone()
             break
         if myMol == None:
