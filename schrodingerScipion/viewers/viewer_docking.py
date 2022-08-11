@@ -24,8 +24,15 @@
 # *
 # **************************************************************************
 
+import os
+
+from pyworkflow.protocol.params import EnumParam
 from pwchem.viewers import SmallMoleculesViewer
+
 from schrodingerScipion.protocols.protocol_glide_docking import ProtSchrodingerGlideDocking
+from schrodingerScipion.viewers.viewers_data import MaestroView
+
+SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 
 class ProtGlideDockingViewer(SmallMoleculesViewer):
     """ Visualize the output of protocol autodock """
@@ -34,3 +41,22 @@ class ProtGlideDockingViewer(SmallMoleculesViewer):
 
     def __init__(self, **args):
         super().__init__(**args)
+
+    def _defineParams(self, form):
+        super()._defineParams(form)
+        form.addSection(label='Maestro view')
+        form.addParam('displaymaestroPocket', EnumParam,
+                       choices=self.getChoices(vType=POCKET, pymol=False)[0], default=0,
+                       label='Display one ligand type: ',
+                       help='Display all conformers and positions of this molecule')
+
+    def _getVisualizeDict(self):
+        visDic = super()._getVisualizeDict()
+        visDic.update({'displayMaestroPocket': self._viewPocketMaestroDock})
+        return visDic
+
+    def _viewPocketMaestroDock(self, e=None):
+        ligandLabel = self.getEnumText('displaymaestroPocket')
+        mols = self.pocketLigandsDic[ligandLabel]
+
+        return [MaestroView(os.path.abspath(mols[0].maeFile.get()), cwd=self.protocol._getExtraPath())]

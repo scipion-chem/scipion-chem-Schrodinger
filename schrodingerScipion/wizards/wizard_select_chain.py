@@ -33,18 +33,10 @@ information such as name and number of residues.
 """
 
 # Imports
-from pwchem.wizards import GetChainsWizard
+from pwem.wizards import SelectChainWizard
 from schrodingerScipion.protocols.protocol_preparation_wizard import ProtSchrodingerPrepWizard
 
-
-
-class GetChainsWizardSchrodinger(GetChainsWizard):
-    """
-    This wizard will extract the chains from a atomic structure (pdb) file in
-    order to select it in the protocol.
-    Then, it will load the structure and will take all chain related
-    information such as name and number of residues.
-    """
-
-    # list with tuples to target protocol parameters
-    _targets = [(ProtSchrodingerPrepWizard, ['chain_name'])]
+SelectChainWizard().addTarget(protocol=ProtSchrodingerPrepWizard,
+                              targets=['chain_name'],
+                              inputs=['inputAtomStruct'],
+                              outputs=['chain_name'])

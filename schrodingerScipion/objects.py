@@ -25,12 +25,10 @@
 
 import os, re, subprocess
 import pwem.objects.data as data
-from pwchem.objects import ProteinPocket
+from pwchem.objects import StructROI
 from pwchem.constants import *
 from pyworkflow.object import (Float, Integer, List, String)
 from schrodingerScipion import Plugin as schrodinger_plugin
-from .utils.utils import parseLogProperties
-from .constants import ATTRIBUTES_MAPPING as AM
 
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 
@@ -44,7 +42,7 @@ class SchrodingerAtomStruct(data.AtomStruct):
 
     def convert2PDB(self, outPDB=None, cwd=None):
         if not outPDB:
-            outPDB = self.getFileName().replace(self.getExtension(), '.pdb')
+            outPDB = os.path.abspath(self.getFileName().replace(self.getExtension(), '.pdb'))
         command = '{} {} {}'.format(structConvertProg, os.path.abspath(self.getFileName()), outPDB)
         subprocess.check_call(command, shell=True, cwd=cwd)
         return outPDB
@@ -182,35 +180,5 @@ class SchrodingerBindingSites(data.EMFile):
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 
-class SchrodingerPoses(data.EMFile):
-    """A set of poses and a structure in the file format of Maestro"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
 
-class SitemapPocket(ProteinPocket):
-    """ Represent a pocket file from Sitemap"""
-    def __init__(self, filename=None, proteinFile=None, logFile=None, **kwargs):
-        if filename != None:
-            self.pocketId = int(filename.split('-')[1].split('.')[0])
-            if logFile != None:
-                self.properties = parseLogProperties(logFile, self.pocketId)
-                self.properties['class'] = 'SiteMap'
-                kwargs.update(self.getKwargs(self.properties, AM))
 
-        super().__init__(filename, proteinFile, logFile, **kwargs)
-        if hasattr(self, 'pocketId'):
-            self.setObjId(self.pocketId)
-
-        #Build contact atoms
-        if proteinFile != None:
-            self.calculateContacts()
-
-    def __str__(self):
-        s = 'SiteMap pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
-        return s
-
-    def getStructureMaeFile(self):
-        return self._maeFile.get()
-
-    def setStructureMaeFile(self, value):
-        self._maeFile.set(value)

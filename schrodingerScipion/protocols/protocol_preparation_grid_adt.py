@@ -29,12 +29,15 @@ from pyworkflow.protocol.params import MultiPointerParam, FloatParam, IntParam, 
 from pyworkflow.object import String, Float
 from pyworkflow.utils.path import createLink, makePath
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
-
 from pwem.protocols import EMProtocol
-from schrodingerScipion.objects import SchrodingerGrid
+
 from pwchem.objects import BindingSite, SetOfBindingSites
-from autodock.objects import AutodockGrid
 from pwchem import Plugin as pwchem_plugin
+from pwchem.constants import MGL_DIC
+from autodock.objects import AutodockGrid
+from autodock import Plugin as autodock_plugin
+
+from schrodingerScipion.objects import SchrodingerGrid
 from schrodingerScipion import Plugin as schrodinger_plugin
 
 class ProtSchrodingerGridADT(EMProtocol):
@@ -128,11 +131,11 @@ class ProtSchrodingerGridADT(EMProtocol):
         libraryGPF = os.path.join(fnGridDirAbs,"library.gpf")
         args += " -o %s"%libraryGPF
 
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
-                    pwchem_plugin.getADTPath('Utilities24/prepare_gpf4.py')+args)
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/prepare_gpf4.py')+args)
 
         args = "-p library.gpf -l library.glg"
-        self.runJob(pwchem_plugin.getAutodockPath("autogrid4"),args, cwd=fnGridDirAbs)
+        self.runJob(autodock_plugin.getAutodockPath("autogrid4"),args, cwd=fnGridDirAbs)
         return fnGridDirAbs
 
     def preparationStep(self):

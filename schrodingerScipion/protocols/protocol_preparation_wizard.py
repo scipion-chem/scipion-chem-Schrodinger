@@ -28,6 +28,8 @@ from pwchem.utils import clean_PDB
 
 from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, FloatParam, IntParam, EnumParam
 from pyworkflow.utils.path import createLink
+from pyworkflow.object import String
+
 from pwem.protocols import EMProtocol
 from pwem.objects.data import AtomStruct
 from pwem.convert.atom_struct import AtomicStructHandler
@@ -229,11 +231,15 @@ class ProtSchrodingerPrepWizard(EMProtocol):
     def createOutput(self):
         fnMae = self._getPath(self.getJobName() + '.maegz')
         if os.path.exists(fnMae):
-            maeFile=SchrodingerAtomStruct()
-            maeFile.setFileName(fnMae)
+            SchAS = SchrodingerAtomStruct()
+            SchAS.setFileName(fnMae)
 
-            self._defineOutputs(outputStructure=maeFile)
-            self._defineSourceRelation(self.inputAtomStruct, maeFile)
+            pdbFile = SchAS.convert2PDB(cwd=self._getPath())
+            pdbAS = AtomStruct(filename=pdbFile)
+            pdbAS._maeFile = String(fnMae)
+
+            self._defineOutputs(outputStructure=pdbAS)
+            self._defineSourceRelation(self.inputAtomStruct, pdbAS)
 
     def getJobName(self):
       return self.inputAtomStruct.get().getFileName().split('/')[-1].split('.')[0]
@@ -248,7 +254,7 @@ class ProtSchrodingerPrepWizard(EMProtocol):
 
         if self.rchains.get():
             chain = json.loads(self.chain_name.get())  # From wizard dictionary
-            chain_id = chain["Chain"].upper().strip()
+            chain_id = chain["chain"].upper().strip()
         else:
             chain_id = None
         cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,

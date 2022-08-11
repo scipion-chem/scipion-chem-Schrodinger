@@ -67,7 +67,7 @@ class TestGlideDocking(BaseTest):
         protPrepWizard = cls.newProtocol(
             ProtSchrodingerPrepWizard,
             cleanPDB=True, waters=False, rchains=True,
-            chain_name='{"Chain": "C", "Number of residues": 93, "Number of chains": 3}',
+            chain_name='{"model": 0, "chain": "C", "residues": 93}',
             **kwargs)
         protPrepWizard.inputAtomStruct.set(cls.protImportPDB)
         protPrepWizard.inputAtomStruct.setExtended('outputPdb')
@@ -98,8 +98,8 @@ class TestGlideDocking(BaseTest):
             ProtSchrodingerGridSiteMap,
             innerAction=1, diameterNin=0.8,
             outerAction=1, diameterNout=1.2)
-        protGrid.inputPockets.set(filterProt)
-        protGrid.inputPockets.setExtended("outputPockets")
+        protGrid.inputStructROIs.set(filterProt)
+        protGrid.inputStructROIs.setExtended("outputStructROIs")
 
         cls.launchProtocol(protGrid)
         return protGrid

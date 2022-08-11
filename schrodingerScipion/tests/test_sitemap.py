@@ -48,11 +48,10 @@ class TestSitemap(BaseTest):
     def _runTargetPreparation(self, kwargs):
         protPrepWizard = self.newProtocol(
             ProtSchrodingerPrepWizard,
-            inputStructure=self.protImportPDB.outputPdb,
+            inputAtomStruct=self.protImportPDB.outputPdb,
             **kwargs)
         self.launchProtocol(protPrepWizard)
         return protPrepWizard
-
 
     def _runSitemap(self, targetProt):
         protSitemap = self.newProtocol(
@@ -60,7 +59,7 @@ class TestSitemap(BaseTest):
             inputStructure=targetProt.outputStructure)
 
         self.launchProtocol(protSitemap)
-        pdbOut = getattr(protSitemap, 'outputAtomStruct', None)
+        pdbOut = getattr(protSitemap, 'outputStructROIs', None)
         self.assertIsNotNone(pdbOut)
 
     def testSitemap(self):

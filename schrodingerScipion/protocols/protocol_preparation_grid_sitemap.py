@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, shutil, subprocess
+import os, shutil, glob
 from subprocess import CalledProcessError
 
 from pyworkflow.protocol.params import MultiPointerParam, STEPS_PARALLEL, PointerParam, BooleanParam, \
@@ -49,16 +49,16 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputPockets', PointerParam, pointerClass="SetOfPockets",
-                      label='Sets of Pockets:', allowsNull=False,
-                      help='Sets of known or predicted protein pockets to center the grid on')
+        form.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
+                      label='Sets of Structural ROIs:', allowsNull=False,
+                      help='Sets of known or predicted protein structural ROIs to center the grid on')
 
         group = form.addGroup('Inner box')
-        group.addParam('innerAction', EnumParam, default=0, label='Determine inner box: ',
+        group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
                       help='How to set the inner box.'
-                           'Manually: you will manually set the same x,y,z for every pocket'
-                           'PocketSize: the diameter * n of each pocket will be used. You can set n')
+                           'Manually: you will manually set the same x,y,z for every ROI'
+                           'PocketDiameter: the diameter * n of each ROI will be used. You can set n')
 
         line = group.addLine('Inner box (Angstroms)', condition='innerAction==0',
                              help='The docked ligand mass center must be inside the inner box radius')
@@ -66,16 +66,16 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         line.addParam('innerY', IntParam, default=10, label='Y')
         line.addParam('innerZ', IntParam, default=10, label='Z')
 
-        group.addParam('diameterNin', FloatParam, default=0.3, condition='innerAction==1',
+        group.addParam('diameterNin', FloatParam, default=0.8, condition='innerAction==1',
                        label='Size of inner box vs diameter: ',
-                       help='The diameter * n of each pocket will be used as inner box side')
+                       help='The diameter * n of each ROI will be used as inner box side')
 
         group = form.addGroup('Outer box')
-        group.addParam('outerAction', EnumParam, default=0, label='Determine outer box: ',
+        group.addParam('outerAction', EnumParam, default=1, label='Determine outer box: ',
                        choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
                        help='How to set the outer box.'
-                            'Manually: you will manually set the same x,y,z for every pocket'
-                            'PocketSize: the diameter * n of each pocket will be used. You can set n')
+                            'Manually: you will manually set the same x,y,z for every structural ROI'
+                            'PocketDiameter: the diameter * n of each pocket will be used. You can set n')
 
         line = group.addLine('Outer box (Angstroms)', condition='outerAction==0',
                             help='The docked ligand atoms must be inside the outer box radius.')
@@ -85,7 +85,7 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
         group.addParam('diameterNout', FloatParam, default=1.2, condition='outerAction==1',
                        label='Size of outer box vs diameter: ',
-                       help='The diameter * n of each pocket will be used as outer box side')
+                       help='The diameter * n of each structural ROI will be used as outer box side')
 
         group = form.addGroup('Hydrogen bonds')
         group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
@@ -104,30 +104,39 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        self.inputMAEFile = self.inputPockets.get().getMAEFile()
-
+        cStep = self._insertFunctionStep('convertStep', prerequisites=[])
         prepSteps = []
-        makePath(self._getPath('grids'))
-        for pocket in self.inputPockets.get():
-            pStep = self._insertFunctionStep('preparationStep', pocket.clone(), prerequisites=[])
+        for pocket in self.inputStructROIs.get():
+            pStep = self._insertFunctionStep('preparationStep', pocket.clone(), prerequisites=[cStep])
             prepSteps.append(pStep)
 
         self._insertFunctionStep('createOutputStep', prerequisites=prepSteps)
+
+    def convertStep(self):
+        maeFile = self.inputStructROIs.get().getMAEFile()
+        if not maeFile:
+            pdbFile = self.inputStructROIs.get().getProteinFile()
+            maeFile = self._getExtraPath('inputReceptor.maegz')
+            prog = schrodinger_plugin.getHome('utilities/prepwizard')
+            args = ' -WAIT -noprotassign -noimpref -noepik {} {}'. \
+                format(os.path.abspath(pdbFile), os.path.abspath(maeFile))
+            self.runJob(prog, args, cwd=self._getExtraPath())
+        else:
+            ext = os.path.splitext(maeFile)[1]
+            shutil.copy(maeFile, self._getExtraPath('inputReceptor{}'.format(ext)))
 
     def preparationStep(self, pocket):
         x, y, z = pocket.calculateMassCenter()
 
         fnGridDir = self.getGridDir(pocket.getObjId())
         gridName = self.getGridName(pocket.getObjId())
-        makePath(self._getPath(fnGridDir))
-        fnTargetLocal = "%s/%s.maegz" % (self._getPath(fnGridDir), gridName)
-        shutil.copy(self.getInputMaeFile(), fnTargetLocal)
+        makePath(fnGridDir)
 
-        fnJob = '%s/%s.inp' % (self._getPath(fnGridDir), gridName)
+        fnJob = os.path.abspath(os.path.join(fnGridDir, gridName)) + '.inp'
         fh = open(fnJob, 'w')
         fh.write("GRIDFILE %s.zip\n" % gridName)
         fh.write("OUTPUTDIR %s\n" % fnGridDir)
-        fh.write("RECEP_FILE %s\n" % fnTargetLocal.split('/')[-1])
+        fh.write("RECEP_FILE %s\n" % os.path.abspath(self.getInputMaeFile()))
         fh.write("REC_MAECHARGES True\n")
         fh.write("HBOND_DONOR_AROMH %s\n" % self.HbondDonorAromH.get())
         if self.HbondDonorAromH.get():
@@ -143,13 +152,13 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         fh.close()
 
         args = "-WAIT -LOCAL %s.inp" % (gridName)
-        self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=self._getPath(fnGridDir))
+        self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=fnGridDir)
 
     def createOutputStep(self):
-        i=1
         outGrids = SetOfSchrodingerGrids(filename=self._getPath('SchGrids.sqlite'))
-        for pocket in self.inputPockets.get():
-            fnDir = self._getPath(self.getGridDir(pocket.getObjId()))
+        for pocket in self.inputStructROIs.get():
+            gridId = pocket.getObjId()
+            fnDir = self.getGridDir(gridId)
             if os.path.exists(fnDir):
                 fnBase = os.path.split(fnDir)[1]
                 fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
@@ -158,11 +167,9 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
                     SchGrid.structureFile = String(self.getInputMaeFile())
                     if str(pocket.getScore()) != 'None':
                         SchGrid.pocketScore = Float(pocket.getScore())
-                    SchGrid.setObjId(i)
+                    SchGrid.setObjId(gridId)
                     # gridFile.bindingSiteDScore = Float(dscore)
-
-                    outGrids.append(SchGrid.clone())
-                    i+=1
+                    outGrids.append(SchGrid)
 
         outGrids.buildBBoxesPML()
         self._defineOutputs(outputGrids=outGrids)
@@ -182,10 +189,11 @@ class ProtSchrodingerGridSiteMap(EMProtocol):
         return maeOut
 
     def getInputMaeFile(self):
-        return self.inputMAEFile
+        maeFile = glob.glob(self._getExtraPath('inputReceptor.mae*'))[0]
+        return maeFile
 
     def getGridDir(self, pocketId):
-        return 'grids/{}'.format(self.getGridName(pocketId))
+        return self._getExtraPath(self.getGridName(pocketId))
 
     def getGridName(self, pocketId):
         return 'grid_{}'.format(pocketId)
