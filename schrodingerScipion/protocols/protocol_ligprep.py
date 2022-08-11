@@ -29,7 +29,7 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, Bool
 from pyworkflow.utils.path import copyFile, moveFile, cleanPath
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
-from pwchem.objects import SetOfDatabaseID, SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 progLigPrep=Plugin.getHome('ligprep')
 progStructConvert=Plugin.getHome('utilities/structconvert')
