@@ -127,7 +127,7 @@ class ProtSchrodingerSplitStructure(EMProtocol):
                 self._defineOutputs(**outputDict)
                 self._defineSourceRelation(self.inputStructure, target)
             elif "_ligand" in fn:
-                ligand = SmallMolecule(smallMolFilename=fn)
+                ligand = SmallMolecule(smallMolFilename=fn, molName='guess')
                 number = getNumber(fn, "_ligand")
                 outputDict = {'outputLigand%s' % number: ligand}
                 self._defineOutputs(**outputDict)

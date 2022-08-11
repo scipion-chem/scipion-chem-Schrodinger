@@ -103,13 +103,13 @@ class ProtSchrodingerLigPrep(EMProtocol):
         fnRoot = os.path.splitext(fnMol)[0]
 
         existingFiles = glob.glob(self._getExtraPath(fnRoot+"*"))
-        if len(existingFiles)==0:
+        if len(existingFiles) == 0:
             fnSmallExtra = self._getTmpPath(fnMol)
-            copyFile(fnSmall,fnSmallExtra)
+            copyFile(fnSmall, fnSmallExtra)
 
             args='-WAIT -LOCAL'
-            if self.ionization.get()!=0:
-                if self.ionization.get()==1:
+            if self.ionization.get() != 0:
+                if self.ionization.get() == 1:
                     args+=" -epik"
                     if self.emb.get():
                         args+=" -epik_metal_binding"
@@ -122,13 +122,13 @@ class ProtSchrodingerLigPrep(EMProtocol):
             else:
                 args+=" -ac -s %d"%self.Niso.get()
 
-            if self.optimization.get()==1:
+            if self.optimization.get() == 1:
                 args+=" -bff 14"
-            elif self.optimization.get()==2:
+            elif self.optimization.get() == 2:
                 args+=" -bff 16"
 
             if fnMol.endswith('.smi'):
-                args+=" -ismi tmp/%s"%(fnMol)
+                args+=" -ismi tmp/%s" % (fnMol)
             elif fnMol.endswith('.mae') or fnMol.endswith('.maegz'):
                 args += " -imae tmp/%s" % (fnMol)
             elif fnMol.endswith('.sdf'):
@@ -143,25 +143,25 @@ class ProtSchrodingerLigPrep(EMProtocol):
             fnSDF = "extra/%s.sdf" % fnRoot
             if not os.path.exists(fnSDF):
                 args+=" -osd %s"%fnSDF
-                self.runJob(progLigPrep,args,cwd=self._getPath())
+                self.runJob(progLigPrep, args, cwd=self._getPath())
 
             if os.path.exists(self._getPath(fnSDF)):
                 fnOsdf="extra/o%s.sdf"%fnRoot
-                args = "%s %s -split-nstructures 1"%(fnSDF,fnOsdf)
+                args = "%s %s -split-nstructures 1" % (fnSDF, fnOsdf)
                 self.runJob(progStructConvert, args, cwd=self._getPath())
-                for fn in glob.glob(self._getExtraPath("o%s*.sdf"%fnRoot)):
+                for fn in glob.glob(self._getExtraPath("o%s*.sdf" % fnRoot)):
                     fnDir, fnOut = os.path.split(fn)
                     fnOut = self._getExtraPath(fnOut[1:])
-                    moveFile(fn,fnOut)
-                    self.saveMolecule(fnOut, self.outputSmallMolecules)
-                if len(glob.glob(self._getExtraPath("%s-*.sdf"%fnRoot))) > 0:
+                    moveFile(fn, fnOut)
+                    self.saveMolecule(fnOut, self.outputSmallMolecules, mol)
+                if len(glob.glob(self._getExtraPath("%s-*.sdf" % fnRoot))) > 0:
                     cleanPath(self._getPath(fnSDF))
             else:
-                self.saveMolecule(fnSmall, self.outputSmallMoleculesDropped)
+                self.saveMolecule(fnSmall, self.outputSmallMoleculesDropped, mol)
         else:
-            for fn in glob.glob(self._getExtraPath("%s*.sdf"%fnRoot)):
-                print("Reading %s"%fn)
-                self.saveMolecule(fn, self.outputSmallMolecules)
+            for fn in glob.glob(self._getExtraPath("%s*.sdf" % fnRoot)):
+                print("Reading %s" % fn)
+                self.saveMolecule(fn, self.outputSmallMolecules, mol)
 
 
     def createOutputStep(self):
@@ -172,10 +172,22 @@ class ProtSchrodingerLigPrep(EMProtocol):
             self._defineOutputs(outputSmallMoleculesDropped=self.outputSmallMoleculesDropped)
             self._defineSourceRelation(self.inputSmallMols, self.outputSmallMoleculesDropped)
 
-    def saveMolecule(self, molFn, molSet):
+    def saveMolecule(self, molFn, molSet, oriMol):
         while self.saving:
             time.sleep(0.2)
         self.saving = True
-        smallMolecule = SmallMolecule(smallMolFilename=molFn, type='Schrodinger')
+        smallMolecule = SmallMolecule()
+        smallMolecule.copy(oriMol, copyId=False)
+        smallMolecule.setFileName(molFn)
+        confId = self.getConfId(molFn, oriMol.getMolName())
+        if confId:
+            smallMolecule.setConfId(molFn.split('-')[-1].split('.')[0])
+
         molSet.append(smallMolecule.clone())
         self.saving = False
+
+    def getConfId(self, molFn, molName):
+        try:
+            return molFn.split(molName)[1].split('-')[1].split('.')[0]
+        except:
+            return None

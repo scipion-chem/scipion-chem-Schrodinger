@@ -266,13 +266,13 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                         tokens = line.split(',')
                         fnBase = os.path.splitext(os.path.split(tokens[0])[1])[0]
                         small = SmallMolecule()
-                        small.copy(smallDict[fnBase])
-                        small.cleanObjId()
+                        small.copy(smallDict[fnBase], copyId=False)
                         small._energy = pwobj.Float(tokens[1])
                         small.ligandEfficiency = pwobj.Float(tokens[2])
                         small.ligandEfficiencySA = pwobj.Float(tokens[3])
                         small.ligandEfficiencyLn = pwobj.Float(tokens[4])
                         small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
+                        small.setPoseId(i)
                         if not self.mergeOutput:
                             small.maeFile = pwobj.String(fnPv)
                         else:
