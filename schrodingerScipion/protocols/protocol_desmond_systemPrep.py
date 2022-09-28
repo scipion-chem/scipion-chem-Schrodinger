@@ -24,20 +24,26 @@
 # *
 # **************************************************************************
 
-import os
+import os, time, subprocess
 import random as rd
 from subprocess import check_call
 
 from pyworkflow.protocol.params import PointerParam, StringParam,\
-  EnumParam, BooleanParam, FloatParam, IntParam
+  EnumParam, BooleanParam, FloatParam, IntParam, LEVEL_ADVANCED
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin as schrodinger_plugin
+from pwem.convert.atom_struct import toPdb
+
+from pwchem.utils import pdbqt2other
+from pwchem import Plugin as pwchemPlugin
+
+from schrodingerScipion import Plugin as schrodingerPlugin
 from schrodingerScipion.constants import *
 from schrodingerScipion.objects import SchrodingerAtomStruct, SchrodingerSystem
 
-multisimProg = schrodinger_plugin.getHome('utilities/multisim')
-jobControlProg = schrodinger_plugin.getHome('jobcontrol')
-structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
+multisimProg = schrodingerPlugin.getHome('utilities/multisim')
+jobControlProg = schrodingerPlugin.getHome('jobcontrol')
+structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
+progLigPrep = schrodingerPlugin.getHome('ligprep')
 
 STRUCTURE, LIGAND = 0, 1
 
@@ -75,9 +81,14 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                       label='Ligand to prepare: ',
                       help='Specific ligand to prepare in the system')
 
-        form.addParam('rezero', BooleanParam, default=True,
-                       label='Reset origin to center of mass: ',
-                       help='Set system origin as the solute center of mass')
+        form.addParam('prepareTarget', BooleanParam, default=True,
+                      label='Prepare target: ', expertLevel=LEVEL_ADVANCED,
+                      help='Prepare target with Schrodinger PrepWizard to ensure correct structure.'
+                           'It may subtly variate the atom positions')
+        form.addParam('prepareLigand', BooleanParam, default=True, condition='inputFrom=={}'.format(LIGAND),
+                      label='Prepare ligand: ', expertLevel=LEVEL_ADVANCED,
+                      help='Prepare target with Schrodinger LigPrep to ensure correct structure.'
+                           'It may subtly variate the ligand atom positions')
 
         group = form.addGroup('Boundary box')
         group.addParam('boundaryShape', EnumParam,
@@ -171,29 +182,41 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
             if type(self.inputStruct.get()) == SchrodingerAtomStruct:
                 self.soluteFile = self.inputStruct.get().getFileName()
             else:
-                pdbFile = self.inputStruct.get().getFileName()
+                pdbFile = self.getPdbFile()
                 structName = os.path.splitext(os.path.basename(pdbFile))[0]
-                self.soluteFile = self._getExtraPath(structName + '.mae')
+                self.soluteFile = os.path.abspath(self._getExtraPath(structName + '.mae'))
                 if not os.path.exists(self.soluteFile):
-                    self.runJob(structConvertProg, '{} {}'.format(pdbFile, self.soluteFile))
+                  if self.prepareTarget.get():
+                      self.soluteFile = self.prepareTargetFile(pdbFile, self.soluteFile)
+                  else:
+                      self.runJob(structConvertProg, '{} {}'.format(pdbFile, self.soluteFile))
 
         elif self.inputFrom.get() == LIGAND:
             self.soluteFile = self._getExtraPath('complexSolute.mae')
             if not os.path.exists(self.soluteFile):
                 mol = self.getSpecifiedMol()
-                molMaeFile = self._getExtraPath(mol.getUniqueName() + '.maegz')
-                self.runJob(structConvertProg, '{} {}'.format(mol.getPoseFile(), molMaeFile))
+                molFile = mol.getPoseFile()
+                if molFile.endswith('.pdbqt'):
+                    molFile = self.sdfFrompdbqt(molFile)
+
+                if self.prepareLigand.get():
+                    molMaeFile = self.prepareLigandFile(molFile)
+                else:
+                    molMaeFile = self._getExtraPath(mol.getUniqueName() + '.maegz')
+                    self.runJob(structConvertProg, '{} {}'.format(molFile, molMaeFile))
 
                 if hasattr(mol, 'structFile'):
                     targetMaeFile = mol.structFile
                 else:
-                    targetFile = self.inputSetOfMols.get().getProteinFile()
-                    targetName = os.path.splitext(os.path.basename(targetFile))[0]
-                    targetMaeFile = self._getExtraPath(targetName + '.maegz')
-                    self.runJob(structConvertProg, '{} {}'.format(targetFile, targetMaeFile))
+                    pdbFile = self.getPdbFile()
+                    targetName = os.path.splitext(os.path.basename(pdbFile))[0]
+                    targetMaeFile = os.path.abspath(self._getExtraPath(targetName + '.maegz'))
+                    if self.prepareTarget.get():
+                        targetMaeFile = self.prepareTargetFile(pdbFile, targetMaeFile)
+                    else:
+                        self.runJob(structConvertProg, '{} {}'.format(pdbFile, targetMaeFile))
 
                 self.runJob('zcat', '{} {} > {}'.format(molMaeFile, targetMaeFile, self.soluteFile))
-
 
     def systemPreparationStep(self):
         maeFile = self.soluteFile
@@ -205,15 +228,21 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         with open(msjFile, 'w') as f:
             f.write(msjStr)
 
-        cmsFile = sysName+'-out.cms'
-
+        cmsName = sysName+'-out.cms'
         args = ' -m {} {} -o {} -WAIT -JOBNAME {}'.format(msjFile.split('/')[-1], os.path.abspath(maeFile),
-                                                          cmsFile, jobName)
+                                                          cmsName, jobName)
         self.runJob(multisimProg, args, cwd=self._getExtraPath())
 
         cmsStruct = SchrodingerSystem()
-        cmsStruct.setFileName(self._getExtraPath(cmsFile))
-        self._defineOutputs(outputSystem=cmsStruct)
+        if os.path.exists(self._getExtraPath(cmsName)):
+            cmsFile = os.path.abspath(self._getPath(cmsName))
+            os.rename(self._getExtraPath(cmsName), cmsFile)
+
+            cmsStruct.setFileName(cmsFile)
+            self._defineOutputs(outputSystem=cmsStruct)
+        else:
+            print('Schrodinger system preparation failed')
+            open(self._getExtraPath(cmsName))
 
 
     def _validate(self):
@@ -259,7 +288,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         if self.solvate:
             solventArg = SOLVENT % self.getEnumText('solventType')
 
-        msj_str = MSJ_SYSPREP % (addIonsArg, *boxArgs, self.getEnumText('ffType'), str(self.rezero.get()).lower(),
+        msj_str = MSJ_SYSPREP % (addIonsArg, *boxArgs, self.getEnumText('ffType'), "true",
                                  saltArg, solventArg, self.getEnumText('ffType'))
         return msj_str
 
@@ -299,4 +328,52 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
             print('Killing job: {} with jobName {}'.format(jobId, self.getJobName()))
             check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
 
+    def getPdbFile(self):
+      if self.inputFrom.get() == STRUCTURE:
+          proteinFile = self.inputStruct.get().getFileName()
+      elif self.inputFrom.get() == LIGAND:
+          proteinFile = self.inputSetOfMols.get().getProteinFile()
+      inName, inExt = os.path.splitext(os.path.basename(proteinFile))
 
+      if inExt == '.pdb':
+          return os.path.abspath(proteinFile)
+      else:
+        pdbFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdb')))
+        if inExt == '.pdbqt':
+            pdbqt2other(self, proteinFile, pdbFile)
+        else:
+            toPdb(proteinFile, pdbFile)
+        return os.path.abspath(pdbFile)
+
+    def sdfFrompdbqt(self, pdbqtFile, sdfFile=None):
+        if not sdfFile:
+            baseName = os.path.splitext(os.path.basename(pdbqtFile))[0]
+            outDir = os.path.abspath(self._getTmpPath())
+            sdfFile = os.path.abspath(os.path.join(outDir, baseName + '.sdf'))
+        else:
+            baseName = os.path.splitext(os.path.basename(sdfFile))[0]
+            outDir = os.path.abspath(os.path.dirname(sdfFile))
+
+        args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}'.format(os.path.abspath(pdbqtFile),
+                                                                              os.path.abspath(outDir), baseName)
+        pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
+        return sdfFile
+
+    def prepareLigandFile(self, sdfFile, maeFile=None):
+        # Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+        if not maeFile:
+            baseName = os.path.splitext(os.path.basename(sdfFile))[0]
+            maeFile = os.path.abspath(os.path.join(self._getExtraPath(baseName + '.maegz')))
+
+        args = " -i 1 -nt -ns -a -isd {} -omae {}".format(sdfFile, maeFile)
+        subprocess.check_call([progLigPrep, *args.split()])
+        while not os.path.exists(maeFile):
+            time.sleep(0.2)
+        return maeFile
+
+    def prepareTargetFile(self, inFile, outFile):
+        prog = schrodingerPlugin.getHome('utilities/prepwizard')
+        args = '-WAIT -noprotassign -noimpref -noepik '
+        args += '%s %s' % (inFile, outFile)
+        self.runJob(prog, args, cwd=self._getPath())
+        return outFile
