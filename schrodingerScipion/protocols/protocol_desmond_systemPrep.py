@@ -33,8 +33,7 @@ from pyworkflow.protocol.params import PointerParam, StringParam,\
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toPdb
 
-from pwchem.utils import pdbqt2other
-from pwchem import Plugin as pwchemPlugin
+from pwchem.utils import pdbqt2other, sdfFrompdbqt
 
 from schrodingerScipion import Plugin as schrodingerPlugin
 from schrodingerScipion.constants import *
@@ -197,7 +196,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                 mol = self.getSpecifiedMol()
                 molFile = mol.getPoseFile()
                 if molFile.endswith('.pdbqt'):
-                    molFile = self.sdfFrompdbqt(molFile)
+                    molFile = sdfFrompdbqt(self, molFile)
 
                 if self.prepareLigand.get():
                     molMaeFile = self.prepareLigandFile(molFile)
@@ -344,20 +343,6 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         else:
             toPdb(proteinFile, pdbFile)
         return os.path.abspath(pdbFile)
-
-    def sdfFrompdbqt(self, pdbqtFile, sdfFile=None):
-        if not sdfFile:
-            baseName = os.path.splitext(os.path.basename(pdbqtFile))[0]
-            outDir = os.path.abspath(self._getTmpPath())
-            sdfFile = os.path.abspath(os.path.join(outDir, baseName + '.sdf'))
-        else:
-            baseName = os.path.splitext(os.path.basename(sdfFile))[0]
-            outDir = os.path.abspath(os.path.dirname(sdfFile))
-
-        args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}'.format(os.path.abspath(pdbqtFile),
-                                                                              os.path.abspath(outDir), baseName)
-        pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
-        return sdfFile
 
     def prepareLigandFile(self, sdfFile, maeFile=None):
         # Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.

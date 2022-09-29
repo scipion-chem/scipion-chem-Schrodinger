@@ -40,6 +40,7 @@ import pyworkflow.wizard as pwizard
 from subprocess import check_call
 
 from pwchem.wizards import SelectElementWizard
+from pwchem.utils import pdbqt2other, getBaseFileName, sdfFrompdbqt
 
 SelectElementWizard().addTarget(protocol=ProtSchrodingerDesmondSysPrep,
                                targets=['inputLigand'],
@@ -60,6 +61,10 @@ class GetSoluteCharge(pwizard.Wizard):
                     check_call('zcat {} > {}'.format(os.path.abspath(inSoluteFile), soluteFile), shell=True)
             else:
                 pdbFile = protocol.inputStruct.get().getFileName()
+                if pdbFile.endswith('.pdbqt'):
+                    pdbqtFile = pdbFile
+                    pdbFile = pdbqt2other(protocol, pdbqtFile,
+                                          os.path.join('/tmp', getBaseFileName(pdbqtFile) + '.pdb'))
                 structName = os.path.splitext(os.path.basename(pdbFile))[0]
                 soluteFile = os.path.join('/tmp', structName + '.mae')
                 if not os.path.exists(soluteFile):
@@ -69,13 +74,21 @@ class GetSoluteCharge(pwizard.Wizard):
             soluteFile = os.path.join('/tmp', 'complexSolute.mae')
             if not os.path.exists(soluteFile):
                 mol = protocol.getSpecifiedMol()
+                molFile = mol.getPoseFile()
+                if molFile.endswith('.pdbqt'):
+                    sdfFile = os.path.join('/tmp', getBaseFileName(molFile) + '.sdf')
+                    molFile = sdfFrompdbqt(protocol, molFile, sdfFile)
+
                 molMaeFile = os.path.join('/tmp', mol.getUniqueName() + '.maegz')
-                check_call('{} {} {}'.format(structConvertProg, mol.getPoseFile(), molMaeFile), shell=True)
+                check_call('{} {} {}'.format(structConvertProg, molFile, molMaeFile), shell=True)
 
                 if hasattr(mol, 'structFile'):
                     targetMaeFile = mol.structFile
                 else:
                     targetFile = protocol.inputSetOfMols.get().getProteinFile()
+                    if targetFile.endswith('.pdbqt'):
+                        targetFile = pdbqt2other(protocol, targetFile,
+                                                 os.path.join('/tmp', getBaseFileName(targetFile) + '.pdb'))
                     targetName = os.path.splitext(os.path.basename(targetFile))[0]
                     targetMaeFile = os.path.join('/tmp', targetName + '.maegz')
                     check_call('{} {} {}'.format(structConvertProg, targetFile, targetMaeFile), shell=True)
@@ -85,11 +98,11 @@ class GetSoluteCharge(pwizard.Wizard):
 
         return soluteFile
 
-
     def show(self, form, *params):
         protocol = form.protocol
         try:
             soluteFile = self.getSoluteFile(protocol)
+            print('Solute: ', soluteFile)
         except Exception as e:
             print("ERROR: ", e)
             return
