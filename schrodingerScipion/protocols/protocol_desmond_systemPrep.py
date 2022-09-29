@@ -33,11 +33,12 @@ from pyworkflow.protocol.params import PointerParam, StringParam,\
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toPdb
 
-from pwchem.utils import pdbqt2other, sdfFrompdbqt
+from pwchem.utils import pdbqt2other, convertToSdf
 
 from schrodingerScipion import Plugin as schrodingerPlugin
 from schrodingerScipion.constants import *
 from schrodingerScipion.objects import SchrodingerAtomStruct, SchrodingerSystem
+from schrodingerScipion.utils import getChargeFromMAE
 
 multisimProg = schrodingerPlugin.getHome('utilities/multisim')
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')
@@ -130,24 +131,31 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
         form.addSection('Charges')
         group = form.addGroup('Ions')
-        group.addParam('placeIons', EnumParam, default=0,
+        group.addParam('placeIons', EnumParam, default=1,
                        label='Add ions: ', choices=['None', 'Neutralize', 'Add number'],
                        help='Whether to add ions to the system')
-        line = group.addLine('Solute charge:', condition='placeIons!=0')
+        line = group.addLine('Solute charge:', condition='placeIons!=0', expertLevel=LEVEL_ADVANCED)
         line.addParam('solCharge', IntParam, default=0, condition='placeIons!=0', readOnly=True,
-                       help='Charge of the solute before the addition of ions')
-        line = group.addLine('Ion type:', condition='placeIons!=0',
-                             help='Type of the ions to neutralize charges (Depending on the system charge)')
-        line.addParam('cationType', EnumParam, condition='placeIons!=0 and solCharge<0',
-                       label='Cation to add: ', choices=self._cations,
+                      help='Check charge of the solute before the addition of ions')
+        line = group.addLine('Cation type:', condition='placeIons!=0',
+                             help='Type of the cations to add into the system. '
+                                  '(If neutralize, only added when solute has negative charge)')
+        line.addParam('cationType', EnumParam, condition='placeIons!=0',
+                       label='Cation to add: ', choices=self._cations, default=0,
                        help='Which cations to add in the system')
-        line.addParam('anionType', EnumParam, condition='placeIons!=0 and solCharge>0',
-                      label='Anion to add: ', choices=self._anions,
-                      help='Which anions to add in the system')
-        line.addParam('ionNum', IntParam, condition='placeIons==2',
-                       label='Number of counterions to add: ',
-                       help='Number of ions to add, cations if the system charge is negative and viceversa')
+        line.addParam('cationNum', IntParam, condition='placeIons==2',
+                      label='Number of cations to add: ',
+                      help='Number of cations to add')
 
+        line = group.addLine('Anion type:', condition='placeIons!=0',
+                             help='Type of the anions to add into the system. '
+                                  '(If neutralize, only added when solute has positive charge)')
+        line.addParam('anionType', EnumParam, condition='placeIons!=0',
+                      label='Anion to add: ', choices=self._anions, default=1,
+                      help='Which anions to add in the system')
+        line.addParam('anionNum', IntParam, condition='placeIons==2',
+                      label='Number of anions to add: ',
+                      help='Number of anions to add')
 
         group = form.addGroup('Salt')
         group.addParam('addSalt', BooleanParam, default=False,
@@ -160,10 +168,10 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         line = group.addLine('Salt type:', condition='addSalt',
                              help='Type of the ions to neutralize charges (Depending on the system charge)')
         line.addParam('cationTypeSalt', EnumParam, condition='addSalt',
-                      label='Salt cation: ', choices=self._saltCations,
+                      label='Salt cation: ', choices=self._saltCations, default=0,
                       help='Cation type of the salt')
         line.addParam('anionTypeSalt', EnumParam, condition='addSalt',
-                       label='Salt anion: ', choices=self._anions,
+                       label='Salt anion: ', choices=self._anions, default=1,
                        help='Anion type of the salt')
 
         group = form.addGroup('Force field')
@@ -196,7 +204,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                 mol = self.getSpecifiedMol()
                 molFile = mol.getPoseFile()
                 if molFile.endswith('.pdbqt'):
-                    molFile = sdfFrompdbqt(self, molFile)
+                    molFile = convertToSdf(self, molFile)
 
                 if self.prepareLigand.get():
                     molMaeFile = self.prepareLigandFile(molFile)
@@ -223,7 +231,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         jobName = sysName + '_' + str(rd.randint(1000000, 9999999))
 
         msjFile = self._getExtraPath('{}.msj'.format(sysName))
-        msjStr = self.buildMSJ_str()
+        msjStr = self.buildMSJ_str(maeFile)
         with open(msjFile, 'w') as f:
             f.write(msjStr)
 
@@ -250,19 +258,17 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
     ############# UTILS
 
-    def buildMSJ_str(self):
+    def buildMSJ_str(self, maeFile):
         '''Build the .msj (file used by multisim to specify the jobs performed by Schrodinger)
         defining the input parameters'''
         addIonsArg = ''
         if self.placeIons.get() != 0:
-            if self.placeIons.get() == 1:
-                number = 'neutralize_system'
-            else:
-                number = self.ionNum.get()
-
-            if self.solCharge.get() < 0:
+            solCharge = getChargeFromMAE(maeFile)
+            if solCharge < 0:
+                number = 'neutralize_system' if self.placeIons.get() == 1 else self.cationNum.get()
                 addIonsArg = ADD_COUNTERION % (self.getEnumText('cationType')[:-1], number)
-            elif self.solCharge.get() > 0:
+            elif solCharge > 0:
+                number = 'neutralize_system' if self.placeIons.get() == 1 else self.anionNum.get()
                 addIonsArg = ADD_COUNTERION % (self.getEnumText('anionType')[:-1], number)
 
 
@@ -346,6 +352,9 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
     def prepareLigandFile(self, sdfFile, maeFile=None):
         # Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+        if not sdfFile.endswith('.sdf'):
+            sdfFile = convertToSdf(self, sdfFile)
+
         if not maeFile:
             baseName = os.path.splitext(os.path.basename(sdfFile))[0]
             maeFile = os.path.abspath(os.path.join(self._getExtraPath(baseName + '.maegz')))

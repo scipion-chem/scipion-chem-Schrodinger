@@ -40,7 +40,7 @@ import pyworkflow.wizard as pwizard
 from subprocess import check_call
 
 from pwchem.wizards import SelectElementWizard
-from pwchem.utils import pdbqt2other, getBaseFileName, sdfFrompdbqt
+from pwchem.utils import pdbqt2other, getBaseFileName, convertToSdf
 
 SelectElementWizard().addTarget(protocol=ProtSchrodingerDesmondSysPrep,
                                targets=['inputLigand'],
@@ -77,7 +77,7 @@ class GetSoluteCharge(pwizard.Wizard):
                 molFile = mol.getPoseFile()
                 if molFile.endswith('.pdbqt'):
                     sdfFile = os.path.join('/tmp', getBaseFileName(molFile) + '.sdf')
-                    molFile = sdfFrompdbqt(protocol, molFile, sdfFile)
+                    molFile = convertToSdf(protocol, molFile, sdfFile)
 
                 molMaeFile = os.path.join('/tmp', mol.getUniqueName() + '.maegz')
                 check_call('{} {} {}'.format(structConvertProg, molFile, molMaeFile), shell=True)
