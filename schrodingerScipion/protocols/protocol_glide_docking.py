@@ -34,7 +34,7 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2
 from pwchem import Plugin as pwchemPlugin
 from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.utils.utils import putMol2Title, sortDockingResults
+from schrodingerScipion.utils.utils import putMol2Title
 
 glideProg = schrodinger_plugin.getHome('glide')
 progLigPrep = schrodinger_plugin.getHome('ligprep')
@@ -260,36 +260,34 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             smallList = []
             fnPv = self._getExtraPath(gridDir + 'job_{}_pv.maegz'.format(gridId))
             with open(self._getExtraPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
-                i = 0
-                for line in fhCsv.readlines():
-                    if i > 1:
-                        tokens = line.split(',')
-                        fnBase = os.path.splitext(os.path.split(tokens[0])[1])[0]
-                        small = SmallMolecule()
-                        small.copy(smallDict[fnBase], copyId=False)
-                        small._energy = pwobj.Float(tokens[1])
-                        small.ligandEfficiency = pwobj.Float(tokens[2])
-                        small.ligandEfficiencySA = pwobj.Float(tokens[3])
-                        small.ligandEfficiencyLn = pwobj.Float(tokens[4])
-                        small.poseFile = pwobj.String("%d@%s"%(i, fnPv))
-                        small.setPoseId(i)
-                        if not self.mergeOutput:
-                            small.maeFile = pwobj.String(fnPv)
-                        else:
-                            small.maeFile = pwobj.String(allMaeFile)
-                        small.setMolClass('Schrodinger')
-                        small.setDockId(self.getObjId())
-                        small.setGridId(gridId)
-                        smallList.append(small)
-                    i += 1
+                fhCsv.readline()
+                fhCsv.readline()
+                for i, line in enumerate(fhCsv.readlines(), start=2):
+                    tokens = line.split(',')
+                    fnBase = os.path.splitext(os.path.split(tokens[0])[1])[0]
+
+                    small = SmallMolecule()
+                    small.copy(smallDict[fnBase], copyId=False)
+                    small._energy = pwobj.Float(tokens[1])
+                    small.ligandEfficiency = pwobj.Float(tokens[2])
+                    small.ligandEfficiencySA = pwobj.Float(tokens[3])
+                    small.ligandEfficiencyLn = pwobj.Float(tokens[4])
+                    small.poseFile = pwobj.String("%d@%s" % (i, fnPv))
+                    small.setPoseId(i)
+                    if not self.mergeOutput:
+                        small.maeFile = pwobj.String(fnPv)
+                    else:
+                        small.maeFile = pwobj.String(allMaeFile)
+                    small.setMolClass('Schrodinger')
+                    small.setDockId(self.getObjId())
+                    small.setGridId(gridId)
+                    smallList.append(small)
 
             allSmallList += smallList
 
             if not self.mergeOutput:
-                idxSorted = sortDockingResults(smallList)
                 outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=gridId)
-                for idx in idxSorted:
-                    small = smallList[idx]
+                for small in smallList:
                     outputSet.append(small)
 
                 self.convertedDic = {}
@@ -306,10 +304,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 self._defineSourceRelation(self.inputLibrary, outputSet)
 
         if self.mergeOutput:
-            idxSorted = sortDockingResults(allSmallList)
             outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
-            for idx in idxSorted:
-                small = allSmallList[idx]
+            for small in allSmallList:
                 outputSet.append(small)
 
             self.convertedDic = {}
@@ -365,8 +361,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             fnAux = os.path.abspath(self._getExtraPath("tmp_%d_%d.mae" % (it, i)))
             poseId, fnRaw = mol.poseFile.get().split('@')
             mol.setPoseId(poseId)
-            fnOut = os.path.join(outDir, '{}.{}'.format(
-                mol.getUniqueName(), 'mol2'))
+            fnOut = os.path.join(outDir, '{}.{}'.format(mol.getUniqueName(), 'mol2'))
 
             if not os.path.exists(fnOut):
                 args = "-n %s %s -o %s" % (poseId, os.path.abspath(fnRaw), fnAux)
@@ -399,7 +394,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         return outFile
 
     def getAllLigandsFile(self, suffix=''):
-        return self._getExtraPath('allMoleculesFile{}.mol2'.format(suffix))
+        return self._getTmpPath('allMoleculesFile{}.mol2'.format(suffix))
 
     def getOriginalReceptorFile(self):
         return self.inputGridSet.get().getProteinFile()
@@ -428,6 +423,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     gridId = dir.split('_')[1]
                     if os.path.exists(self._getExtraPath(dir, "job_{}_pv.maegz".format(gridId))):
                         gridDirs.append(dir)
+                    else:
+                        print('No good poses found in grid ' + gridId)
         return gridDirs
 
     def mergeMAEfiles(self):
