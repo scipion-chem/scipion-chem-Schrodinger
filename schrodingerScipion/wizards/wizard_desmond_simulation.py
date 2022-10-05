@@ -36,9 +36,9 @@ information such as name and number of residues.
 from schrodingerScipion.protocols.protocol_desmond_simulation import *
 from ..constants import *
 import pyworkflow.wizard as pwizard
-from pwchem.wizards import AddElementWizard, DeleteElementWizard
+from pwchem.wizards import AddElementSummaryWizard, DeleteElementWizard
 
-AddElementWizard().addTarget(protocol=ProtSchrodingerDesmondMD,
+AddElementSummaryWizard().addTarget(protocol=ProtSchrodingerDesmondMD,
                              targets=['insertStep'],
                              inputs=['insertStep'],
                              outputs=['workFlowSteps', 'summarySteps'])

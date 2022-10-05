@@ -1,8 +1,14 @@
 ==================================
-Schrodinger Maestro scipion plugin
+Schrodinger Maestro Scipion plugin
 ==================================
 
-Programs coming from Schrodinger
+**Documentation under development, sorry for the inconvenience**
+
+This is a **Scipion** plugin that offers different **Schrodinger tools**.
+These tools will make it possible to carry out different functions for Virtual Drug Screening (VDS)
+
+Therefore, this plugin allows to use programs from the Schrodinger software suite
+within the Scipion framework.
 
 ===================
 Install this plugin
@@ -10,7 +16,7 @@ Install this plugin
 
 You will need to use `3.0.0 <https://github.com/I2PC/scipion/releases/tag/v3.0>`_ version of Scipion to run these protocols. To install the plugin, you have two options:
 
-- **Stable version**  
+- **Stable version**   (currently not available)
 
 .. code-block:: 
 
@@ -22,17 +28,28 @@ OR
       
 - **Developer's version** 
 
-1. Download repository: 
+1. **Download repository**:
 
 .. code-block::
 
-            git clone https://github.com/scipion-chem/scipion-chem-schrodinger.git
+            git clone https://github.com/scipion-chem/scipion-chem-schrodingerScipion.git
 
-2. Install:
+2. **Switch to the desired branch** (master or devel):
+
+Scipion-chem-schrodingerScipion is constantly under development and including new features.
+If you want a relatively older an more stable version, use master branch (default).
+If you want the latest changes and developments, user devel branch.
 
 .. code-block::
 
-            scipion installp -p path_to_scipion-chem-schrodinger --devel
+            cd scipion-chem-schrodingerScipion
+            git checkout devel
+
+3. **Install**:
+
+.. code-block::
+
+            scipion3 installp -p path_to_scipion-chem-schrodingerScipion --devel
 
 - **Binary files** 
 

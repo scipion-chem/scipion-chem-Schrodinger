@@ -121,7 +121,7 @@ class ProtSchrodingerConvert(EMProtocol):
         while self.saving:
             time.sleep(0.2)
         self.saving = True
-        smallMolecule = SmallMolecule(smallMolFilename=molFn)
+        smallMolecule = SmallMolecule(smallMolFilename=molFn, molName='guess')
         molSet.append(smallMolecule.clone())
         self.saving = False
 

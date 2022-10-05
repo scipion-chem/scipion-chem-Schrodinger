@@ -45,8 +45,8 @@ class ProtGlideDockingViewer(SmallMoleculesViewer):
     def _defineParams(self, form):
         super()._defineParams(form)
         form.addSection(label='Maestro view')
-        form.addParam('displaymaestroPocket', EnumParam,
-                       choices=self.getChoices(vType=POCKET, pymol=False)[0], default=0,
+        form.addParam('displayMaestroPocket', EnumParam,
+                       choices=self.getChoices(vType=SET, pymol=False)[0], default=0,
                        label='Display one ligand type: ',
                        help='Display all conformers and positions of this molecule')
 
@@ -56,7 +56,7 @@ class ProtGlideDockingViewer(SmallMoleculesViewer):
         return visDic
 
     def _viewPocketMaestroDock(self, e=None):
-        ligandLabel = self.getEnumText('displaymaestroPocket')
-        mols = self.pocketLigandsDic[ligandLabel]
+        ligandLabel = self.getEnumText('displayMaestroPocket')
+        mols = self.setLigandsDic[ligandLabel]
 
-        return [MaestroView(os.path.abspath(mols[0].maeFile.get()), cwd=self.protocol._getExtraPath())]
+        return [MaestroView(os.path.abspath(mols.getFirstItem().maeFile.get()), cwd=self.protocol._getExtraPath())]
