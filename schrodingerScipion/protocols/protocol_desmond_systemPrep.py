@@ -368,6 +368,6 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
     def prepareTargetFile(self, inFile, outFile):
         prog = schrodingerPlugin.getHome('utilities/prepwizard')
         args = '-WAIT -noprotassign -noimpref -noepik '
-        args += '%s %s' % (inFile, outFile)
+        args += '%s %s' % (os.path.relpath(inFile), os.path.relpath(outFile))
         self.runJob(prog, args, cwd=self._getPath())
         return outFile
