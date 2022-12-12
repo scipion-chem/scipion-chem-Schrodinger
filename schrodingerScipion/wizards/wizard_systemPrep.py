@@ -33,19 +33,39 @@ information such as name and number of residues.
 """
 
 # Imports
+import pyworkflow.wizard as pwizard
+from pwem.objects import AtomStruct
+
+from pwchem.wizards import SelectElementWizard, GetRadiusProtein
+from pwchem.utils import pdbqt2other, getBaseFileName, convertToSdf
+from pwchem.objects import SetOfSmallMolecules
+
+from schrodingerScipion.protocols import *
 from schrodingerScipion.protocols.protocol_desmond_systemPrep import *
 from schrodingerScipion.utils.utils import getChargeFromMAE
-
-import pyworkflow.wizard as pwizard
-from subprocess import check_call
-
-from pwchem.wizards import SelectElementWizard
-from pwchem.utils import pdbqt2other, getBaseFileName, convertToSdf
+from schrodingerScipion.objects import SchrodingerAtomStruct
 
 SelectElementWizard().addTarget(protocol=ProtSchrodingerDesmondSysPrep,
                                targets=['inputLigand'],
                                inputs=['inputSetOfMols'],
                                outputs=['inputLigand'])
+
+class GetRadiusProteinSch(GetRadiusProtein):
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getASFile(self, inputObj, form=None):
+        if issubclass(type(inputObj), SchrodingerAtomStruct):
+            pdbFile = form.protocol.getProject().getTmpPath('schStruct.pdb')
+            return inputObj.convert2PDB(pdbFile)
+        elif issubclass(type(inputObj), AtomStruct):
+            return inputObj.getFileName()
+        elif issubclass(type(inputObj), SetOfSmallMolecules):
+            return inputObj.getProteinFile()
+
+GetRadiusProteinSch().addTarget(protocol=ProtSchrodingerGlideDocking,
+                             targets=['radius'],
+                             inputs=['inputAtomStruct'],
+                             outputs=['radius'])
 
 class GetSoluteCharge(pwizard.Wizard):
     """Calculates the charge of the input atom structure"""

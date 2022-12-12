@@ -23,16 +23,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, shutil, threading, subprocess, time
+import os, shutil, threading, subprocess, time, glob
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, FloatParam, IntParam, STEPS_PARALLEL
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
+
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import relabelAtomsMol2
+from pwchem.utils import relabelAtomsMol2, calculate_centerMass
 from pwchem import Plugin as pwchemPlugin
+
 from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.utils.utils import putMol2Title
 
@@ -57,22 +59,74 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputGridSet', PointerParam, pointerClass="SetOfSchrodingerGrids",
-                       label='Grid to analyze:', allowsNull=False)
-        form.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
-                       label='Library of compounds:', allowsNull=False)
-        form.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
-                      label='Merge output from different structural ROIs: ')
+        group = form.addGroup('Input')
+        group.addParam('fromPockets', EnumParam, label='Dock on : ', default=1,
+                       choices=['Whole protein', 'SetOfStructROIs', 'Schrodinger Grids'],
+                       help='Whether to dock on a whole protein surface or on specific regions defines as StructROIs or'
+                            ' Schrodinger Grids')
+
+        group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
+                       condition='fromPockets==0', label='Input structure:',
+                       help='Input atomic structure to perform the docking on. We suggest the use of Structural ROIs'
+                            'to speed up the docking process instead of docking on the whole protein')
+        group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
+                       condition='fromPockets == 0', allowsNull=False,
+                       help='Radius of the Schrodinger grid for the whole protein')
+
+        group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
+                       condition='fromPockets==1', label='Input structural ROIs:',
+                       help='Input structural ROIs defining the space where the docking will be performed')
+        group.addParam('inputGridSet', PointerParam, pointerClass="SetOfSchrodingerGrids",
+                       condition='fromPockets==2', label='Input grids:',
+                       help='Input grids defining the space where the docking will be performed')
+
+        group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
+                       label='Input small molecules:', help='Input small molecules to be docked with Glide')
+
+        group = form.addGroup('Define grids', condition='fromPockets!=2')
+        group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
+                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
+                       help='How to set the inner box.'
+                            'Manually: you will manually set the same x,y,z for every ROI'
+                            'PocketDiameter: the diameter * n of each ROI will be used. You can set n')
+
+        line = group.addLine('Inner box (Angstroms)', condition='innerAction==0',
+                             help='The docked ligand mass center must be inside the inner box radius')
+        line.addParam('innerX', IntParam, default=10, label='X')
+        line.addParam('innerY', IntParam, default=10, label='Y')
+        line.addParam('innerZ', IntParam, default=10, label='Z')
+
+        group.addParam('diameterNin', FloatParam, default=0.8, condition='innerAction==1',
+                       label='Size of inner box vs diameter: ',
+                       help='The diameter * n of each ROI will be used as inner box side')
+
+        group.addParam('outerAction', EnumParam, default=1, label='Determine outer box: ',
+                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
+                       help='How to set the outer box.'
+                            'Manually: you will manually set the same x,y,z for every structural ROI'
+                            'PocketDiameter: the diameter * n of each pocket will be used. You can set n')
+
+        line = group.addLine('Outer box (Angstroms)', condition='outerAction==0',
+                             help='The docked ligand atoms must be inside the outer box radius.')
+        line.addParam('outerX', IntParam, default=30, label='X')
+        line.addParam('outerY', IntParam, default=30, label='Y')
+        line.addParam('outerZ', IntParam, default=30, label='Z')
+
+        group.addParam('diameterNout', FloatParam, default=1.2, condition='outerAction==1',
+                       label='Size of outer box vs diameter: ',
+                       help='The diameter * n of each structural ROI will be used as outer box side')
+
         group = form.addGroup('Docking')
-        group.addParam('posesPerLig', IntParam, default=5,
-                       label='No. Poses to report per ligand: ')
-        group.addParam('dockingMethod', EnumParam, default=0, choices=['Flexible dock (confgen)', 'Rigid dock (rigid)',
-                                                                      'Refine (do not dock, mininplace)',
-                                                                      'Score in place (do not dock, inplace)'],
-                       label='Docking method')
-        group.addParam('dockingPrecision', EnumParam, default=0, choices=['Low (HTVS)','Medium (SP)','High (XP)'],
+        group.addParam('posesPerLig', IntParam, default=5, label='No. Poses to report per ligand: ',
+                       help='Maximum number of final poses to report per ligand')
+        group.addParam('dockingMethod', EnumParam, default=0, label='Docking method',
+                       choices=['Flexible dock (confgen)', 'Rigid dock (rigid)', 'Refine (do not dock, mininplace)',
+                                'Score in place (do not dock, inplace)'],
+                       help='Glide method to use for docking')
+        group.addParam('dockingPrecision', EnumParam, default=0, choices=['Low (HTVS)', 'Medium (SP)', 'High (XP)'],
                        label='Docking precision',
-                       help='You may use a low to high strategy. HTVS takes about 2 s/ligand, SP about 10s, and XP about 10 min.')
+                       help='You may use a low to high strategy. HTVS takes about 2 s/ligand, SP about 10s, and XP '
+                            'about 10 min.')
         group.addParam('maxkeep', IntParam, default=5000, expertLevel=LEVEL_ADVANCED,
                        label='No. Poses to keep per ligand (dock):',
                        help='Number of poses per ligand to keep in initial phase of docking.')
@@ -84,46 +138,77 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        help='Number of poses to keep per ligand for energy minimization. '
                             'If set to -1, the default value is 400, except for XP precision that is 800.')
 
-        form.addSection(label='Ligand sampling')
-        form.addParam('sampleNinversions', BooleanParam, default=True, condition='dockingMethod==0',
+        form.addSection(label='Ligand sampling', expertLevel=LEVEL_ADVANCED,)
+        group = form.addGroup('Grid hydrogen bonds')
+        group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
+                       help='Accept aromatic hydrogens as potential H-bond donors.')
+        group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
+                       condition='HbondDonorAromH',
+                       help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
+                            'The cutoff is applied to the actual (signed) charge, not the absolute value.')
+        group.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
+                       help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
+        group.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
+                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
+                            '(noncovalent interaction) donors')
+        group.addParam('rewardIntraHBonds', BooleanParam, default=False, label='Reward intra H bonds:',
+                      help='Reward intramolecular ligand hydrogen bonds by adding a contribution for each '
+                           'intramolecular hydrogen bond to the GlideScore, and a contribution to Emodel')
+
+        group = form.addGroup('Docking parameters')
+        group.addParam('sampleNinversions', BooleanParam, default=True, condition='dockingMethod==0',
                        label='Sample pyramid nitrogen inversions:')
-        form.addParam('sampleRings', BooleanParam, default=True, condition='dockingMethod==0',
+        group.addParam('sampleRings', BooleanParam, default=True, condition='dockingMethod==0',
                        label='Sample rings:')
-        form.addParam('epikPenalties', BooleanParam, default=False, label='Epik penalties:',
+        group.addParam('epikPenalties', BooleanParam, default=False, label='Epik penalties:',
                       help='Apply penalties for ionization or tautomeric states calculated by Epik')
-        form.addParam('skipMetalEpik', BooleanParam, default=True, label='Skip Epik metal only:',
+        group.addParam('skipMetalEpik', BooleanParam, default=True, label='Skip Epik metal only:',
                       help='Skip Epik-generated states of ligands that are designed for binding to metals. '
                            'This option is useful if the receptor has a metal but the ligand does not bind to it. '
                            'These states are skipped by default if the receptor does not have a metal.')
-        form.addParam('expandedSampling', BooleanParam, default=False, label='Expanded sampling:',
+        group.addParam('expandedSampling', BooleanParam, default=False, label='Expanded sampling:',
                       help='Expand the sampling by bypassing the elimination of poses in the rough scoring stage. '
                            'Useful for fragment docking.')
-        form.addParam('rewardIntraHBonds', BooleanParam, default=False, label='Reward intra H bonds:',
-                      help='Reward intramolecular ligand hydrogen bonds by adding a contribution for each '
-                           'intramolecular hydrogen bond to the GlideScore, and a contribution to Emodel')
-        form.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
-                      help='Accept aromatic hydrogens as potential H-bond donors.')
-        form.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
-                      condition='HbondDonorAromH',
-                      help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
-                           'The cutoff is applied to the actual (signed) charge, not the absolute value.')
-        form.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
-                      help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
-        form.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
-                      help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
-                           '(noncovalent interaction) donors')
 
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        cStep = self._insertFunctionStep('createLigandsFileStep', prerequisites=[])
+        convStep = self._insertFunctionStep('convertStep', prerequisites=[])
+        cStep = self._insertFunctionStep('createLigandsFileStep', prerequisites=[convStep])
         c2Step = self._insertFunctionStep('combineLigandsFilesStep', prerequisites=[cStep])
+        c2Steps = [c2Step]
+
+        inputGrids = self.inputGridSet.get()
+        if self.fromPockets.get() == 0:
+            dStep = self._insertFunctionStep('gridStep', self.inputAtomStruct.get(), prerequisites=c2Steps)
+            c2Steps, inputGrids = [dStep], [self.inputAtomStruct.get()]
+
+        elif self.fromPockets.get() == 1:
+            gridSteps = []
+            for pocket in self.inputStructROIs.get():
+                dStep = self._insertFunctionStep('gridStep', pocket.clone(), prerequisites=c2Steps)
+                gridSteps.append(dStep)
+            c2Steps, inputGrids = gridSteps, self.inputStructROIs.get()
+
         dockSteps = []
-        for grid in self.inputGridSet.get():
-            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=[c2Step])
+        for grid in inputGrids:
+            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=c2Steps)
             dockSteps.append(dStep)
         self._insertFunctionStep('createOutput', prerequisites=dockSteps)
+
+    def convertStep(self):
+        inFile = self.getOriginalReceptorFile()
+
+        if not '.mae' in inFile:
+            maeFile = self._getExtraPath('inputReceptor.maegz')
+            prog = schrodinger_plugin.getHome('utilities/prepwizard')
+            args = ' -WAIT -noprotassign -noimpref -noepik {} {}'. \
+                format(os.path.abspath(inFile), os.path.abspath(maeFile))
+            self.runJob(prog, args, cwd=self._getExtraPath())
+        else:
+            ext = os.path.splitext(inFile)[1]
+            shutil.copy(inFile, self._getExtraPath('inputReceptor{}'.format(ext)))
 
     def createLigandsFileStep(self):
         nt = self.numberOfThreads.get()
@@ -159,30 +244,67 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 #os.remove(self.getAllLigandsFile(suffix=it))
 
 
-    def createLigandsFile(self, ligSet, it):
-        curAllLigandsFile = self.getAllLigandsFile(suffix=it)
-        with open(curAllLigandsFile, 'w') as fh:
-            for small in ligSet:
-                fnSmall = small.getFileName()
-                if not fnSmall.endswith('.mol2'):
-                    fnSmall = self.convert2mol2(fnSmall, it)
-                putMol2Title(fnSmall)
-                with open(fnSmall) as fhLigand:
-                    fh.write(fhLigand.read())
+    def gridStep(self, pocket):
+        if self.fromPockets.get() == 0:
+            inAS = self.inputAtomStruct.get()
+            pdbFile = inAS.getFileName()
+            if not pdbFile.endswith('.pdb'):
+                pdbFile = inAS.convert2PDB(self._getExtraPath('inputStructure.pdb'))
+
+            pocket = self.radius.get()
+            structure, x, y, z = calculate_centerMass(pdbFile)
+            pId = 1
+        else:
+            x, y, z = pocket.calculateMassCenter()
+            pId = pocket.getObjId()
+
+        fnGridDir = self.getGridDir(pId)
+        gridName = self.getGridName(pId)
+        # print('Grid name: ', gridName)
+        makePath(fnGridDir)
+
+        fnJob = os.path.abspath(os.path.join(fnGridDir, gridName)) + '.inp'
+        fh = open(fnJob, 'w')
+        fh.write("GRIDFILE %s.zip\n" % gridName)
+        fh.write("OUTPUTDIR %s\n" % fnGridDir)
+        fh.write("RECEP_FILE %s\n" % os.path.abspath(self.getInputMaeFile()))
+        fh.write("REC_MAECHARGES True\n")
+        fh.write("HBOND_DONOR_AROMH %s\n" % self.HbondDonorAromH.get())
+        if self.HbondDonorAromH.get():
+            fh.write("HBOND_DONOR_AROMH_CHARGE %f\n" % self.HbondDonorAromHCharge.get())
+        fh.write("HBOND_ACCEP_HALO %s\n" % self.HbondAcceptHalo.get())
+        fh.write("HBOND_DONOR_HALO %s\n" % self.HbondDonorHalo.get())
+        fh.write("INNERBOX {},{},{}\n".format(*(self.getInnerBox(pocket))))
+        fh.write("ACTXRANGE %d\n" % self.getOuterBox(pocket)[0])
+        fh.write("ACTYRANGE %d\n" % self.getOuterBox(pocket)[1])
+        fh.write("ACTZRANGE %d\n" % self.getOuterBox(pocket)[2])
+        fh.write("OUTERBOX {},{},{}\n".format(*(self.getOuterBox(pocket))))
+        fh.write("GRID_CENTER %s,%s,%s\n" % (x, y, z))
+        fh.close()
+
+        args = "-WAIT -LOCAL %s.inp" % (gridName)
+        self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=fnGridDir)
 
     def dockingStep(self, grid):
         gridId = grid.getObjId()
-        gridDir = self._getExtraPath('grid_{}/'.format(gridId))
+        if self.fromPockets.get() == 0:
+            gridId = 1
+            gridDir = self.getGridDir(gridId)
+        elif self.fromPockets.get() == 1:
+            gridDir = self.getGridDir(grid.getObjId())
 
-        makePath(gridDir)
-        fnGrid = os.path.join(gridDir, "grid.zip")
-        if not os.path.exists(fnGrid): # Prepared to resume
-            shutil.copy(grid.getFileName(), fnGrid)
+        elif self.fromPockets.get() == 2:
+            gridDir = self._getExtraPath('grid_{}/'.format(gridId))
+
+            makePath(gridDir)
+            fnGrid = os.path.join(gridDir, "grid_{}.zip".format(gridId))
+            if not os.path.exists(fnGrid): # Prepared to resume
+                shutil.copy(grid.getFileName(), fnGrid)
 
         fnIn = os.path.join(gridDir, 'job_{}.inp'.format(gridId))
         if not os.path.exists(fnIn): # Prepared to resume
             with open(fnIn, 'w') as fhIn:
-                fhIn.write("GRIDFILE %s\n" % ("grid.zip"))
+                fhIn.write("GRIDFILE %s\n" % ("grid_{}.zip".format(gridId)))
 
                 if self.dockingMethod.get()==0:
                     fhIn.write("DOCKING_METHOD confgen\n")
@@ -248,11 +370,10 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             if not fnBase in smallDict:
                 smallDict[fnBase] = small.clone()
 
-        if self.mergeOutput:
-            allMaeFile = self.mergeMAEfiles()
+        allMaeFile = self.mergeMAEfiles()
 
         allSmallList = []
-        fnStruct = self.inputGridSet.get().getFirstItem().structureFile.get()
+        fnStruct = self.getInputMaeFile()
         for gridDir in self.getGridDirs(complete=True):
             gridId = gridDir.split('_')[1]
             gridDir = 'grid_{}/'.format(gridId)
@@ -274,10 +395,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     small.ligandEfficiencyLn = pwobj.Float(tokens[4])
                     small.poseFile = pwobj.String("%d@%s" % (i, fnPv))
                     small.setPoseId(i)
-                    if not self.mergeOutput:
-                        small.maeFile = pwobj.String(fnPv)
-                    else:
-                        small.maeFile = pwobj.String(allMaeFile)
+                    small.maeFile = pwobj.String(allMaeFile)
                     small.setMolClass('Schrodinger')
                     small.setDockId(self.getObjId())
                     small.setGridId(gridId)
@@ -285,42 +403,22 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
             allSmallList += smallList
 
-            if not self.mergeOutput:
-                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=gridId)
-                for small in smallList:
-                    outputSet.append(small)
 
-                self.convertedDic = {}
-                print('Converting output to {}: outputSmallMolecules_{}'.
-                      format('mol2', gridId))
-                nameOut = 'outputSmallMolecules_{}'.format(gridId)
-                self.convertOutput(outputSet, nameDir=nameOut)
-                # Updating mols with converted posFiles
-                self.updatePosFiles(outputSet, nameOut)
+        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
+        for small in allSmallList:
+            outputSet.append(small)
 
-                outputSet.setDocked(True)
-                outputSet.proteinFile.set(self.getOriginalReceptorFile())
-                self._defineOutputs(**{nameOut: outputSet})
-                self._defineSourceRelation(self.inputLibrary, outputSet)
+        self.convertedDic = {}
+        # print('Converting output to mol2: outputSmallMolecules')
+        nameOut = 'outputSmallMolecules'
+        self.convertOutput(outputSet, nameDir=nameOut)
+        #Updating mols with converted posFiles
+        self.updatePosFiles(outputSet, nameOut)
 
-        if self.mergeOutput:
-            outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
-            for small in allSmallList:
-                outputSet.append(small)
-
-            self.convertedDic = {}
-            print('Converting output to mol2: outputSmallMolecules')
-            nameOut = 'outputSmallMolecules'
-            self.convertOutput(outputSet, nameDir=nameOut)
-            #Updating mols with converted posFiles
-            self.updatePosFiles(outputSet, nameOut)
-
-            outputSet.setDocked(True)
-            outputSet.proteinFile.set(self.getOriginalReceptorFile())
-            outputSet.structFile = pwobj.String(fnStruct)
-            self._defineOutputs(outputSmallMolecules=outputSet)
-            self._defineSourceRelation(self.inputGridSet, outputSet)
-            self._defineSourceRelation(self.inputLibrary, outputSet)
+        outputSet.setDocked(True)
+        outputSet.proteinFile.set(self.getOriginalReceptorFile())
+        outputSet.structFile = pwobj.String(fnStruct)
+        self._defineOutputs(outputSmallMolecules=outputSet)
 
 
     def _validate(self):
@@ -396,9 +494,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
     def getAllLigandsFile(self, suffix=''):
         return self._getTmpPath('allMoleculesFile{}.mol2'.format(suffix))
 
-    def getOriginalReceptorFile(self):
-        return self.inputGridSet.get().getProteinFile()
-
     def updatePosFiles(self, outSet, outName):
         newMols = []
         for mol in outSet:
@@ -437,3 +532,65 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         command = 'zcat {} | gzip -c > {}'.format(' '.join(maeFiles), outName)
         self.runJob('', command, cwd=self._getExtraPath())
         return self._getExtraPath(outName)
+
+
+    def createLigandsFile(self, ligSet, it):
+        curAllLigandsFile = self.getAllLigandsFile(suffix=it)
+        with open(curAllLigandsFile, 'w') as fh:
+            for small in ligSet:
+                fnSmall = small.getFileName()
+                if not fnSmall.endswith('.mol2'):
+                    fnSmall = self.convert2mol2(fnSmall, it)
+                putMol2Title(fnSmall)
+                with open(fnSmall) as fhLigand:
+                    fh.write(fhLigand.read())
+
+    def getGridDir(self, pocketId):
+        return self._getExtraPath(self.getGridName(pocketId))
+
+    def getGridName(self, pocketId):
+        return 'grid_{}'.format(pocketId)
+
+    def getInputMaeFile(self):
+        maeFile = glob.glob(self._getExtraPath('inputReceptor.mae*'))[0]
+        return maeFile
+
+    def getInnerBox(self, pocket):
+        if self.fromPockets.get() == 0:
+            return 3*[int(pocket * 2 * self.diameterNin.get())]
+        else:
+            if self.innerAction.get() == 0:
+                return self.innerX.get(), self.innerY.get(), self.innerZ.get()
+            else:
+                diam = pocket.getDiameter() * self.diameterNin.get()
+                return [diam, diam, diam]
+
+    def getOuterBox(self, pocket):
+        if self.fromPockets.get() == 0:
+            return 3*[int(pocket * 2 * self.diameterNout.get())]
+        else:
+            if self.outerAction.get() == 0:
+                return self.outerX.get(), self.outerY.get(), self.outerZ.get()
+            else:
+                diam = pocket.getDiameter() * self.diameterNout.get()
+                return [diam, diam, diam]
+
+    def getOriginalReceptorFile(self):
+        if self.fromPockets.get() == 0:
+            inAs = self.inputAtomStruct.get()
+            if hasattr(inAs, '_maeFile'):
+                return getattr(inAs, '_maeFile').get()
+            else:
+                return inAs.getFileName()
+
+        elif self.fromPockets.get() == 1:
+            inFile = self.inputStructROIs.get().getMAEFile()
+            if not inFile:
+                inFile = self.inputStructROIs.get().getProteinFile()
+
+        elif self.fromPockets.get() == 2:
+            inFile = self.inputGridSet.get().getProteinFile()
+        return inFile
+
+
+
