@@ -562,7 +562,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             if self.innerAction.get() == 0:
                 return self.innerX.get(), self.innerY.get(), self.innerZ.get()
             else:
-                diam = pocket.getDiameter() * self.diameterNin.get()
+                diam = int(pocket.getDiameter() * self.diameterNin.get())
                 return [diam, diam, diam]
 
     def getOuterBox(self, pocket):
@@ -572,7 +572,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             if self.outerAction.get() == 0:
                 return self.outerX.get(), self.outerY.get(), self.outerZ.get()
             else:
-                diam = pocket.getDiameter() * self.diameterNout.get()
+                diam = int(pocket.getDiameter() * self.diameterNout.get())
                 return [diam, diam, diam]
 
     def getOriginalReceptorFile(self):

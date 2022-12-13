@@ -24,5 +24,4 @@
 # *
 # **************************************************************************
 
-from .test_sitemap import TestSitemap
-from .test_glide import TestGlideDocking
+from .main_wf import *
