@@ -98,7 +98,7 @@ class ProtSchrodingerPrepWizard(EMProtocol):
         form.addParam('palmitoylation', BooleanParam, default=False, condition='stage1',
                       label='Palmitoylation:',
                       help='Create palmitoylation bonds even if not included in the CONNECT records ( delete hydrogens as needed)')
-        form.addParam('captermini', BooleanParam, default=True, condition='stage1',
+        form.addParam('captermini', BooleanParam, default=False, condition='stage1',
                       label='Add cap termini:',
                       help='Add ACE and NME termini')
         form.addParam('keepFarWat', BooleanParam, default=False, condition='stage1',

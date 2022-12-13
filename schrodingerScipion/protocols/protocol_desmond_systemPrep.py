@@ -235,15 +235,16 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         with open(msjFile, 'w') as f:
             f.write(msjStr)
 
-        cmsName = sysName+'-out.cms'
-        args = ' -m {} {} -o {} -WAIT -JOBNAME {}'.format(msjFile.split('/')[-1], os.path.abspath(maeFile),
+        cmsName = jobName + '-out.cms'
+        args = ' -m {} {} -WAIT -o {} -JOBNAME {}'.format(msjFile.split('/')[-1], os.path.abspath(maeFile),
                                                           cmsName, jobName)
         self.runJob(multisimProg, args, cwd=self._getExtraPath())
 
         cmsStruct = SchrodingerSystem()
-        if os.path.exists(self._getExtraPath(cmsName)):
+        outFile = self._getExtraPath(cmsName)
+        if os.path.exists(outFile):
             cmsFile = os.path.abspath(self._getPath(cmsName))
-            os.rename(self._getExtraPath(cmsName), cmsFile)
+            os.rename(outFile, cmsFile)
 
             cmsStruct.setFileName(cmsFile)
             self._defineOutputs(outputSystem=cmsStruct)
@@ -368,6 +369,6 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
     def prepareTargetFile(self, inFile, outFile):
         prog = schrodingerPlugin.getHome('utilities/prepwizard')
         args = '-WAIT -noprotassign -noimpref -noepik '
-        args += '%s %s' % (os.path.relpath(inFile), os.path.relpath(outFile))
+        args += '%s %s' % (os.path.abspath(inFile), os.path.abspath(outFile))
         self.runJob(prog, args, cwd=self._getPath())
         return outFile
