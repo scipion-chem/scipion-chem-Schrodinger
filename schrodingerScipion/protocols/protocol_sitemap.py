@@ -43,11 +43,12 @@ class ProtSchrodingerSiteMap(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
-                       label='Atomic Structure:', allowsNull=False)
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct", label='Atomic Structure:',
+                      help='Input protein structure where the binding sites will be predicted')
+        form.addParam('maxsites', IntParam, default=5, label='Number of predicted sites:',
+                      help='Maximum numbe rof binding sites to be predicted on the structure')
         form.addParam('jobName', StringParam, label='Job Name:', default='', expertLevel=LEVEL_ADVANCED)
-        form.addParam('maxsites', IntParam, expertLevel=LEVEL_ADVANCED, default=5,
-                       label='Number of predicted sites:')
+
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):

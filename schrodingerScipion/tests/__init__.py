@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    Yunior C. Fonseca Reyna (cfonseca@cnb.csic.es)
+# * Authors:     Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
