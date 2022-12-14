@@ -186,7 +186,6 @@ class ProtSchrodingerDesmondMD(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def simulationStep(self):
-        print('WF:', self.workFlowSteps.get())
 
         lastCheckFile = self.findLastCheckPoint()
         unmergedFile = 'unmerged-simulation.cms'
