@@ -34,12 +34,12 @@ from schrodingerScipion.utils.utils import putMol2Title
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 SMALLMOL, TARGET = 0, 1
+molChoices = {"Maestro": 'maegz', 'PDB': 'pdb', "Sybyl Mol2": 'mol2', "Smiles": 'smi', 'V2000 SD': 'sdf'}
+targetChoices = {"Maestro": 'maegz', 'PDB': 'pdb'}
 
 class ProtSchrodingerConvert(EMProtocol):
     """Convert a set of input ligands or a receptor structure to a specific file format"""
     _label = 'convert'
-    _program = ""
-    _outFormats = ['maegz', 'pdb', 'mol2', 'smi', 'cif', 'sd', 'csv']
 
     saving = False
 
@@ -49,21 +49,20 @@ class ProtSchrodingerConvert(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputType', EnumParam, default=0,
-                       choices=["Small molecules", 'Target structure'],
-                       label='Input type')
+        form.addParam('inputType', EnumParam, default=0, choices=["Small molecules", 'Target structure'],
+                      label='Input type', help='Type of input you want to convert')
         form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
-                      condition='inputType=={}'.format(SMALLMOL),
-                      label='Input set:', allowsNull=False)
+                      condition='inputType=={}'.format(SMALLMOL), label='Input small molecules:',
+                      help='Input small molecules to convert')
         form.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType=={}'.format(SMALLMOL),
-                       choices=["Maestro", 'PDB', "Sybyl Mol2", "Smiles", 'Cif',
-                                'V2000 SD', 'CSV (Smiles with properties)'],
-                       label='Output format')
+                      choices=list(molChoices.keys()), label='Output format',
+                      help='Output format for the small molecules')
         form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct, AtomStruct",
-                      condition='inputType=={}'.format(TARGET), label='Input structure:', allowsNull=False)
+                      condition='inputType=={}'.format(TARGET), label='Input structure:',
+                      help='Input atomic structure to convert')
         form.addParam('outputFormatTarget', EnumParam, default=2, condition='inputType=={}'.format(TARGET),
-                       choices=["Maestro", 'PDB', "Sybyl Mol2"],
-                       label='Output format')
+                      choices=list(targetChoices.keys()), label='Output format',
+                      help='Output format for the atomic structure')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -87,23 +86,28 @@ class ProtSchrodingerConvert(EMProtocol):
 
         fnSmall = mol.smallMoleculeFile.get()
         fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
-        fnOut = self._getExtraPath("{}.{}".format(fnRoot, self._outFormats[self.outputFormatSmall.get()]))
+
+        outFormat = molChoices[self.getEnumText('outputFormatSmall')]
+        fnOut = self._getExtraPath("{}.{}".format(fnRoot, outFormat))
 
         args = '{} {}'.format(fnSmall, fnOut)
 
         self.runJob(progStructConvert, args)
-        if self.outputFormatSmall.get()==2:
+        if outFormat == 'mol2':
             putMol2Title(fnOut)
 
-        self.saveMolecule(fnOut, self.outputSmallMolecules)
+        self.saveMolecule(fnOut, self.outputSmallMolecules, mol)
 
     def convertTargetStep(self):
         progStructConvert = Plugin.getHome('utilities/structconvert')
         fnStructure = self.inputStructure.get().getFileName()
-        args = fnStructure
         fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
-        fnOut = self._getExtraPath("{}.{}".format(fnRoot, self._outFormats[self.outputFormatTarget.get()]))
-        args += fnOut
+
+        outFormat = targetChoices[self.getEnumText('outputFormatTarget')]
+        fnOut = self._getExtraPath("{}.{}".format(fnRoot, outFormat))
+
+        args = '{} {}'.format(fnStructure, fnOut)
+
         self.runJob(progStructConvert, args)
 
         if fnOut.endswith('.maegz'):
@@ -117,14 +121,25 @@ class ProtSchrodingerConvert(EMProtocol):
         else:
             self._defineOutputs(outputStructure=self.target)
 
-    def saveMolecule(self, molFn, molSet):
+    def saveMolecule(self, molFn, molSet, oriMol):
         while self.saving:
             time.sleep(0.2)
         self.saving = True
-        smallMolecule = SmallMolecule(smallMolFilename=molFn, molName='guess')
+        smallMolecule = SmallMolecule()
+        smallMolecule.copy(oriMol, copyId=False)
+        smallMolecule.setFileName(molFn)
+        confId = self.getConfId(molFn, oriMol.getMolName())
+        if confId:
+            smallMolecule.setConfId(molFn.split('-')[-1].split('.')[0])
+
         molSet.append(smallMolecule.clone())
         self.saving = False
 
+    def getConfId(self, molFn, molName):
+        try:
+            return molFn.split(molName)[1].split('-')[1].split('.')[0]
+        except:
+            return None
 
     def _summary(self):
         summary=[]

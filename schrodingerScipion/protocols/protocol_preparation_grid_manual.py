@@ -35,17 +35,20 @@ from pwem.objects.data import AtomStruct
 from pwem.convert.atom_struct import AtomicStructHandler
 
 from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.objects import SchrodingerGrid
+from schrodingerScipion.objects import SchrodingerGrid, SetOfSchrodingerGrids
 
 class ProtSchrodingerGridManual(EMProtocol):
-    """Calls glide GUI to prepare a grid"""
+    """Calls glide GUI to prepare a grid.
+    Please do not change the default JobNames and close Maestro only after all the jobs are finished"""
     _label = 'grid definition manual (glide)'
     _program = ""
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct, SchrodingerAtomStruct",
-                       label='Atomic Structure:', allowsNull=False)
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct", label='Atomic Structure:',
+                      help='Input structure to generate the schrodinger grids on.'
+                           'A tutorial for grid generation can be found at '
+                           'https://www.youtube.com/watch?v=_AUKLGtrBR8')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -53,29 +56,65 @@ class ProtSchrodingerGridManual(EMProtocol):
         self._insertFunctionStep('createOutput')
 
     def preparationStep(self):
-        if isinstance(self.inputStructure.get(),AtomStruct):
-            fnIn = self._getExtraPath("atomStructIn.pdb")
-            aStruct1 = AtomicStructHandler(self.inputStructure.get().getFileName())
-            aStruct1.write(fnIn)
-            fnIn='extra/atomStructIn.pdb'
-            self.runJob(schrodinger_plugin.getHome('maestro'), "-b %s"%fnIn, cwd=self._getPath())
+        oriFile = self.inputStructure.get().getFileName()
+        _, inExt = os.path.splitext(oriFile)
+
+        if inExt in ['.pdb', '.mae', '.maegz']:
+            fnIn = os.path.abspath(self._getExtraPath("atomStructIn{}".format(inExt)))
+            createLink(oriFile, fnIn)
+
         else:
-            fnIn = self._getExtraPath("atomStructIn")+self.inputStructure.get().getExtension()
-            createLink(self.inputStructure.get().getFileName(),fnIn)
-            fnIn=os.path.join('extra',os.path.split(fnIn)[1])
-            self.runJob(schrodinger_plugin.getHome('maestro'), "-m %s"%fnIn, cwd=self._getPath())
+            fnIn = os.path.abspath(self._getExtraPath("atomStructIn.pdb"))
+            aStruct1 = AtomicStructHandler(oriFile)
+            aStruct1.write(fnIn)
+
+        self.runJob(schrodinger_plugin.getHome('maestro'), " %s" % fnIn, cwd=self._getPath())
 
     def createOutput(self):
+        outGrids = SetOfSchrodingerGrids(filename=self._getPath('SchGrids.sqlite'))
         fnStruct = glob.glob(self._getExtraPath("atomStructIn*"))[0]
 
         for fnDir in glob.glob(self._getPath('glide-*')):
             fnBase = os.path.split(fnDir)[1]
-            fnGrid = os.path.join(fnDir,'%s.zip'%fnBase)
-            if os.path.exists(fnGrid):
-                gridFile=SchrodingerGrid(filename=fnGrid)
-                gridFile.structureFile = String(fnStruct)
+            gridFile, gridArgs = self.getGridArgs(fnBase)
 
-                n = fnDir.split('glide-')[1]
-                outputDict = {'outputGrid%s' % n: gridFile}
-                self._defineOutputs(**outputDict)
-                self._defineSourceRelation(self.inputStructure, gridFile)
+            fnGrid = os.path.join(fnDir, gridFile)
+            gridId = int(fnDir.split('glide-grid_')[1])
+            if os.path.exists(fnGrid):
+                gridObj = SchrodingerGrid(filename=fnGrid, **gridArgs)
+                gridObj._proteinFile = String(fnStruct)
+                gridObj.setObjId(gridId)
+
+                oriFile = self.inputStructure.get().getFileName()
+                if '.mae' in oriFile:
+                    gridObj.structureFile = String(oriFile)
+
+                outGrids.append(gridObj)
+
+        outGrids.buildBBoxesPML()
+        self._defineOutputs(outputGrids=outGrids)
+        self._defineSourceRelation(self.inputStructure, outGrids)
+
+
+    def getGridArgs(self, fnBase):
+        with open(self._getPath('{}/{}.in'.format(fnBase, fnBase))) as f:
+            for line in f:
+                if line.startswith('FORCEFIELD'):
+                    ff = line.split()[1].strip()
+
+                elif line.startswith('GRID_CENTER'):
+                    cMass = line.replace(',', '').split()[1:]
+
+                elif line.startswith('GRIDFILE'):
+                    gridFile = line.split()[1].strip()
+
+                elif line.startswith('INNERBOX'):
+                    iBox = line.replace(',', '').split()[1:]
+
+                elif line.startswith('OUTERBOX'):
+                    oBox = line.replace(',', '').split()[1:]
+
+        return gridFile, {'centerX': cMass[0], 'centerY': cMass[1], 'centerZ': cMass[2],
+                          'innerX': iBox[0], 'innerY': iBox[1], 'innerZ': iBox[2],
+                          'outerX': oBox[0], 'outerY': oBox[1], 'outerZ': oBox[2],
+                          'forceField': ff}

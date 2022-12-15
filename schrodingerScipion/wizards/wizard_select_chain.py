@@ -33,10 +33,26 @@ information such as name and number of residues.
 """
 
 # Imports
-from pwem.wizards import SelectChainWizard
-from schrodingerScipion.protocols.protocol_preparation_wizard import ProtSchrodingerPrepWizard
+from pwchem.wizards import SelectChainWizardQT, SelectResidueWizardQT, AddResidueWizard
+from schrodingerScipion.protocols import ProtSchrodingerPrepWizard, ProtSchrodingerPrime
 
-SelectChainWizard().addTarget(protocol=ProtSchrodingerPrepWizard,
-                              targets=['chain_name'],
-                              inputs=['inputAtomStruct'],
-                              outputs=['chain_name'])
+SelectChainWizardQT().addTarget(protocol=ProtSchrodingerPrepWizard,
+                                targets=['chain_name'],
+                                inputs=['inputAtomStruct'],
+                                outputs=['chain_name'])
+
+SelectChainWizardQT().addTarget(protocol=ProtSchrodingerPrime,
+                                targets=['resChain'],
+                                inputs=['inputStructure'],
+                                outputs=['resChain'])
+
+SelectResidueWizardQT().addTarget(protocol=ProtSchrodingerPrime,
+                                  targets=['resPosition'],
+                                  inputs=['inputStructure', 'resChain'],
+                                  outputs=['resPosition'])
+
+AddResidueWizard().addTarget(protocol=ProtSchrodingerPrime,
+                             targets=['addResidue'],
+                             inputs=['resChain', 'resPosition'],
+                             outputs=['residueList'])
+

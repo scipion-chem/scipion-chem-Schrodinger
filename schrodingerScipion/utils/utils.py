@@ -25,7 +25,7 @@
 # **************************************************************************
 
 import numpy as np
-import os
+import os, subprocess
 from pyworkflow.utils.path import moveFile
 import pyworkflow.object as pwobj
 
@@ -86,7 +86,20 @@ def sortDockingResults(smallList):
 
     return np.argsort(h)
 
+def unzipMaegz(inFile, outFile=None):
+    if inFile.endswith('.mae'):
+        return inFile
+    elif inFile.endswith('.maegz'):
+        if not outFile:
+            outFile = inFile.replace('.maegz', '.mae')
+        subprocess.check_call('zcat {} > {}'.format(inFile, outFile), shell=True)
+        return outFile
+    else:
+        print('Format not recognized. File must be a .maegz')
+
 def getChargeFromMAE(maeFile):
+    maeFile = unzipMaegz(maeFile)
+
     charge = 0
     with open(maeFile) as f:
         keys, values = False, False

@@ -36,14 +36,16 @@ from schrodingerScipion import Plugin as schrodinger_plugin
 from schrodingerScipion.objects import SchrodingerAtomStruct
 
 class ProtSchrodingerPrepWizardManual(EMProtocol):
-    """Calls the preparation wizard GUI"""
+    """Calls the preparation wizard GUI.
+    Please do not change the default JobNames and close Maestro only after all the jobs are finished"""
     _label = 'target preparation manual (prepwizard)'
     _program = ""
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct, SchrodingerAtomStruct",
-                       label='Atomic Structure:', allowsNull=False)
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct", label='Atomic Structure to prepare: ',
+                      help='Input structure to prepare. A tutorial can be found at '
+                           'https://www.youtube.com/watch?v=YRFROyN88Fw&ab_channel=Schr%C3%B6dingerTV')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -51,27 +53,29 @@ class ProtSchrodingerPrepWizardManual(EMProtocol):
         self._insertFunctionStep('createOutput')
 
     def preparationStep(self):
-        if isinstance(self.inputStructure.get(),AtomStruct):
-            fnIn = self._getExtraPath("atomStructIn.pdb")
-            aStruct1 = AtomicStructHandler(self.inputStructure.get().getFileName())
-            aStruct1.write(fnIn)
-            fnIn='extra/atomStructIn.pdb'
-        else:
-            fnIn = self._getExtraPath("atomStructIn.mae")
-            createLink(self.inputStructure.get().getFileName(),fnIn)
-            fnIn='extra/atomStructIn.mae'
 
-        self.runJob(schrodinger_plugin.getHome('maestro'), "-b %s"%fnIn, cwd=self._getPath())
+        oriFile = self.inputStructure.get().getFileName()
+        _, inExt = os.path.splitext(oriFile)
+
+        if inExt in ['.pdb', '.mae', '.maegz']:
+            fnIn = os.path.abspath(self._getExtraPath("atomStructIn{}".format(inExt)))
+            createLink(oriFile, fnIn)
+
+        else:
+            fnIn = os.path.abspath(self._getExtraPath("atomStructIn.pdb"))
+            aStruct1 = AtomicStructHandler(oriFile)
+            aStruct1.write(fnIn)
+
+        self.runJob(schrodinger_plugin.getHome('maestro'), " %s" % fnIn, cwd=self._getPath())
 
     def createOutput(self):
-        files = [self._getPath('prepwizard_workdir/%s'%file) \
-                               for file in os.listdir(self._getPath("prepwizard_workdir")) \
-                                           if (file.lower().endswith('out.mae'))]
-        if len(files)>0:
+        files = [self._getPath('prepwizard_workdir/%s'%file)
+                 for file in os.listdir(self._getPath("prepwizard_workdir")) if (file.lower().endswith('out.mae'))]
+        if len(files) > 0:
             files.sort(key=os.path.getmtime)
-            filesSorted=sorted(files,key=os.path.getmtime)
+            filesSorted = sorted(files, key=os.path.getmtime)
 
-            maeFile=SchrodingerAtomStruct()
+            maeFile = SchrodingerAtomStruct()
             maeFile.setFileName(filesSorted[-1])
 
             self._defineOutputs(outputStructure=maeFile)
