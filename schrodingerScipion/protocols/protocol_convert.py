@@ -54,13 +54,13 @@ class ProtSchrodingerConvert(EMProtocol):
         form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
                       condition='inputType=={}'.format(SMALLMOL), label='Input small molecules:',
                       help='Input small molecules to convert')
-        form.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType=={}'.format(SMALLMOL),
+        form.addParam('outputFormatSmall', EnumParam, default=0, condition='inputType=={}'.format(SMALLMOL),
                       choices=list(molChoices.keys()), label='Output format',
                       help='Output format for the small molecules')
         form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct, AtomStruct",
                       condition='inputType=={}'.format(TARGET), label='Input structure:',
                       help='Input atomic structure to convert')
-        form.addParam('outputFormatTarget', EnumParam, default=2, condition='inputType=={}'.format(TARGET),
+        form.addParam('outputFormatTarget', EnumParam, default=0, condition='inputType=={}'.format(TARGET),
                       choices=list(targetChoices.keys()), label='Output format',
                       help='Output format for the atomic structure')
 
@@ -153,16 +153,10 @@ class ProtSchrodingerConvert(EMProtocol):
             elif self.outputFormatSmall.get() == 3:
                 summary.append('Converted to Smiles')
             elif self.outputFormatSmall.get() == 4:
-                summary.append('Converted to Cif')
-            elif self.outputFormatSmall.get() == 5:
                 summary.append('Converted to V2000 SD')
-            elif self.outputFormatSmall.get() == 6:
-                summary.append('Converted to CSV (Smiles with properties)')
         else:
             if self.outputFormatTarget.get() == 0:
                 summary.append('Converted to Maestro')
             elif self.outputFormatTarget.get() == 1:
                 summary.append('Converted to PDB')
-            elif self.outputFormatTarget.get() == 2:
-                summary.append('Converted to Sybyl Mol2')
         return summary
