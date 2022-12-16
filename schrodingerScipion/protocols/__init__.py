@@ -25,14 +25,12 @@
 # **************************************************************************
 
 from .protocol_preparation_wizard import ProtSchrodingerPrepWizard
-from .protocol_preparation_wizard_manual import ProtSchrodingerPrepWizardManual
 from .protocol_prime import ProtSchrodingerPrime
 from .protocol_ligprep import ProtSchrodingerLigPrep
 from .protocol_convert import ProtSchrodingerConvert
 from .protocol_splitStructure import ProtSchrodingerSplitStructure
-from .protocol_preparation_grid_manual import ProtSchrodingerGridManual
 from .protocol_glide_docking import ProtSchrodingerGlideDocking
 from .protocol_sitemap import ProtSchrodingerSiteMap
-from .protocol_preparation_grid_sitemap import ProtSchrodingerGridSiteMap
+from .protocol_preparation_grid import ProtSchrodingerGrid
 from .protocol_desmond_systemPrep import ProtSchrodingerDesmondSysPrep
 from .protocol_desmond_simulation import ProtSchrodingerDesmondMD
