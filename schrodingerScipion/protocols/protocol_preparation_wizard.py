@@ -145,7 +145,7 @@ class ProtSchrodingerPrepWizard(EMProtocol):
         form.addParam('force', EnumParam, default=1, choices=["2005", "3"],
                       condition='stage3 and not manual', label='OPLS force field:')
 
-        form.addSection(label='Stage 4. Ionization and tautomeric states of HET groups (Epik)')
+        form.addSection(label='Stage 4. Ionization and tautomerization (Epik)')
         form.addParam('manual4', LabelParam, label='All options can be modified manually from Maestro GUI',
                       condition='manual')
         form.addParam('stage4', BooleanParam, default=False, label='Stage 4 preparation: ', condition='not manual')
