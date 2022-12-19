@@ -121,6 +121,7 @@ class SchrodingerGrid(data.EMFile):
         self._outerY = Integer(kwargs.get('outerY', None))
         self._outerZ = Integer(kwargs.get('outerZ', None))
 
+        self._forceField = String(kwargs.get('forceField', None))
         self._proteinFile = String(kwargs.get('proteinFile', None))
 
     def __str__(self):

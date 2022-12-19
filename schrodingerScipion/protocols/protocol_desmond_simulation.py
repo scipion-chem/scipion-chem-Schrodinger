@@ -25,7 +25,7 @@
 # **************************************************************************
 
 import random as rd
-import glob
+import glob, os
 from subprocess import check_call
 from pyworkflow.protocol.params import *
 from pwem.protocols import EMProtocol
@@ -186,6 +186,7 @@ class ProtSchrodingerDesmondMD(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def simulationStep(self):
+
         lastCheckFile = self.findLastCheckPoint()
         unmergedFile = 'unmerged-simulation.cms'
         self.jobName = self.getCurrentJobName()
@@ -264,7 +265,8 @@ class ProtSchrodingerDesmondMD(EMProtocol):
             errors += self.validateAnneal(msjDic)
         else:
             workSteps = self.workFlowSteps.get().split('\n')
-            workSteps.remove('')
+            if '' in workSteps:
+                workSteps.remove('')
             for wStep in workSteps:
                 msjDic = eval(wStep)
                 msjDic = self.addDefaultForMissing(msjDic)
@@ -348,7 +350,8 @@ class ProtSchrodingerDesmondMD(EMProtocol):
             msj_str += self.buildSimulateStr(msjDic)
         else:
             workSteps = self.workFlowSteps.get().split('\n')
-            workSteps.remove('')
+            if '' in workSteps:
+                workSteps.remove('')
             for wStep in workSteps:
                 msjDic = eval(wStep)
                 msj_str += self.buildSimulateStr(msjDic)

@@ -41,22 +41,22 @@ class ProtSchrodingerSplitStructure(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct",
-                      label='Input structure:', allowsNull=False)
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
+                      label='Input structure:',)
         form.addParam('splitMode', EnumParam, default=0,
-                       choices=["Chain","Molecule","Residue","Ligand","PDB"],
+                       choices=["Chain", "Ligand", "PDB"],
                        label='Split mode',
-                       help='Mode=pdb will split the structure into 1) receptor, 2) each individual ligand, '
-                            '3) all non-metal ions and cofactors, 4) all waters. By default, mode=chain. '
-                            'Use mode=ligand to remove ligands')
+                       help='Split structures by chain, ligand or '
+                            'pdbMode=pdb will split the structure into 1) receptor, 2) each individual ligand, '
+                            '3) all non-metal ions and cofactors, 4) all waters. By default')
         form.addParam('mergeLigands', BooleanParam, default=False, condition="splitMode==0",
                       label='Merge ligands with the closest chain')
         form.addParam('mergeWaters', BooleanParam, default=False, condition="splitMode==0",
                       label='Merge waters with the closest chain')
         form.addParam('keepProperties', BooleanParam, default=False,
                       label='Keep properties')
-        form.addParam('groupWaters', BooleanParam, default=False, condition="splitMode!=4",
-                      label='Merge waters with the closest chain')
+        form.addParam('groupWaters', BooleanParam, default=False, condition="splitMode!=2",
+                      label='Group waters in structure')
         form.addParam('splitAll', BooleanParam, default=False,
                       label='Split cofactors and metals into different structures')
         form.addParam('ligandASL', StringParam, default="", expertLevel=LEVEL_ADVANCED,
@@ -67,11 +67,11 @@ class ProtSchrodingerSplitStructure(EMProtocol):
                       label='ASL used to define cofactor structures',
                       help='For help on ASL (Atom Specification Language), see Chap. 3 of '
                            'http://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
-        form.addParam('positiveASL', StringParam, default="", expertLevel=LEVEL_ADVANCED, condition="splitMode==4",
+        form.addParam('positiveASL', StringParam, default="", expertLevel=LEVEL_ADVANCED, condition="splitMode==2",
                       label='ASL used to define non-metal positive ions',
                       help='For help on ASL (Atom Specification Language), see Chap. 3 of '
                            'http://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
-        form.addParam('negativeASL', StringParam, default="", expertLevel=LEVEL_ADVANCED, condition="splitMode==4",
+        form.addParam('negativeASL', StringParam, default="", expertLevel=LEVEL_ADVANCED, condition="splitMode==2",
                       label='ASL used to define negative ions',
                       help='For help on ASL (Atom Specification Language), see Chap. 3 of '
                            'http://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
@@ -89,12 +89,8 @@ class ProtSchrodingerSplitStructure(EMProtocol):
             if self.mergeWaters.get():
                 args+=" -merge_waters_with_chain"
         elif self.splitMode.get()==1:
-            args+=" -m molecule"
-        elif self.splitMode.get()==2:
-            args+=" -m residue"
-        elif self.splitMode.get()==3:
             args+=" -m ligand"
-        elif self.splitMode.get()==4:
+        elif self.splitMode.get()==2:
             args+=" -m pdb"
             if self.positiveASL.get()!="":
                 args+=' -positive_ion_asl "%s"'%self.positiveASL.get()
@@ -102,7 +98,7 @@ class ProtSchrodingerSplitStructure(EMProtocol):
                 args+=' -negative_ion_asl "%s"'%self.negativeASL.get()
         if self.keepProperties.get():
             args+=" --keep_properties"
-        if self.splitMode.get()!=4 and self.groupWaters.get():
+        if self.splitMode.get()!=3 and self.groupWaters.get():
             args+=" -groupwaters"
         if self.splitAll.get():
             args+=" -splitall"
@@ -113,8 +109,10 @@ class ProtSchrodingerSplitStructure(EMProtocol):
         args+=" -many_files %s %s"%(self.inputStructure.get().getFileName(),
                                     self._getExtraPath('output.maegz'))
 
-        self.runJob(Plugin.getHome('run'),args)
-        def getNumber(fn,suffix):
+        self.runJob(Plugin.getHome('run'), args)
+
+
+        def getNumber(fn, suffix):
             fnBase = os.path.splitext(os.path.split(fn)[1])[0]
             tokens = fnBase.split(suffix)
             return tokens[1]
@@ -122,7 +120,13 @@ class ProtSchrodingerSplitStructure(EMProtocol):
         for fn in glob.glob(self._getExtraPath("output*")):
             if "_receptor" in fn:
                 target = SchrodingerAtomStruct(filename=fn)
-                number = getNumber(fn,"_receptor")
+                number = getNumber(fn, "_receptor")
+                outputDict = {'outputStructure%s' % number: target}
+                self._defineOutputs(**outputDict)
+                self._defineSourceRelation(self.inputStructure, target)
+            elif "_chain" in fn:
+                target = SchrodingerAtomStruct(filename=fn)
+                number = getNumber(fn, "_chain")
                 outputDict = {'outputStructure%s' % number: target}
                 self._defineOutputs(**outputDict)
                 self._defineSourceRelation(self.inputStructure, target)

@@ -38,7 +38,7 @@ import pyworkflow.utils as pwutils
 from .bibtex import _bibtexStr
 from .constants import *
 
-_logo = 'SchrodingerLogo.png'
+_logo = 'schrodinger_logo.png'
 SCHRODINGER_DIC = {'name': 'schrodinger', 'version': '2021-3', 'home': 'SCHRODINGER_HOME'}
 
 class Plugin(pwem.Plugin):

@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, time, subprocess
+import os, time
 import random as rd
 from subprocess import check_call
 
@@ -43,6 +43,7 @@ from schrodingerScipion.utils import getChargeFromMAE
 multisimProg = schrodingerPlugin.getHome('utilities/multisim')
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')
 structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
+maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
 progLigPrep = schrodingerPlugin.getHome('ligprep')
 
 STRUCTURE, LIGAND = 0, 1
@@ -235,15 +236,16 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         with open(msjFile, 'w') as f:
             f.write(msjStr)
 
-        cmsName = sysName+'-out.cms'
-        args = ' -m {} {} -o {} -WAIT -JOBNAME {}'.format(msjFile.split('/')[-1], os.path.abspath(maeFile),
+        cmsName = jobName + '-out.cms'
+        args = ' -m {} {} -WAIT -o {} -JOBNAME {}'.format(msjFile.split('/')[-1], os.path.abspath(maeFile),
                                                           cmsName, jobName)
         self.runJob(multisimProg, args, cwd=self._getExtraPath())
 
         cmsStruct = SchrodingerSystem()
-        if os.path.exists(self._getExtraPath(cmsName)):
+        outFile = self._getExtraPath(cmsName)
+        if os.path.exists(outFile):
             cmsFile = os.path.abspath(self._getPath(cmsName))
-            os.rename(self._getExtraPath(cmsName), cmsFile)
+            os.rename(outFile, cmsFile)
 
             cmsStruct.setFileName(cmsFile)
             self._defineOutputs(outputSystem=cmsStruct)
@@ -352,22 +354,28 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
     def prepareLigandFile(self, sdfFile, maeFile=None):
         # Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+        baseName = os.path.splitext(os.path.basename(sdfFile))[0]
         if not sdfFile.endswith('.sdf'):
             sdfFile = convertToSdf(self, sdfFile)
 
-        if not maeFile:
-            baseName = os.path.splitext(os.path.basename(sdfFile))[0]
-            maeFile = os.path.abspath(os.path.join(self._getExtraPath(baseName + '.maegz')))
-
-        args = " -i 1 -nt -ns -a -isd {} -omae {}".format(sdfFile, maeFile)
-        subprocess.check_call([progLigPrep, *args.split()])
-        while not os.path.exists(maeFile):
+        tmpmaeFile = os.path.abspath(self._getExtraPath(baseName + '_tmp.maegz'))
+        args = " -R h -isd {} -omae {}".format(sdfFile, tmpmaeFile)
+        self.runJob(progLigPrep, args, cwd=self._getExtraPath())
+        while not os.path.exists(tmpmaeFile):
             time.sleep(0.2)
+
+        if not maeFile:
+            maeFile = os.path.abspath(self._getExtraPath(baseName + '.maegz'))
+
+        args = " -n 1 {} -o {}".format(tmpmaeFile, maeFile)
+        self.runJob(maeSubsetProg, args, cwd=self._getExtraPath())
+
+        os.remove(tmpmaeFile)
         return maeFile
 
     def prepareTargetFile(self, inFile, outFile):
         prog = schrodingerPlugin.getHome('utilities/prepwizard')
         args = '-WAIT -noprotassign -noimpref -noepik '
-        args += '%s %s' % (inFile, outFile)
+        args += '%s %s' % (os.path.abspath(inFile), os.path.abspath(outFile))
         self.runJob(prog, args, cwd=self._getPath())
         return outFile

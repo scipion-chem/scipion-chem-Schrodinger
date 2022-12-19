@@ -26,7 +26,8 @@
 import os, json
 from pwchem.utils import clean_PDB
 
-from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, FloatParam, IntParam, EnumParam
+from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, FloatParam, \
+  IntParam, EnumParam, LabelParam
 from pyworkflow.utils.path import createLink
 from pyworkflow.object import String
 
@@ -42,7 +43,7 @@ class ProtSchrodingerPrepWizard(EMProtocol):
     _program = ""
 
     def _cleanStructureParams(self, form):
-        clean = form.addGroup("Clean atomic structure")
+        clean = form.addGroup("Clean atomic structure", condition='not manual')
         clean.addParam('cleanPDB', BooleanParam, default=False, label='Clean PDB: ')
         clean.addParam("waters", BooleanParam,
                        label='Remove waters', condition='cleanPDB',
@@ -72,84 +73,118 @@ class ProtSchrodingerPrepWizard(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct, SchrodingerAtomStruct",
-                       label='Atomic Structure:', allowsNull=False)
+        form.addParam('manual', BooleanParam, default=False, label='Perform preparation manually: ',
+                      help='Perform preparation manually using Maestro GUI. A tutorial can be found at '
+                           'https://www.youtube.com/watch?v=YRFROyN88Fw&ab_channel=Schr%C3%B6dingerTV')
+
+        form.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
+                      label='Input Atomic Structure: ')
+
         self._cleanStructureParams(form)
         form.addSection(label='Stage 1')
-        form.addParam('stage1', BooleanParam, default=False, label='Stage 1 preparation:')
+        form.addParam('manual1', LabelParam, label='All options can be modified manually from Maestro GUI',
+                      condition='manual')
+        form.addParam('stage1', BooleanParam, default=False, label='Stage 1 preparation:', condition='not manual')
 
-        form.addParam('fillSideChains', BooleanParam, default=True, condition='stage1',
+        form.addParam('fillSideChains', BooleanParam, default=True, condition='stage1 and not manual',
                       label='Fill side chains:',
                       help='Fill missing side chains Prime')
-        form.addParam('fillLoops', BooleanParam, default=True, condition='stage1',
+        form.addParam('fillLoops', BooleanParam, default=True, condition='stage1 and not manual',
                       label='Fill loops:',
                       help='Fill missing loops with Prime')
-        form.addParam('disulfides', BooleanParam, default=True, condition='stage1',
+        form.addParam('disulfides', BooleanParam, default=True, condition='stage1 and not manual',
                       label='Create bonds to proximal Sulfurs:',
                       help='Delete hydrogens as needed')
-        form.addParam('mse', BooleanParam, default=True, condition='stage1',
+        form.addParam('mse', BooleanParam, default=True, condition='stage1 and not manual',
                       label='Convert Selenomethionine residues to Methionines:')
         form.addParam('hydrogens', EnumParam, default=0, choices=["Don't add hydrogens", "Delete and re-add hydrogens"],
-                      condition='stage1',
-                      label='Hydrogen treatment:')
-        form.addParam('glycosylation', BooleanParam, default=False, condition='stage1',
+                      condition='stage1 and not manual', label='Hydrogen treatment:')
+        form.addParam('glycosylation', BooleanParam, default=False, condition='stage1 and not manual',
                       label='Glycosylation:',
                       help='Create bonds to N-linked and O-linked sugars (delete hydrogens as needed)')
-        form.addParam('palmitoylation', BooleanParam, default=False, condition='stage1',
+        form.addParam('palmitoylation', BooleanParam, default=False, condition='stage1 and not manual',
                       label='Palmitoylation:',
                       help='Create palmitoylation bonds even if not included in the CONNECT records ( delete hydrogens as needed)')
-        form.addParam('captermini', BooleanParam, default=True, condition='stage1',
+        form.addParam('captermini', BooleanParam, default=False, condition='stage1 and not manual',
                       label='Add cap termini:',
                       help='Add ACE and NME termini')
-        form.addParam('keepFarWat', BooleanParam, default=False, condition='stage1',
+        form.addParam('keepFarWat', BooleanParam, default=False, condition='stage1 and not manual',
                       label='Keep far waters:',
                       help="Don't delete waters far from het groups")
-        form.addParam('watdist', FloatParam, default=5, condition='stage1 and keepFarWat',
+        form.addParam('watdist', FloatParam, default=5, condition='stage1 and keepFarWat and not manual',
                       label='Water distance cutoff (A)',
                       help='Distance threshold for far waters')
-        form.addParam('treatMetals', BooleanParam, default=True, condition='stage1',
+        form.addParam('treatMetals', BooleanParam, default=True, condition='stage1 and not manual',
                       label='Treat metals:',
                       help="Adding zero-order bonds, etc")
 
         form.addSection(label='Stage 2. Protonation (Protassign)')
-        form.addParam('stage2', BooleanParam, default=False, label='Stage 2 preparation:')
-        form.addParam('sampleWaters', BooleanParam, default=True, condition='stage2',
+        form.addParam('manual2', LabelParam, label='All options can be modified manually from Maestro GUI',
+                      condition='manual')
+        form.addParam('stage2', BooleanParam, default=False, label='Stage 2 preparation:', condition='not manual')
+        form.addParam('sampleWaters', BooleanParam, default=True, condition='stage2 and not manual',
                       label='Sample waters:')
-        form.addParam('xtal', BooleanParam, default=False, condition='stage2',
+        form.addParam('xtal', BooleanParam, default=False, condition='stage2 and not manual',
                       label='Use crystal symmetry:')
-        form.addParam('propKa', BooleanParam, default=False, condition='stage2',
+        form.addParam('propKa', BooleanParam, default=False, condition='stage2 and not manual',
                       label='Adjust protonation to a specific pH:')
-        form.addParam('propKapH', FloatParam, default=7, condition='stage2 and propKa',
+        form.addParam('propKapH', FloatParam, default=7, condition='stage2 and propKa and not manual',
                       label='pH:')
-        form.addParam('minadjh', BooleanParam, default=True, condition='stage2',
+        form.addParam('minadjh', BooleanParam, default=True, condition='stage2 and not manual',
                       label='Minimize all adjustable hydrogens:',
                       help='Titratable hydrogens, water hydrogens, hydroxyls, thiols, and ASN/GLN carboxamide hydrogens')
 
         form.addSection(label='Stage 3. Restrained minimization (Impref)')
-        form.addParam('stage3', BooleanParam, default=False, label='Stage 3 preparation:')
-        form.addParam('rmsdD', FloatParam, default=0.3, condition='stage3',
+        form.addParam('manual3', LabelParam, label='All options can be modified manually from Maestro GUI',
+                      condition='manual')
+        form.addParam('stage3', BooleanParam, default=False, label='Stage 3 preparation:', condition='not manual')
+        form.addParam('rmsdD', FloatParam, default=0.3, condition='stage3 and not manual',
                       label='RMSD cutoff:')
-        form.addParam('fix', BooleanParam, default=False, condition='stage3',
+        form.addParam('fix', BooleanParam, default=False, condition='stage3 and not manual',
                       label='Fix heavy atoms:', help='Minimize hydrogens only')
-        form.addParam('force', EnumParam, default=1, choices=["2005","3"],
-                      condition='stage3', label='OPLS force field:')
+        form.addParam('force', EnumParam, default=1, choices=["2005", "3"],
+                      condition='stage3 and not manual', label='OPLS force field:')
 
-        form.addSection(label='Stage 4. Ionization and tautomeric states of HET groups (Epik)')
-        form.addParam('stage4', BooleanParam, default=False, label='Stage 4 preparation:')
-        form.addParam('ms', BooleanParam, default=False, condition='stage4',
+        form.addSection(label='Stage 4. Ionization and tautomerization (Epik)')
+        form.addParam('manual4', LabelParam, label='All options can be modified manually from Maestro GUI',
+                      condition='manual')
+        form.addParam('stage4', BooleanParam, default=False, label='Stage 4 preparation: ', condition='not manual')
+        form.addParam('ms', BooleanParam, default=False, condition='stage4 and not manual',
                       label='Apply Max. States constrain:')
-        form.addParam('msN', IntParam, default=1, condition='stage4 and ms',
+        form.addParam('msN', IntParam, default=1, condition='stage4 and ms and not manual',
                       label='Max. Number of states:')
-        form.addParam('epikPh', FloatParam, default=7, condition='stage4',
+        form.addParam('epikPh', FloatParam, default=7, condition='stage4 and not manual',
                       label='pH:')
-        form.addParam('epikPht', FloatParam, default=2, condition='stage4',
+        form.addParam('epikPht', FloatParam, default=2, condition='stage4 and not manual',
                       label='pH Range:')
 
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('preparationStep')
-        self._insertFunctionStep('createOutput')
+        if self.manual:
+          self._insertFunctionStep('preparationManualStep')
+          self._insertFunctionStep('createOutputManual')
+
+        else:
+          self._insertFunctionStep('preparationStep')
+          self._insertFunctionStep('createOutput')
+
+    def preparationManualStep(self):
+
+        oriFile = self.inputAtomStruct.get().getFileName()
+        _, inExt = os.path.splitext(oriFile)
+
+        if inExt in ['.pdb', '.mae', '.maegz']:
+            fnIn = os.path.abspath(self._getExtraPath("atomStructIn{}".format(inExt)))
+            createLink(oriFile, fnIn)
+
+        else:
+            fnIn = os.path.abspath(self._getExtraPath("atomStructIn.pdb"))
+            aStruct1 = AtomicStructHandler(oriFile)
+            aStruct1.write(fnIn)
+
+        self.runJob(Plugin.getHome('maestro'), " %s" % fnIn, cwd=self._getPath())
+
 
     def preparationStep(self):
         inputPDB = self.inputAtomStruct.get().getFileName()
@@ -226,7 +261,20 @@ class ProtSchrodingerPrepWizard(EMProtocol):
             args+=" -noepik"
 
         args+=' %s %s.maegz' % (fnIn, self.getJobName())
-        self.runJob(prog,args,cwd=self._getPath())
+        self.runJob(prog, args, cwd=self._getPath())
+
+    def createOutputManual(self):
+        files = [self._getPath('prepwizard_workdir/%s'%file)
+                 for file in os.listdir(self._getPath("prepwizard_workdir")) if (file.lower().endswith('out.mae'))]
+        if len(files) > 0:
+            files.sort(key=os.path.getmtime)
+            filesSorted = sorted(files, key=os.path.getmtime)
+
+            maeFile = SchrodingerAtomStruct()
+            maeFile.setFileName(filesSorted[-1])
+
+            self._defineOutputs(outputStructure=maeFile)
+            self._defineSourceRelation(self.inputAtomStruct, maeFile)
 
     def createOutput(self):
         fnMae = self._getPath(self.getJobName() + '.maegz')

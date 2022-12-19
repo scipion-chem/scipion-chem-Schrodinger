@@ -23,14 +23,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
+import os, json
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, StringParam, EnumParam, FloatParam
+from pyworkflow.protocol.params import PointerParam, StringParam, EnumParam, FloatParam, LabelParam, TextParam
 from pyworkflow.utils.path import createLink
 from pwem.protocols import EMProtocol
 from schrodingerScipion import Plugin
 from schrodingerScipion.objects import SchrodingerAtomStruct
+
+progPrime = Plugin.getHome('prime')
 
 class ProtSchrodingerPrime(EMProtocol):
     """Schrodinger's prime is a structure prediction program """
@@ -39,20 +41,23 @@ class ProtSchrodingerPrime(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct",
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
                        label='Atomic Structure:', allowsNull=False)
-        form.addParam('operation', EnumParam, choices=['Side chain prediction','Minimization of all hydrogens',
-                                                       'Loop prediction'],
+        form.addParam('operation', EnumParam,
+                      choices=['Side chain prediction', 'Minimization of all hydrogens', 'Loop prediction'],
                       label='Operation', default=0)
-        form.addParam('residueList', StringParam, condition='operation==0',
-                      label='List of residues:',
-                      help='Example: Residues 110 of chain A and 45 of chain B -> A:110, B:45')
-        form.addParam('residueFirst', StringParam, condition='operation==2',
-                      label='First residue of the loop:',
-                      help='Example: Residue 110 of chain A -> A:110')
-        form.addParam('residueLast', StringParam, condition='operation==2',
-                      label='Last residue of the loop:',
-                      help='Example: Residue 115 of chain A -> A:115')
+
+        form.addParam('resChain', StringParam, label='Residues chain: ', condition='operation!=1',
+                      help='Specify the protein chain where the residues of interest are')
+        form.addParam('resPosition', StringParam, label='Residues positions: ', condition='operation!=1',
+                      help='Specify the residues positions for side chain / loop prediction.'
+                           'You can use Ctrl to select a range')
+        form.addParam('addResidue', LabelParam, label='Add defined residues: ', condition='operation==0',
+                      help='Click on the wizard to save the specified residues in the list below')
+        form.addParam('residueList', TextParam, width=70, condition='operation==0',
+                      label='List of residues:', default='',
+                      help='List of residues where the side chain will be predicted')
+
         form.addParam('resSphere', FloatParam, condition='operation==2', expertLevel=LEVEL_ADVANCED,
                       label='Residue sphere (A):', default=7.5)
         form.addParam('minOverlap', FloatParam, condition='operation==2', expertLevel=LEVEL_ADVANCED,
@@ -64,35 +69,36 @@ class ProtSchrodingerPrime(EMProtocol):
         self._insertFunctionStep('createOutput')
 
     def primeStep(self):
-        prog=Plugin.getHome('prime')
 
         fnInputStructure = self.inputStructure.get().getFileName()
-        fnIn=self._getPath("atomStructIn")+self.inputStructure.get().getExtension()
+        inExt = os.path.splitext(fnInputStructure)[1]
+        fnIn = self._getPath("atomStructIn{}".format(inExt))
 
-        createLink(fnInputStructure,fnIn)
-        fnIn=os.path.split(fnIn)[1]
+        createLink(fnInputStructure, fnIn)
+        fnIn = os.path.split(fnIn)[1]
 
-        fhJob = open(self._getPath('job.inp'),'w')
+        fhJob = open(self._getPath('job.inp'), 'w')
         fhJob.write("STRUCT_FILE %s\n" % fnIn)
-        if self.operation.get()==0:
+        if self.operation.get() == 0:
             # Side chain prediction
             fhJob.write("PRIME_TYPE  SIDE_PRED\n")
             fhJob.write("SELECT  pick\n")
-            i=0
-            for residue in self.residueList.get().split(','):
-                fhJob.write("RESIDUE_%d %s\n"%(i,residue.strip()))
-                i+=1
-        elif self.operation.get()==1:
+            for i, residue in enumerate(self.getResidueList()):
+                fhJob.write("RESIDUE_%d %s\n" % (i, residue.strip()))
+
+        elif self.operation.get() == 1:
             # Minimization of all hydrogens
             fhJob.write("PRIME_TYPE  REAL_MIN\n")
             fhJob.write("SELECT  asl = (atom.ele H)\n")
-        elif self.operation.get()==2:
+
+        elif self.operation.get() == 2:
             # Loop prediction
+            fRes, lRes = self.getFLResidues()
             fhJob.write("PRIME_TYPE  LOOP_BLD\n")
-            fhJob.write("LOOP_0_RES_0 %s\n"%self.residueFirst.get())
-            fhJob.write("LOOP_0_RES_1 %s\n"%self.residueLast.get())
-            fhJob.write("RES_SPHERE %f\n"%self.resSphere.get())
-            fhJob.write("MIN_OVERLAP %f\n"%self.minOverlap.get())
+            fhJob.write("LOOP_0_RES_0 %s\n" % fRes)
+            fhJob.write("LOOP_0_RES_1 %s\n" % lRes)
+            fhJob.write("RES_SPHERE %f\n" % self.resSphere.get())
+            fhJob.write("MIN_OVERLAP %f\n" % self.minOverlap.get())
 
         fhJob.write("USE_CRYSTAL_SYMMETRY no\n")
         fhJob.write("USE_RANDOM_SEED no\n")
@@ -100,13 +106,13 @@ class ProtSchrodingerPrime(EMProtocol):
         fhJob.write("EXT_DIEL 80.00\n")
         fhJob.write("USE_MEMBRANE no\n")
         fhJob.close()
-        args='-WAIT -LOCAL job.inp'
-        self.runJob(prog,args,cwd=self._getPath())
+        args = '-WAIT -LOCAL job.inp'
+        self.runJob(progPrime, args, cwd=self._getPath())
 
     def createOutput(self):
         fnMae = self._getPath('job-out.maegz')
         if os.path.exists(fnMae):
-            maeFile=SchrodingerAtomStruct()
+            maeFile = SchrodingerAtomStruct()
             maeFile.setFileName(fnMae)
 
             self._defineOutputs(outputStructure=maeFile)
@@ -114,3 +120,19 @@ class ProtSchrodingerPrime(EMProtocol):
 
     def _citations(self):
         return ['Jacobson2002', 'Jacobson2004']
+
+    def getFLResidues(self):
+        cDic, rDic = json.loads(self.resChain.get()), json.loads(self.resPosition.get())
+        return '{}:{}'.format(cDic['chain'], rDic['index'].split('-')[0]), \
+               '{}:{}'.format(cDic['chain'], rDic['index'].split('-')[1])
+
+    def getResidueList(self):
+        resList = []
+        for line in self.residueList.get().split('\n'):
+            if line.strip():
+                rDic = json.loads(line.strip())
+                chain, idxs = rDic['chain'], list(map(int, rDic['index'].split('-')))
+                for i in range(idxs[0], idxs[1]+1):
+                    resList.append('{}:{}'.format(chain, i))
+        return resList
+
