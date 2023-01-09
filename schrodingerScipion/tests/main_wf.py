@@ -28,7 +28,7 @@ from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb, ProtSetFilter
 from pwchem.protocols import ProtChemImportSmallMolecules
 from ..protocols import ProtSchrodingerSiteMap, ProtSchrodingerPrepWizard, \
-    ProtSchrodingerLigPrep, ProtSchrodingerGridSiteMap, ProtSchrodingerGlideDocking
+    ProtSchrodingerLigPrep, ProtSchrodingerGrid, ProtSchrodingerGlideDocking
 
 class TestSchroProtPrep(BaseTest):
     @classmethod
@@ -124,7 +124,7 @@ class TestGridSchro(TestSitemap):
     @classmethod
     def _runGridDefinition(cls, filterProt):
         protGrid = cls.newProtocol(
-            ProtSchrodingerGridSiteMap,
+            ProtSchrodingerGrid, manual=False,
             innerAction=1, diameterNin=0.8,
             outerAction=1, diameterNout=1.2)
         protGrid.inputStructROIs.set(filterProt)

@@ -195,7 +195,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         for grid in inputGrids:
             dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=c2Steps)
             dockSteps.append(dStep)
-        self._insertFunctionStep('createOutput', prerequisites=dockSteps)
+        self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
     def convertStep(self):
         inFile = self.getOriginalReceptorFile()
@@ -362,7 +362,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         else:
             print('Failed to find ligands for grid {}'.format(gridId))
 
-    def createOutput(self):
+    def createOutputStep(self):
         smallDict = {}
         for small in self.inputLibrary.get():
             fnSmall = small.getFileName()
