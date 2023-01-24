@@ -109,7 +109,7 @@ class TestSchroLigPrep(BaseTest):
     def _runLigandPreparation(cls):
         protPrepLigand = cls.newProtocol(
             ProtSchrodingerLigPrep,
-            inputSmallMols=cls.protImportSmallMols.outputSmallMolecules,
+            inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
             ionization=1)
         cls.proj.launchProtocol(protPrepLigand, wait=False)
         return protPrepLigand

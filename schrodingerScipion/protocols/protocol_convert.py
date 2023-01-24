@@ -51,7 +51,7 @@ class ProtSchrodingerConvert(EMProtocol):
         form.addSection(label='Input')
         form.addParam('inputType', EnumParam, default=0, choices=["Small molecules", 'Target structure'],
                       label='Input type', help='Type of input you want to convert')
-        form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
+        form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                       condition='inputType=={}'.format(SMALLMOL), label='Input small molecules:',
                       help='Input small molecules to convert')
         form.addParam('outputFormatSmall', EnumParam, default=0, condition='inputType=={}'.format(SMALLMOL),
@@ -71,7 +71,7 @@ class ProtSchrodingerConvert(EMProtocol):
         convSteps = []
         if self.inputType.get() == SMALLMOL:
             self.outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
-            for mol in self.inputSmallMols.get():
+            for mol in self.inputSmallMolecules.get():
                 cStep = self._insertFunctionStep('convertMolStep', mol.clone(), prerequisites=[])
                 convSteps.append(cStep)
 

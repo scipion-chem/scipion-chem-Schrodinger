@@ -46,7 +46,7 @@ class ProtSchrodingerLigPrep(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
+        form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Set of small molecules:', allowsNull=False)
         group = form.addGroup('Ionization')
         group.addParam('ionization', EnumParam, default=0,
@@ -88,7 +88,7 @@ class ProtSchrodingerLigPrep(EMProtocol):
     def _insertAllSteps(self):
         iniStep = self._insertFunctionStep('initializeStep')
         prepSteps=[]
-        for mol in self.inputSmallMols.get():
+        for mol in self.inputSmallMolecules.get():
             pStep = self._insertFunctionStep('ligPrepStep', mol.clone(), prerequisites=[iniStep])
             prepSteps.append(pStep)
         self._insertFunctionStep('createOutputStep', prerequisites=prepSteps)
@@ -167,10 +167,10 @@ class ProtSchrodingerLigPrep(EMProtocol):
     def createOutputStep(self):
         if len(self.outputSmallMolecules)>0:
             self._defineOutputs(outputSmallMolecules=self.outputSmallMolecules)
-            self._defineSourceRelation(self.inputSmallMols, self.outputSmallMolecules)
+            self._defineSourceRelation(self.inputSmallMolecules, self.outputSmallMolecules)
         if len(self.outputSmallMoleculesDropped)>0:
             self._defineOutputs(outputSmallMoleculesDropped=self.outputSmallMoleculesDropped)
-            self._defineSourceRelation(self.inputSmallMols, self.outputSmallMoleculesDropped)
+            self._defineSourceRelation(self.inputSmallMolecules, self.outputSmallMoleculesDropped)
 
     def saveMolecule(self, molFn, molSet, oriMol):
         while self.saving:

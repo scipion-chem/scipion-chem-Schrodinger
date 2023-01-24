@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 
-from .main_wf import *
-from .md_wf import *
-from .test_utils import *
+from schrodingerScipion.tests.md_wf import *
+from schrodingerScipion.tests.test_utils import *
+from schrodingerScipion.tests.main_wf import *
+

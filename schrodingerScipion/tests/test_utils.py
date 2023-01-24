@@ -75,8 +75,8 @@ class TestSchroConvert(BaseTest):
             inputType=mode)
 
         if mode == 0:
-            protConv.inputSmallMols.set(inputProt)
-            protConv.inputSmallMols.setExtended('outputSmallMolecules')
+            protConv.inputSmallMolecules.set(inputProt)
+            protConv.inputSmallMolecules.setExtended('outputSmallMolecules')
             protConv.outputFormatSmall.set(outFormat)
             protConv.setObjLabel('Convert SmallMolecules to {}'.format(list(molChoices.keys())[outFormat]))
 
