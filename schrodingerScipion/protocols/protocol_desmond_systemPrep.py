@@ -359,7 +359,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
             sdfFile = convertToSdf(self, sdfFile)
 
         tmpmaeFile = os.path.abspath(self._getExtraPath(baseName + '_tmp.maegz'))
-        args = " -R h -isd {} -omae {}".format(sdfFile, tmpmaeFile)
+        args = " -R h -a -isd {} -omae {}".format(sdfFile, tmpmaeFile)
         self.runJob(progLigPrep, args, cwd=self._getExtraPath())
         while not os.path.exists(tmpmaeFile):
             time.sleep(0.2)
