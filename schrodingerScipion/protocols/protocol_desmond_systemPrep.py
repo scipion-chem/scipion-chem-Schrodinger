@@ -24,20 +24,27 @@
 # *
 # **************************************************************************
 
-import os
+import os, time
 import random as rd
 from subprocess import check_call
 
 from pyworkflow.protocol.params import PointerParam, StringParam,\
-  EnumParam, BooleanParam, FloatParam, IntParam
+  EnumParam, BooleanParam, FloatParam, IntParam, LEVEL_ADVANCED
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin as schrodinger_plugin
+from pwem.convert.atom_struct import toPdb
+
+from pwchem.utils import pdbqt2other, convertToSdf
+
+from schrodingerScipion import Plugin as schrodingerPlugin
 from schrodingerScipion.constants import *
 from schrodingerScipion.objects import SchrodingerAtomStruct, SchrodingerSystem
+from schrodingerScipion.utils import getChargeFromMAE
 
-multisimProg = schrodinger_plugin.getHome('utilities/multisim')
-jobControlProg = schrodinger_plugin.getHome('jobcontrol')
-structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
+multisimProg = schrodingerPlugin.getHome('utilities/multisim')
+jobControlProg = schrodingerPlugin.getHome('jobcontrol')
+structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
+maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
+progLigPrep = schrodingerPlugin.getHome('ligprep')
 
 STRUCTURE, LIGAND = 0, 1
 
@@ -63,7 +70,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputFrom', EnumParam, default=STRUCTURE,
-                      label='Input from: ', choices=['AtomStructure', 'SetOfSmallMolecules'],
+                      label='Input from: ', choices=['AtomStruct', 'SetOfSmallMolecules'],
                       help='Type of input you want to use')
         form.addParam('inputStruct', PointerParam, pointerClass='SchrodingerAtomStruct, AtomStruct',
                       label='Input structure to be prepared for MD:', allowsNull=False, condition='inputFrom==0',
@@ -75,9 +82,14 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                       label='Ligand to prepare: ',
                       help='Specific ligand to prepare in the system')
 
-        form.addParam('rezero', BooleanParam, default=True,
-                       label='Reset origin to center of mass: ',
-                       help='Set system origin as the solute center of mass')
+        form.addParam('prepareTarget', BooleanParam, default=True,
+                      label='Prepare target: ', expertLevel=LEVEL_ADVANCED,
+                      help='Prepare target with Schrodinger PrepWizard to ensure correct structure.'
+                           'It may subtly variate the atom positions')
+        form.addParam('prepareLigand', BooleanParam, default=True, condition='inputFrom=={}'.format(LIGAND),
+                      label='Prepare ligand: ', expertLevel=LEVEL_ADVANCED,
+                      help='Prepare target with Schrodinger LigPrep to ensure correct structure.'
+                           'It may subtly variate the ligand atom positions')
 
         group = form.addGroup('Boundary box')
         group.addParam('boundaryShape', EnumParam,
@@ -120,24 +132,31 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
         form.addSection('Charges')
         group = form.addGroup('Ions')
-        group.addParam('placeIons', EnumParam, default=0,
+        group.addParam('placeIons', EnumParam, default=1,
                        label='Add ions: ', choices=['None', 'Neutralize', 'Add number'],
                        help='Whether to add ions to the system')
-        line = group.addLine('Solute charge:', condition='placeIons!=0')
+        line = group.addLine('Solute charge:', condition='placeIons!=0', expertLevel=LEVEL_ADVANCED)
         line.addParam('solCharge', IntParam, default=0, condition='placeIons!=0', readOnly=True,
-                       help='Charge of the solute before the addition of ions')
-        line = group.addLine('Ion type:', condition='placeIons!=0',
-                             help='Type of the ions to neutralize charges (Depending on the system charge)')
-        line.addParam('cationType', EnumParam, condition='placeIons!=0 and solCharge<0',
-                       label='Cation to add: ', choices=self._cations,
+                      help='Check charge of the solute before the addition of ions')
+        line = group.addLine('Cation type:', condition='placeIons!=0',
+                             help='Type of the cations to add into the system. '
+                                  '(If neutralize, only added when solute has negative charge)')
+        line.addParam('cationType', EnumParam, condition='placeIons!=0',
+                       label='Cation to add: ', choices=self._cations, default=0,
                        help='Which cations to add in the system')
-        line.addParam('anionType', EnumParam, condition='placeIons!=0 and solCharge>0',
-                      label='Anion to add: ', choices=self._anions,
-                      help='Which anions to add in the system')
-        line.addParam('ionNum', IntParam, condition='placeIons==2',
-                       label='Number of counterions to add: ',
-                       help='Number of ions to add, cations if the system charge is negative and viceversa')
+        line.addParam('cationNum', IntParam, condition='placeIons==2',
+                      label='Number of cations to add: ',
+                      help='Number of cations to add')
 
+        line = group.addLine('Anion type:', condition='placeIons!=0',
+                             help='Type of the anions to add into the system. '
+                                  '(If neutralize, only added when solute has positive charge)')
+        line.addParam('anionType', EnumParam, condition='placeIons!=0',
+                      label='Anion to add: ', choices=self._anions, default=1,
+                      help='Which anions to add in the system')
+        line.addParam('anionNum', IntParam, condition='placeIons==2',
+                      label='Number of anions to add: ',
+                      help='Number of anions to add')
 
         group = form.addGroup('Salt')
         group.addParam('addSalt', BooleanParam, default=False,
@@ -150,10 +169,10 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         line = group.addLine('Salt type:', condition='addSalt',
                              help='Type of the ions to neutralize charges (Depending on the system charge)')
         line.addParam('cationTypeSalt', EnumParam, condition='addSalt',
-                      label='Salt cation: ', choices=self._saltCations,
+                      label='Salt cation: ', choices=self._saltCations, default=0,
                       help='Cation type of the salt')
         line.addParam('anionTypeSalt', EnumParam, condition='addSalt',
-                       label='Salt anion: ', choices=self._anions,
+                       label='Salt anion: ', choices=self._anions, default=1,
                        help='Anion type of the salt')
 
         group = form.addGroup('Force field')
@@ -171,29 +190,41 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
             if type(self.inputStruct.get()) == SchrodingerAtomStruct:
                 self.soluteFile = self.inputStruct.get().getFileName()
             else:
-                pdbFile = self.inputStruct.get().getFileName()
+                pdbFile = self.getPdbFile()
                 structName = os.path.splitext(os.path.basename(pdbFile))[0]
-                self.soluteFile = self._getExtraPath(structName + '.mae')
+                self.soluteFile = os.path.abspath(self._getExtraPath(structName + '.mae'))
                 if not os.path.exists(self.soluteFile):
-                    self.runJob(structConvertProg, '{} {}'.format(pdbFile, self.soluteFile))
+                  if self.prepareTarget.get():
+                      self.soluteFile = self.prepareTargetFile(pdbFile, self.soluteFile)
+                  else:
+                      self.runJob(structConvertProg, '{} {}'.format(pdbFile, self.soluteFile))
 
         elif self.inputFrom.get() == LIGAND:
             self.soluteFile = self._getExtraPath('complexSolute.mae')
             if not os.path.exists(self.soluteFile):
                 mol = self.getSpecifiedMol()
-                molMaeFile = self._getExtraPath(mol.getUniqueName() + '.maegz')
-                self.runJob(structConvertProg, '{} {}'.format(mol.getPoseFile(), molMaeFile))
+                molFile = mol.getPoseFile()
+                if molFile.endswith('.pdbqt'):
+                    molFile = convertToSdf(self, molFile)
+
+                if self.prepareLigand.get():
+                    molMaeFile = self.prepareLigandFile(molFile)
+                else:
+                    molMaeFile = self._getExtraPath(mol.getUniqueName() + '.maegz')
+                    self.runJob(structConvertProg, '{} {}'.format(molFile, molMaeFile))
 
                 if hasattr(mol, 'structFile'):
                     targetMaeFile = mol.structFile
                 else:
-                    targetFile = self.inputSetOfMols.get().getProteinFile()
-                    targetName = os.path.splitext(os.path.basename(targetFile))[0]
-                    targetMaeFile = self._getExtraPath(targetName + '.maegz')
-                    self.runJob(structConvertProg, '{} {}'.format(targetFile, targetMaeFile))
+                    pdbFile = self.getPdbFile()
+                    targetName = os.path.splitext(os.path.basename(pdbFile))[0]
+                    targetMaeFile = os.path.abspath(self._getExtraPath(targetName + '.maegz'))
+                    if self.prepareTarget.get():
+                        targetMaeFile = self.prepareTargetFile(pdbFile, targetMaeFile)
+                    else:
+                        self.runJob(structConvertProg, '{} {}'.format(pdbFile, targetMaeFile))
 
                 self.runJob('zcat', '{} {} > {}'.format(molMaeFile, targetMaeFile, self.soluteFile))
-
 
     def systemPreparationStep(self):
         maeFile = self.soluteFile
@@ -201,19 +232,26 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         jobName = sysName + '_' + str(rd.randint(1000000, 9999999))
 
         msjFile = self._getExtraPath('{}.msj'.format(sysName))
-        msjStr = self.buildMSJ_str()
+        msjStr = self.buildMSJ_str(maeFile)
         with open(msjFile, 'w') as f:
             f.write(msjStr)
 
-        cmsFile = sysName+'-out.cms'
-
-        args = ' -m {} {} -o {} -WAIT -JOBNAME {}'.format(msjFile.split('/')[-1], os.path.abspath(maeFile),
-                                                          cmsFile, jobName)
+        cmsName = jobName + '-out.cms'
+        args = ' -m {} {} -WAIT -o {} -JOBNAME {}'.format(msjFile.split('/')[-1], os.path.abspath(maeFile),
+                                                          cmsName, jobName)
         self.runJob(multisimProg, args, cwd=self._getExtraPath())
 
         cmsStruct = SchrodingerSystem()
-        cmsStruct.setFileName(self._getExtraPath(cmsFile))
-        self._defineOutputs(outputSystem=cmsStruct)
+        outFile = self._getExtraPath(cmsName)
+        if os.path.exists(outFile):
+            cmsFile = os.path.abspath(self._getPath(cmsName))
+            os.rename(outFile, cmsFile)
+
+            cmsStruct.setFileName(cmsFile)
+            self._defineOutputs(outputSystem=cmsStruct)
+        else:
+            print('Schrodinger system preparation failed')
+            open(self._getExtraPath(cmsName))
 
 
     def _validate(self):
@@ -222,19 +260,17 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
     ############# UTILS
 
-    def buildMSJ_str(self):
+    def buildMSJ_str(self, maeFile):
         '''Build the .msj (file used by multisim to specify the jobs performed by Schrodinger)
         defining the input parameters'''
         addIonsArg = ''
         if self.placeIons.get() != 0:
-            if self.placeIons.get() == 1:
-                number = 'neutralize_system'
-            else:
-                number = self.ionNum.get()
-
-            if self.solCharge.get() < 0:
+            solCharge = getChargeFromMAE(maeFile)
+            if solCharge < 0:
+                number = 'neutralize_system' if self.placeIons.get() == 1 else self.cationNum.get()
                 addIonsArg = ADD_COUNTERION % (self.getEnumText('cationType')[:-1], number)
-            elif self.solCharge.get() > 0:
+            elif solCharge > 0:
+                number = 'neutralize_system' if self.placeIons.get() == 1 else self.anionNum.get()
                 addIonsArg = ADD_COUNTERION % (self.getEnumText('anionType')[:-1], number)
 
 
@@ -259,7 +295,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         if self.solvate:
             solventArg = SOLVENT % self.getEnumText('solventType')
 
-        msj_str = MSJ_SYSPREP % (addIonsArg, *boxArgs, self.getEnumText('ffType'), str(self.rezero.get()).lower(),
+        msj_str = MSJ_SYSPREP % (addIonsArg, *boxArgs, self.getEnumText('ffType'), "true",
                                  saltArg, solventArg, self.getEnumText('ffType'))
         return msj_str
 
@@ -267,7 +303,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
     def getSpecifiedMol(self):
         myMol = None
         for mol in self.inputSetOfMols.get():
-          if mol.getUniqueName() == self.inputLigand.get():
+          if mol.__str__() == self.inputLigand.get():
             myMol = mol.clone()
             break
         if myMol == None:
@@ -299,4 +335,47 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
             print('Killing job: {} with jobName {}'.format(jobId, self.getJobName()))
             check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
 
+    def getPdbFile(self):
+      if self.inputFrom.get() == STRUCTURE:
+          proteinFile = self.inputStruct.get().getFileName()
+      elif self.inputFrom.get() == LIGAND:
+          proteinFile = self.inputSetOfMols.get().getProteinFile()
+      inName, inExt = os.path.splitext(os.path.basename(proteinFile))
 
+      if inExt == '.pdb':
+          return os.path.abspath(proteinFile)
+      else:
+        pdbFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdb')))
+        if inExt == '.pdbqt':
+            pdbqt2other(self, proteinFile, pdbFile)
+        else:
+            toPdb(proteinFile, pdbFile)
+        return os.path.abspath(pdbFile)
+
+    def prepareLigandFile(self, sdfFile, maeFile=None):
+        # Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+        baseName = os.path.splitext(os.path.basename(sdfFile))[0]
+        if not sdfFile.endswith('.sdf'):
+            sdfFile = convertToSdf(self, sdfFile)
+
+        tmpmaeFile = os.path.abspath(self._getExtraPath(baseName + '_tmp.maegz'))
+        args = " -R h -a -isd {} -omae {}".format(sdfFile, tmpmaeFile)
+        self.runJob(progLigPrep, args, cwd=self._getExtraPath())
+        while not os.path.exists(tmpmaeFile):
+            time.sleep(0.2)
+
+        if not maeFile:
+            maeFile = os.path.abspath(self._getExtraPath(baseName + '.maegz'))
+
+        args = " -n 1 {} -o {}".format(tmpmaeFile, maeFile)
+        self.runJob(maeSubsetProg, args, cwd=self._getExtraPath())
+
+        os.remove(tmpmaeFile)
+        return maeFile
+
+    def prepareTargetFile(self, inFile, outFile):
+        prog = schrodingerPlugin.getHome('utilities/prepwizard')
+        args = '-WAIT -noprotassign -noimpref -noepik '
+        args += '%s %s' % (os.path.abspath(inFile), os.path.abspath(outFile))
+        self.runJob(prog, args, cwd=self._getPath())
+        return outFile

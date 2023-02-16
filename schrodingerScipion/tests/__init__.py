@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    Yunior C. Fonseca Reyna (cfonseca@cnb.csic.es)
+# * Authors:     Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,5 +24,7 @@
 # *
 # **************************************************************************
 
-from .test_sitemap import TestSitemap
-from .test_glide import TestGlideDocking
+from schrodingerScipion.tests.md_wf import *
+from schrodingerScipion.tests.test_utils import *
+from schrodingerScipion.tests.main_wf import *
+
