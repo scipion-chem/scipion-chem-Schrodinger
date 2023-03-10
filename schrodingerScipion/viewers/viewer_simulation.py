@@ -84,11 +84,15 @@ class DesmondSimulationViewer(pwviewer.ProtocolViewer):
         #Generates the event analysis file (eaf) with instructions
         eventScript = schPlugin.getHome('mmshare-v5.5/python/scripts/event_analysis.py')
         baseName = system.getBaseName()
+        inEAF = self.protocol._getExtraPath('{}-in.eaf'.format(baseName))
         outEAF = '{}_pl_complete.eaf'.format(baseName)
 
         args = 'analyze {} -o extra/{}'.format(system.getFileName(), baseName)
-        if not os.path.exists(self.protocol._getExtraPath('{}-in.eaf'.format(baseName))):
+        if not os.path.exists(inEAF):
             schPlugin.runSchrodingerScript(program=eventScript, args=args, cwd=system.getDirName())
+            if not os.path.exists(inEAF):
+                args = 'analyze {} -lig none -o extra/{}'.format(system.getFileName(), baseName)
+                schPlugin.runSchrodingerScript(program=eventScript, args=args, cwd=system.getDirName())
 
         #Analyze the simulations with the instructions provided
         args = '{} {} extra/{} extra/{}-in.eaf'.format(system.getFileName(), system.getTrajectoryDirName(),
