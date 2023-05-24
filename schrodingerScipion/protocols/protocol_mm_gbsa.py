@@ -24,28 +24,16 @@
 # *
 # **************************************************************************
 
-import os
-
-from pyworkflow.protocol.constants import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, StringParam
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin
-from schrodingerScipion.objects import SchrodingerAtomStruct
-from pwchem.objects import SmallMolecule
 
 class ProtSchrodingerMMGBSA(EMProtocol):
-    """Split a structure into different pieces"""
-    _label = 'split structure'
+    """ TODO: find out & place here"""
+    _label = 'mm-gbsa'
     _program = ""
 
     def _defineParams(self, form):
         pass
 
-        # --------------------------- INSERT steps functions --------------------
+    # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         pass
-        #self._insertFunctionStep('splitStep')
-
-    def _summary(self):
-        summary=[]
-        return summary
