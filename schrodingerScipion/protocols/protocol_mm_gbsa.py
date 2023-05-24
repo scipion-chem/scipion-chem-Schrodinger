@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    Carlos Oscar Sorzano (coss@cnb.csic.es)
+# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,14 +24,28 @@
 # *
 # **************************************************************************
 
-from .protocol_preparation_wizard import ProtSchrodingerPrepWizard
-from .protocol_prime import ProtSchrodingerPrime
-from .protocol_ligprep import ProtSchrodingerLigPrep
-from .protocol_convert import ProtSchrodingerConvert
-from .protocol_splitStructure import ProtSchrodingerSplitStructure
-from .protocol_glide_docking import ProtSchrodingerGlideDocking
-from .protocol_sitemap import ProtSchrodingerSiteMap
-from .protocol_preparation_grid import ProtSchrodingerGrid
-from .protocol_desmond_systemPrep import ProtSchrodingerDesmondSysPrep
-from .protocol_desmond_simulation import ProtSchrodingerDesmondMD
-from .protocol_mm_gbsa import ProtSchrodingerMMGBSA
+import os
+
+from pyworkflow.protocol.constants import LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, StringParam
+from pwem.protocols import EMProtocol
+from schrodingerScipion import Plugin
+from schrodingerScipion.objects import SchrodingerAtomStruct
+from pwchem.objects import SmallMolecule
+
+class ProtSchrodingerMMGBSA(EMProtocol):
+    """Split a structure into different pieces"""
+    _label = 'split structure'
+    _program = ""
+
+    def _defineParams(self, form):
+        pass
+
+        # --------------------------- INSERT steps functions --------------------
+    def _insertAllSteps(self):
+        pass
+        #self._insertFunctionStep('splitStep')
+
+    def _summary(self):
+        summary=[]
+        return summary
