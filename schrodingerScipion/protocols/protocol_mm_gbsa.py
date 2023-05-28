@@ -24,7 +24,10 @@
 # *
 # **************************************************************************
 
+import os
+
 from pwem.protocols import EMProtocol
+from schrodingerScipion import Plugin
 
 class ProtSchrodingerMMGBSA(EMProtocol):
     """ TODO: find out & place here"""
@@ -36,4 +39,16 @@ class ProtSchrodingerMMGBSA(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        pass
+        """ This function inserts all steps functions that will be run when running the protocol """
+        self._insertFunctionStep('runMMGBSAStep')
+    
+    def runMMGBSAStep(self):
+        """ This function runs the schrodinger binary file with the given params """
+        # Getting binary file
+        schrodinger = self.getMMGBSABinaryFile()
+        print("BINARY FILE:", schrodinger)
+    
+    # --------------------------- Utils functions --------------------
+    def getMMGBSABinaryFile(self):
+        """ This function returns the location for the Schrodinger MM-GBSA binary file """
+        return os.path.join(Plugin.getVar('SCHRODINGER_HOME'), 'prime_mmgbsa')
