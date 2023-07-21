@@ -84,6 +84,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 	def runQikpropStep(self, baseCommand, molecule):
 		""" This function runs the schrodinger binary file with the given params. """
+		# It only prints for now, it will run the command in the future and capture the output
 		print(baseCommand + ' ' + molecule)
 	
 	# --------------------------- INFO functions --------------------------------------------
