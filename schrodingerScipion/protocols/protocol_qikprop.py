@@ -54,5 +54,13 @@ class ProtSchrodingerQikprop(EMProtocol):
 	
 	# --------------------------- Utils functions --------------------
 	def getQikpropBinaryFile(self):
-		""" This function returns the location for the Schrodinger qikprop binary file """
-		return os.path.join(Plugin.getVar('SCHRODINGER_HOME'), 'qikprop')
+		""" This function returns the location for the Schrodinger qikprop binary file. """
+		# Getting path to the binary
+		binaryPath = os.path.join(Plugin.getVar('SCHRODINGER_HOME'), 'qikprop')
+
+		# If path exists, return it
+		if os.path.exists(binaryPath):
+			return binaryPath
+		
+		# If path was not found, raise exception
+		raise FileNotFoundError(f"Path \"{binaryPath}\" not found. Is variable SCHRODINGER_HOME properly set within scipion.conf file?")
