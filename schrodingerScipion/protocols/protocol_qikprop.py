@@ -30,6 +30,7 @@ import os
 # Scipion em imports
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam
+from pyworkflow.utils import redStr
 
 # Plugin imports
 from schrodingerScipion import Plugin
@@ -127,7 +128,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 			return binaryPath
 		
 		# If path was not found, raise exception
-		raise FileNotFoundError(f"Path \"{binaryPath}\" not found. Is variable SCHRODINGER_HOME properly set within scipion.conf file?")
+		raise FileNotFoundError(redStr(f"Path \"{binaryPath}\" not found. Is variable SCHRODINGER_HOME properly set within scipion.conf file?"))
 	
 	def getInputFiles(self):
 		""" This function returns a list with the full path to each one of the input files. """
