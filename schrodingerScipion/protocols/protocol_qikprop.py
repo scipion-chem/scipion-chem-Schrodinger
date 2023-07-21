@@ -29,7 +29,7 @@ import os
 
 # Scipion em imports
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam
+from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam
 
 # Plugin imports
 from schrodingerScipion import Plugin
@@ -39,8 +39,22 @@ class ProtSchrodingerQikprop(EMProtocol):
 	_label = 'qikprop'
 	_program = ""
 
+	# --------------------------- Class constructor --------------------------------------------
+	def __init__(self, **args):
+		# Calling parent class constructor
+		super().__init__(**args)
+
+		# Defining execution mode. Steps will take place in parallel now
+		# Full tutorial on how to parallelize protocols can be read here:
+		# https://scipion-em.github.io/docs/release-3.0.0/docs/developer/parallelization.html
+		self.stepsExecutionMode = STEPS_PARALLEL
+
 	def _defineParams(self, form):
 		""" This function defines the params to be included in the protocol's form. """
+		# Add parallel section
+		form.addParallelSection(threads=4)
+
+		# Create form
 		form.addSection(label='Input')
 		form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
 			label='Input small molecules:', help='Input small molecules to be treated.')
@@ -61,16 +75,31 @@ class ProtSchrodingerQikprop(EMProtocol):
 	# --------------------------- INSERT steps functions --------------------
 	def _insertAllSteps(self):
 		""" This function inserts all steps functions that will be run when running the protocol. """
-		self._insertFunctionStep('runQikpropStep')
-	
-	def runQikpropStep(self):
-		""" This function runs the schrodinger binary file with the given params. """
 		# Getting common command string for every call
 		baseCommand = self.getQikpropBaseCmd()
 
 		# For every SmallMolecule in the input set, build complete command
 		for molecule in self.getInputFiles():
-			print(baseCommand + ' ' + molecule)
+			self._insertFunctionStep('runQikpropStep', baseCommand, molecule)
+
+	def runQikpropStep(self, baseCommand, molecule):
+		""" This function runs the schrodinger binary file with the given params. """
+		print(baseCommand + ' ' + molecule)
+	
+	# --------------------------- INFO functions --------------------------------------------
+	def _validate(self):
+		"""
+		The function of this hook is to add some validation before the protocol
+		is launched to be executed. It should return a list of errors. If the list is
+		empty the protocol can be executed.
+		"""
+		errors = []
+
+		# Checking if MPI is selected (only threads are allowed)
+		if self.numberOfMpi > 1:
+			errors.append('MPI cannot be selected, because Scipion is going to drop support for it. Select threads instead.')
+
+		return errors
 	
 	# --------------------------- Utils functions --------------------
 	def getQikpropBaseCmd(self):
