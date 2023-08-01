@@ -32,7 +32,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import relabelAtomsMol2, calculate_centerMass
+from pwchem.utils import relabelAtomsMol2, calculate_centerMass, performBatchThreading
 from pwchem import Plugin as pwchemPlugin
 
 from schrodingerScipion import Plugin as schrodinger_plugin
@@ -82,6 +82,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
         group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Input small molecules:', help='Input small molecules to be docked with Glide')
+        group.addParam('convertOutputParam', BooleanParam, default=False, label='Convert output to mol2:',
+                       help='Whether to convert the output poses from the mae to mol2 format')
 
         group = form.addGroup('Define grids', condition='fromPockets!=2')
         group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
@@ -362,19 +364,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         else:
             print('Failed to find ligands for grid {}'.format(gridId))
 
-    def createOutputStep(self):
-        smallDict = {}
-        for small in self.inputLibrary.get():
-            fnSmall = small.getFileName()
-            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
-            if not fnBase in smallDict:
-                smallDict[fnBase] = small.clone()
-
-        allMaeFile = self.mergeMAEfiles()
-
+    def performOutputParsing(self, gridDirs, molLists, it, smallDict, allMaeFile):
         allSmallList = []
-        fnStruct = self.getInputMaeFile()
-        for gridDir in self.getGridDirs(complete=True):
+        for gridDir in gridDirs:
             gridId = gridDir.split('_')[1]
             gridDir = 'grid_{}/'.format(gridId)
 
@@ -403,17 +395,35 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
             allSmallList += smallList
 
+        molLists[it] = allSmallList
+
+    def createOutputStep(self):
+        nt = self.numberOfThreads.get()
+        smallDict = {}
+        for small in self.inputLibrary.get():
+            fnSmall = small.getFileName()
+            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
+            if not fnBase in smallDict:
+                smallDict[fnBase] = small.clone()
+
+        allMaeFile = self.mergeMAEfiles()
+        fnStruct = self.getInputMaeFile()
+
+        gridDirs = self.getGridDirs(complete=True)
+        allSmallList = performBatchThreading(self.performOutputParsing, gridDirs, nt, cloneItem=False,
+                                             smallDict=smallDict, allMaeFile=allMaeFile)
 
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
         for small in allSmallList:
             outputSet.append(small)
 
-        self.convertedDic = {}
-        # print('Converting output to mol2: outputSmallMolecules')
-        nameOut = 'outputSmallMolecules'
-        self.convertOutput(outputSet, nameDir=nameOut)
-        #Updating mols with converted posFiles
-        self.updatePosFiles(outputSet, nameOut)
+        if self.convertOutputParam:
+            self.convertedDic = {}
+            # print('Converting output to mol2: outputSmallMolecules')
+            nameOut = 'outputSmallMolecules'
+            self.convertOutput(outputSet, nameDir=nameOut)
+            #Updating mols with converted posFiles
+            self.updatePosFiles(outputSet, nameOut)
 
         outputSet.setDocked(True)
         outputSet.proteinFile.set(self.getOriginalReceptorFile())
