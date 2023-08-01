@@ -231,13 +231,13 @@ class ProtSchrodingerDesmondMD(EMProtocol):
             cmsStruct = SchrodingerSystem()
             cmsStruct.setFileName(mergedFile)
             cmsStruct.changeTrajectoryDirName(outTrjDir, trjPath=self._getPath())
-            cmsStruct.changeCMSFileName(outFile)
+            cmsStruct.changeCMSFileName(os.path.relpath(outFile))
 
         else:
             cmsStruct = SchrodingerSystem()
             cmsStruct.setFileName(self._getTmpPath(unmergedFile))
             cmsStruct.changeTrajectoryDirName(outTrjDir, trjPath=self._getTmpPath())
-            cmsStruct.changeCMSFileName(outFile)
+            cmsStruct.changeCMSFileName(os.path.relpath(outFile))
 
         os.rename(self._getTmpPath('{}_multisim.log'.format(self.getJobName())),
                   self._getExtraPath(sysName+'_multisim.log'))

@@ -244,7 +244,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         cmsStruct = SchrodingerSystem()
         outFile = self._getExtraPath(cmsName)
         if os.path.exists(outFile):
-            cmsFile = os.path.abspath(self._getPath(cmsName))
+            cmsFile = self._getPath(cmsName)
             os.rename(outFile, cmsFile)
 
             cmsStruct.setFileName(cmsFile)
