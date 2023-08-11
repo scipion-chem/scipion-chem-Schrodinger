@@ -164,10 +164,10 @@ def convertMAE2Mol2(mol, outDir):
 
     try:
         args = f"-n {poseId} {os.path.abspath(fnRaw)} -o {fnAux}"
-        result = subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
+        subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
 
         args = f'{fnAux} {os.path.abspath(fnOut)}'
-        result = subprocess.run(f'{structConvertProg} {args}', check=True, capture_output=True, text=True, shell=True)
+        subprocess.run(f'{structConvertProg} {args}', check=True, capture_output=True, text=True, shell=True)
         os.remove(fnAux)
 
         if os.path.splitext(fnOut)[1] == '.mol2':
@@ -184,6 +184,7 @@ def convertMAE2Mol2(mol, outDir):
 
 
 def convertMAEMolSet(molSet, outDir, njobs):
+    '''Convert in parallel a set of SetOfSmallMolecules from their MAE format to MOL2'''
     convMols = runInParallel(convertMAE2Mol2, outDir, paramList=[item.clone() for item in molSet], jobs=njobs)
     for mol in convMols:
         molSet.update(mol)
