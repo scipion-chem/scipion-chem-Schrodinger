@@ -36,7 +36,7 @@ from pwchem.utils import relabelAtomsMol2, calculate_centerMass, performBatchThr
 from pwchem import Plugin as pwchemPlugin
 
 from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.utils.utils import putMol2Title
+from schrodingerScipion.utils.utils import putMol2Title, convertMAEMolSet
 
 glideProg = schrodinger_plugin.getHome('glide')
 progLigPrep = schrodinger_plugin.getHome('ligprep')
@@ -418,12 +418,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             outputSet.append(small)
 
         if self.convertOutputParam:
-            self.convertedDic = {}
-            # print('Converting output to mol2: outputSmallMolecules')
-            nameOut = 'outputSmallMolecules'
-            self.convertOutput(outputSet, nameDir=nameOut)
-            #Updating mols with converted posFiles
-            self.updatePosFiles(outputSet, nameOut)
+            outDir = os.path.abspath(self._getExtraPath('outputSmallMolecules'))
+            os.mkdir(outDir)
+            convertMAEMolSet(outputSet, outDir, nt)
 
         outputSet.setDocked(True)
         outputSet.proteinFile.set(self.getOriginalReceptorFile())
