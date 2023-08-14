@@ -182,11 +182,12 @@ def convertMAE2Mol2(mol, outDir):
         print(f"Failed to convert molecule {molName}")
 
 
-
-def convertMAEMolSet(molSet, outDir, njobs):
+def convertMAEMolSet(molSet, outDir, njobs, updateSet=True):
     '''Convert in parallel a set of SetOfSmallMolecules from their MAE format to MOL2'''
     convMols = runInParallel(convertMAE2Mol2, outDir, paramList=[item.clone() for item in molSet], jobs=njobs)
-    for mol in convMols:
-        molSet.update(mol)
-    return molSet
-
+    if updateSet:
+        for mol in convMols:
+            molSet.update(mol)
+        return molSet
+    else:
+        return convMols
