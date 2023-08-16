@@ -29,7 +29,7 @@ import os
 
 # Scipion em imports
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam
+from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, FloatParam
 from pyworkflow.utils import redStr
 
 # Plugin imports
@@ -67,8 +67,9 @@ class ProtSchrodingerQikprop(EMProtocol):
 			help='Generate a list of known drugs most similar to each processed molecule.')
 		form.addParam('altclass', BooleanParam, default=False, label='Alternative class:',
 			help='Run additional SASA, PSA calculations using an alternative class definition.')
-		form.addParam('altprobe', BooleanParam, default=False, label='Alternative probe:',
+		form.addParam('useAltprobe', BooleanParam, default=False, label='Use alternative probe:',
 			help='Run additional SASA, PSA calculations using an alternative probe radii (1.4A by default).')
+		form.addParam('altprobe', FloatParam, default=1.4, label='Alternative probe:', condition='useAltprobe==True')
 		form.addParam('recap', BooleanParam, default=False, label='Replace CombiGlide with methyl:',
 			help='Replace the CombiGlide functional group with a methyl group prior to processing.\n'
 				'When used in the CombiGlide reagent-preparation process, gives properties for the \'naked sidechain\'.')
@@ -100,17 +101,24 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Checking if MPI is selected (only threads are allowed)
 		if self.numberOfMpi > 1:
 			errors.append('MPI cannot be selected, because Scipion is going to drop support for it. Select threads instead.')
+		
+		# Checking if altprobe is used, and, if so, that the value is 0 or greater
+		if self.useAltprobe.get() and self.altprobe.get() < 0:
+			errors.append('Altprobe has to be a number equal or greater than 0.')
 
 		return errors
 	
 	# --------------------------- Utils functions --------------------
 	def getQikpropBaseCmd(self):
 		""" This function returns the command string to run qikprop. """
+		# Change directory to protocol's extra path
+		command = f'cd {self._getExtraPath()} && '
+
 		# Command starts with the executable file
-		command = self.getQikpropBinaryFile()
+		command += self.getQikpropBinaryFile()
 
 		# Add permanent flags
-		command += f' {self.getFastFlag()} {self.getNeutFlag()} {self.getSimFlag()}'
+		command += f' {self.getFastFlag()} {self.getNeutFlag()} {self.getSimFlag()} -LOCAL'
 
 		# Add optional flags
 		command += self.getAltClassFlag() + self.getAltProbeFlag() + self.getRecapFlag()
@@ -132,7 +140,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 	
 	def getInputFiles(self):
 		""" This function returns a list with the full path to each one of the input files. """
-		return [molecule.getFileName() for molecule in self.inputSmallMolecules.get()]
+		return [os.path.abspath(molecule.getFileName()) for molecule in self.inputSmallMolecules.get()]
 	
 	def getFastFlag(self):
 		""" This function returns the flag string corresponding to the fast flag param. """
@@ -152,7 +160,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 	
 	def getAltProbeFlag(self):
 		""" This function returns the flag string corresponding to the altprobe flag param. """
-		return ' -altprobe' if self.altprobe.get() else ''
+		return f' -altprobe {self.altprobe.get()}' if self.useAltprobe.get() else ''
 	
 	def getRecapFlag(self):
 		""" This function returns the flag string corresponding to the sim recap param. """
