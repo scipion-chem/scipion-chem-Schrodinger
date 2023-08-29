@@ -86,8 +86,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 	def runQikpropStep(self, baseCommand, molecule):
 		""" This function runs the schrodinger binary file with the given params. """
-		# It only prints for now, it will run the command in the future and capture the output
-		print(baseCommand + ' ' + molecule)
+		self.runJob(baseCommand, f' {molecule}', cwd=self._getExtraPath())
 	
 	# --------------------------- INFO functions --------------------------------------------
 	def _validate(self):
@@ -111,11 +110,8 @@ class ProtSchrodingerQikprop(EMProtocol):
 	# --------------------------- Utils functions --------------------
 	def getQikpropBaseCmd(self):
 		""" This function returns the command string to run qikprop. """
-		# Change directory to protocol's extra path
-		command = f'cd {self._getExtraPath()} && '
-
 		# Command starts with the executable file
-		command += self.getQikpropBinaryFile()
+		command = self.getQikpropBinaryFile()
 
 		# Add permanent flags
 		command += f' {self.getFastFlag()} {self.getNeutFlag()} {self.getSimFlag()} -LOCAL'
