@@ -32,7 +32,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import relabelAtomsMol2, calculate_centerMass
+from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading
 from pwchem import Plugin as pwchemPlugin
 
 from schrodingerScipion import Plugin as schrodinger_plugin
@@ -82,6 +82,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
         group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Input small molecules:', help='Input small molecules to be docked with Glide')
+
+        group.addParam('convertOutput2Mol2', BooleanParam, label='Convert output to mol2: ', default=False,
+                       help='Whether to convert to output molecules to mol2 files instead of keeping the mae files')
 
         group = form.addGroup('Define grids', condition='fromPockets!=2')
         group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
@@ -383,9 +386,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             with open(self._getExtraPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
                 fhCsv.readline()
                 fhCsv.readline()
-                for i, line in enumerate(fhCsv.readlines(), start=2):
+                for i, line in enumerate(fhCsv.readlines()):
                     tokens = line.split(',')
-                    fnBase = os.path.splitext(os.path.split(tokens[0])[1])[0]
+                    fnBase = getBaseName(tokens[0])
 
                     small = SmallMolecule()
                     small.copy(smallDict[fnBase], copyId=False)
@@ -393,7 +396,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     small.ligandEfficiency = pwobj.Float(tokens[2])
                     small.ligandEfficiencySA = pwobj.Float(tokens[3])
                     small.ligandEfficiencyLn = pwobj.Float(tokens[4])
-                    small.poseFile = pwobj.String("%d@%s" % (i, fnPv))
+                    small.poseFile = pwobj.String("%d@%s" % (i+1, fnPv))
                     small.setPoseId(i)
                     small.maeFile = pwobj.String(allMaeFile)
                     small.setMolClass('Schrodinger')
@@ -403,17 +406,17 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
             allSmallList += smallList
 
+        if self.convertOutput2Mol2.get():
+            nt = self.numberOfThreads.get()
+            # print('Converting output to mol2: outputSmallMolecules')
+            outDir = self._getExtraPath('outputSmallMolecules')
+            os.mkdir(outDir)
+            allSmallList = performBatchThreading(self.convertOutputStep, allSmallList, nt, outDir=outDir,
+                                                 cloneItem=True)
 
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
         for small in allSmallList:
             outputSet.append(small)
-
-        self.convertedDic = {}
-        # print('Converting output to mol2: outputSmallMolecules')
-        nameOut = 'outputSmallMolecules'
-        self.convertOutput(outputSet, nameDir=nameOut)
-        #Updating mols with converted posFiles
-        self.updatePosFiles(outputSet, nameOut)
 
         outputSet.setDocked(True)
         outputSet.proteinFile.set(self.getOriginalReceptorFile())
@@ -428,47 +431,27 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         return errors
 
     ###########################  Utils functions #####################
-    def convertOutput(self, molSet, nameDir):
-        outDir = self._getExtraPath(nameDir)
-        os.mkdir(outDir)
-        self.convertedDic[os.path.basename(outDir)] = {}
-
-        nt = self.numberOfThreads.get()
-        nMols = len(molSet) // nt
-        it, curMolSet = 0, []
-        threads=[]
-        for mol in molSet:
-            curMolSet.append(mol.clone())
-            if len(curMolSet) == nMols and it < nt - 1:
-                t = threading.Thread(target=self.convertOutputStep, args=(curMolSet.copy(), outDir, it,),
-                                     daemon=False)
-                t.start()
-                threads.append(t)
-                curMolSet, it = [], it+1
-
-        if len(curMolSet) > 0:
-            t = threading.Thread(target=self.convertOutputStep, args=(curMolSet.copy(), outDir, it,),
-                                 daemon=False)
-            t.start()
-            threads.append(t)
-        for t in threads:
-            t.join()
-
-    def convertOutputStep(self, curMolSet, outDir, it):
+    def convertOutputStep(self, curMolSet, molLists, it, outDir):
         for i, mol in enumerate(curMolSet):
-            fnAux = os.path.abspath(self._getExtraPath("tmp_%d_%d.mae" % (it, i)))
             poseId, fnRaw = mol.poseFile.get().split('@')
+            poseId = str(int(poseId) + 1)
             mol.setPoseId(poseId)
-            fnOut = os.path.join(outDir, '{}.{}'.format(mol.getUniqueName(), 'mol2'))
+
+            molName = mol.getUniqueName()
+            fnAux = os.path.abspath(self._getExtraPath(f"tmp_{molName}_{it}_{i}.mae"))
+            fnOut = os.path.join(outDir, f'{molName}.mol2')
 
             if not os.path.exists(fnOut):
                 args = "-n %s %s -o %s" % (poseId, os.path.abspath(fnRaw), fnAux)
                 subprocess.call([maeSubsetProg, *args.split()])
 
-                args = fnAux + ' ' + os.path.abspath(fnOut)
+                args = f'{fnAux} {os.path.abspath(fnOut)}'
                 subprocess.call([structConvertProg, *args.split()])
                 os.remove(fnAux)
-                self.convertedDic[os.path.basename(outDir)][mol.getObjId()] = fnOut
+                fnOut = relabelAtomsMol2(fnOut)
+            mol.setPoseFile(fnOut)
+            molLists[it].append(mol)
+
 
     def convert2mol2(self, fnSmall, it):
         baseName = os.path.splitext(os.path.basename(fnSmall))[0]
@@ -493,20 +476,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
 
     def getAllLigandsFile(self, suffix=''):
         return self._getTmpPath('allMoleculesFile{}.mol2'.format(suffix))
-
-    def updatePosFiles(self, outSet, outName):
-        newMols = []
-        for mol in outSet:
-            posFile = self.convertedDic[outName][mol.getObjId()]
-            if os.path.splitext(posFile)[1] == '.mol2':
-                posFile = relabelAtomsMol2(posFile)
-            mol.setPoseFile(posFile)
-            mol.setPoseId(posFile.split('_')[-2])
-            newMols.append(mol.clone())
-
-        for mol in newMols:
-            outSet.update(mol)
-        return outSet
 
     def getGridDirs(self, complete=False):
         gridDirs = []
