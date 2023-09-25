@@ -124,6 +124,14 @@ def getChargeFromMAE(maeFile):
                     values = False
     return charge
 
+def getNumberOfStructures(maeFile):
+    maeFile = unzipMaegz(maeFile)
+    mols = 0
+    with open(maeFile) as f:
+        for line in f:
+            mols += line.count('f_m_ct')
+    return mols
+
 def maeLineSplit(maeLine):
     '''Some elements are strings surrounded by "" but with spaces in between,
         accounting for several elements of the list when they are actually just 1'''
