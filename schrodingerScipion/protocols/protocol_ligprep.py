@@ -28,8 +28,12 @@ import os, time, glob
 from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam, STEPS_PARALLEL
 from pyworkflow.utils.path import copyFile, moveFile, cleanPath
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin
+
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.utils import getBaseName
+
+from .. import Plugin
+
 
 progLigPrep=Plugin.getHome('ligprep')
 progStructConvert=Plugin.getHome('utilities/structconvert')
@@ -172,7 +176,18 @@ class ProtSchrodingerLigPrep(EMProtocol):
             self._defineOutputs(outputSmallMoleculesDropped=self.outputSmallMoleculesDropped)
             self._defineSourceRelation(self.inputSmallMolecules, self.outputSmallMoleculesDropped)
 
+    def renameSDFTitle(self, sdfFile):
+        tmpFile = self._getTmpPath(os.path.basename(sdfFile))
+        with open(sdfFile) as fIn:
+            fIn.readline()
+            with open(tmpFile, 'w') as fOut:
+                fOut.write(f'{getBaseName(sdfFile)}\n')
+                for line in fIn:
+                    fOut.write(line)
+        os.rename(tmpFile, sdfFile)
+
     def saveMolecule(self, molFn, molSet, oriMol):
+        self.renameSDFTitle(molFn)
         while self.saving:
             time.sleep(0.2)
         self.saving = True
