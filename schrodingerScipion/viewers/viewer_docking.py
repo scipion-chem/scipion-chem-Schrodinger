@@ -57,6 +57,6 @@ class ProtGlideDockingViewer(SmallMoleculesViewer):
 
     def _viewPocketMaestroDock(self, e=None):
         ligandLabel = self.getEnumText('displayMaestroPocket')
-        mols = self.setLigandsDic[ligandLabel]
+        mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
+        return [MaestroView(os.path.abspath(mols[0].maeFile.get()), cwd=self.protocol._getExtraPath())]
 
-        return [MaestroView(os.path.abspath(mols.getFirstItem().maeFile.get()), cwd=self.protocol._getExtraPath())]
