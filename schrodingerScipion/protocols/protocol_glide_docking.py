@@ -35,8 +35,9 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading
 from pwchem import Plugin as pwchemPlugin
 
-from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.utils.utils import putMol2Title
+from .. import Plugin as schrodinger_plugin
+from ..utils.utils import putMol2Title
+from ..protocols.protocol_preparation_grid import ProtSchrodingerGrid
 
 glideProg = schrodinger_plugin.getHome('glide')
 progLigPrep = schrodinger_plugin.getHome('ligprep')
@@ -45,7 +46,7 @@ structCatProg = schrodinger_plugin.getHome('utilities/structcat')
 propListerProg = schrodinger_plugin.getHome('utilities/proplister')
 maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
 
-class ProtSchrodingerGlideDocking(EMProtocol):
+class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     """Calls glide to perform a docking of a set of compounds in a structural region defined by a grid.
        It is assumed that the input library of ligands is already prepared.
 
@@ -57,9 +58,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         EMProtocol.__init__(self, **kwargs)
         self.stepsExecutionMode = STEPS_PARALLEL
 
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-        group = form.addGroup('Input')
+    def _defineGlideReceptorParams(self, form):
+        group = form.addGroup('Receptor')
         group.addParam('fromPockets', EnumParam, label='Dock on : ', default=1,
                        choices=['Whole protein', 'SetOfStructROIs', 'Schrodinger Grids'],
                        help='Whether to dock on a whole protein surface or on specific regions defines as StructROIs or'
@@ -79,46 +79,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         group.addParam('inputGridSet', PointerParam, pointerClass="SetOfSchrodingerGrids",
                        condition='fromPockets==2', label='Input grids:',
                        help='Input grids defining the space where the docking will be performed')
+        return form
 
-        group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
-                       label='Input small molecules:', help='Input small molecules to be docked with Glide')
-
-        group.addParam('convertOutput2Mol2', BooleanParam, label='Convert output to mol2: ', default=False,
-                       help='Whether to convert to output molecules to mol2 files instead of keeping the mae files')
-
-        group = form.addGroup('Define grids', condition='fromPockets!=2')
-        group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
-                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
-                       help='How to set the inner box.'
-                            'Manually: you will manually set the same x,y,z for every ROI'
-                            'PocketDiameter: the diameter * n of each ROI will be used. You can set n')
-
-        line = group.addLine('Inner box (Angstroms)', condition='innerAction==0',
-                             help='The docked ligand mass center must be inside the inner box radius')
-        line.addParam('innerX', IntParam, default=10, label='X')
-        line.addParam('innerY', IntParam, default=10, label='Y')
-        line.addParam('innerZ', IntParam, default=10, label='Z')
-
-        group.addParam('diameterNin', FloatParam, default=0.8, condition='innerAction==1',
-                       label='Size of inner box vs diameter: ',
-                       help='The diameter * n of each ROI will be used as inner box side')
-
-        group.addParam('outerAction', EnumParam, default=1, label='Determine outer box: ',
-                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
-                       help='How to set the outer box.'
-                            'Manually: you will manually set the same x,y,z for every structural ROI'
-                            'PocketDiameter: the diameter * n of each pocket will be used. You can set n')
-
-        line = group.addLine('Outer box (Angstroms)', condition='outerAction==0',
-                             help='The docked ligand atoms must be inside the outer box radius.')
-        line.addParam('outerX', IntParam, default=30, label='X')
-        line.addParam('outerY', IntParam, default=30, label='Y')
-        line.addParam('outerZ', IntParam, default=30, label='Z')
-
-        group.addParam('diameterNout', FloatParam, default=1.2, condition='outerAction==1',
-                       label='Size of outer box vs diameter: ',
-                       help='The diameter * n of each structural ROI will be used as outer box side')
-
+    def _defineGlideParams(self, form):
         group = form.addGroup('Docking')
         group.addParam('posesPerLig', IntParam, default=5, label='No. Poses to report per ligand: ',
                        help='Maximum number of final poses to report per ligand')
@@ -140,38 +103,35 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        label='No. Poses to keep per ligand (em):',
                        help='Number of poses to keep per ligand for energy minimization. '
                             'If set to -1, the default value is 400, except for XP precision that is 800.')
-
-        form.addSection(label='Ligand sampling', expertLevel=LEVEL_ADVANCED,)
-        group = form.addGroup('Grid hydrogen bonds')
-        group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
-                       help='Accept aromatic hydrogens as potential H-bond donors.')
-        group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
-                       condition='HbondDonorAromH',
-                       help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
-                            'The cutoff is applied to the actual (signed) charge, not the absolute value.')
-        group.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
-                       help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
-        group.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
-                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
-                            '(noncovalent interaction) donors')
-        group.addParam('rewardIntraHBonds', BooleanParam, default=False, label='Reward intra H bonds:',
-                      help='Reward intramolecular ligand hydrogen bonds by adding a contribution for each '
-                           'intramolecular hydrogen bond to the GlideScore, and a contribution to Emodel')
-
-        group = form.addGroup('Docking parameters')
         group.addParam('sampleNinversions', BooleanParam, default=True, condition='dockingMethod==0',
                        label='Sample pyramid nitrogen inversions:')
         group.addParam('sampleRings', BooleanParam, default=True, condition='dockingMethod==0',
                        label='Sample rings:')
         group.addParam('epikPenalties', BooleanParam, default=False, label='Epik penalties:',
-                      help='Apply penalties for ionization or tautomeric states calculated by Epik')
+                       help='Apply penalties for ionization or tautomeric states calculated by Epik')
         group.addParam('skipMetalEpik', BooleanParam, default=True, label='Skip Epik metal only:',
-                      help='Skip Epik-generated states of ligands that are designed for binding to metals. '
-                           'This option is useful if the receptor has a metal but the ligand does not bind to it. '
-                           'These states are skipped by default if the receptor does not have a metal.')
+                       help='Skip Epik-generated states of ligands that are designed for binding to metals. '
+                            'This option is useful if the receptor has a metal but the ligand does not bind to it. '
+                            'These states are skipped by default if the receptor does not have a metal.')
         group.addParam('expandedSampling', BooleanParam, default=False, label='Expanded sampling:',
-                      help='Expand the sampling by bypassing the elimination of poses in the rough scoring stage. '
-                           'Useful for fragment docking.')
+                       help='Expand the sampling by bypassing the elimination of poses in the rough scoring stage. '
+                            'Useful for fragment docking.')
+        return form
+
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+        form = self._defineGlideReceptorParams(form)
+        form = self._defineGridParams(form, condition='fromPockets!=2')
+
+        group = form.addGroup('Ligands')
+        group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
+                       label='Input small molecules:', help='Input small molecules to be docked with Glide')
+
+        group.addParam('convertOutput2Mol2', BooleanParam, label='Convert output to mol2: ', default=False,
+                       help='Whether to convert to output molecules to mol2 files instead of keeping the mae files')
+
+        form.addSection(label='Docking')
+        form = self._defineGlideParams(form)
 
         form.addParallelSection(threads=4, mpi=1)
 
