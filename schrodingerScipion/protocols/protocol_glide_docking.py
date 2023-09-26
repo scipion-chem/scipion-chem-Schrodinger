@@ -138,31 +138,30 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         convStep = self._insertFunctionStep('convertStep', prerequisites=[])
-        cStep = self._insertFunctionStep('createLigandsFileStep', prerequisites=[convStep])
-        c2Step = self._insertFunctionStep('combineLigandsFilesStep', prerequisites=[cStep])
-        c2Steps = [c2Step]
+        cSteps = [convStep]
 
         inputGrids = self.inputGridSet.get()
         if self.fromPockets.get() == 0:
-            dStep = self._insertFunctionStep('gridStep', self.inputAtomStruct.get(), prerequisites=c2Steps)
-            c2Steps, inputGrids = [dStep], [self.inputAtomStruct.get()]
+            dStep = self._insertFunctionStep('gridStep', self.inputAtomStruct.get(), prerequisites=cSteps)
+            cSteps, inputGrids = [dStep], [self.inputAtomStruct.get()]
 
         elif self.fromPockets.get() == 1:
             gridSteps = []
             for pocket in self.inputStructROIs.get():
-                dStep = self._insertFunctionStep('gridStep', pocket.clone(), prerequisites=c2Steps)
+                dStep = self._insertFunctionStep('gridStep', pocket.clone(), prerequisites=cSteps)
                 gridSteps.append(dStep)
-            c2Steps, inputGrids = gridSteps, self.inputStructROIs.get()
+            cSteps, inputGrids = gridSteps, self.inputStructROIs.get()
 
         dockSteps = []
         for grid in inputGrids:
-            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=c2Steps)
+            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=cSteps)
             dockSteps.append(dStep)
         self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
     def convertStep(self):
+        nt = self.numberOfThreads.get()
+        # Convert receptor
         inFile = self.getOriginalReceptorFile()
-
         if not '.mae' in inFile:
             maeFile = self._getExtraPath('inputReceptor.maegz')
             prog = schrodinger_plugin.getHome('utilities/prepwizard')
@@ -173,39 +172,15 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             ext = os.path.splitext(inFile)[1]
             shutil.copy(inFile, self._getExtraPath('inputReceptor{}'.format(ext)))
 
-    def createLigandsFileStep(self):
-        nt = self.numberOfThreads.get()
+        # Create ligand files
         ligSet = self.inputLibrary.get()
-        nLigs = len(ligSet) // nt
-        it, curLigSet = 0, []
-        threads = []
-        for lig in ligSet:
-            curLigSet.append(lig.clone())
-            if len(curLigSet) == nLigs and it < nt -1:
-                t = threading.Thread(target=self.createLigandsFile, args=(curLigSet.copy(), it,),
-                                     daemon=False)
-                threads.append(t)
-                t.start()
-                curLigSet, it = [], it + 1
+        performBatchThreading(self.createLigandsFile, ligSet, nt)
 
-        if len(curLigSet) > 0:
-            t = threading.Thread(target=self.createLigandsFile, args=(curLigSet.copy(), it,),
-                                 daemon=False)
-            threads.append(t)
-            t.start()
-
-        for t in threads:
-            t.join()
-
-    def combineLigandsFilesStep(self):
-        nt = self.numberOfThreads.get()
         allLigandsFile = self.getAllLigandsFile()
         with open(allLigandsFile, 'w') as f:
             for it in range(nt):
                 with open(self.getAllLigandsFile(suffix=it)) as fLig:
                     f.write(fLig.read())
-                #os.remove(self.getAllLigandsFile(suffix=it))
-
 
     def gridStep(self, pocket):
         if self.fromPockets.get() == 0:
@@ -293,7 +268,6 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
                 fhIn.write("EPIK_PENALTIES %s\n"%self.sampleNinversions.get())
                 fhIn.write("SKIP_EPIK_METAL_ONLY %s\n"%self.skipMetalEpik.get())
                 fhIn.write("EXPANDED_SAMPLING %s\n"%self.expandedSampling.get())
-                fhIn.write("REWARD_INTRA_HBONDS %s\n"%self.rewardIntraHBonds.get())
                 fhIn.write("HBOND_DONOR_AROMH %s\n"%self.HbondDonorAromH.get())
                 if self.HbondDonorAromH.get():
                     fhIn.write("HBOND_DONOR_AROMH_CHARGE %f\n" % self.HbondDonorAromHCharge.get())
@@ -463,7 +437,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         return self._getExtraPath(outName)
 
 
-    def createLigandsFile(self, ligSet, it):
+    def createLigandsFile(self, ligSet, molLists, it):
         curAllLigandsFile = self.getAllLigandsFile(suffix=it)
         with open(curAllLigandsFile, 'w') as fh:
             for small in ligSet:
