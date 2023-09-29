@@ -55,7 +55,8 @@ class ProtSchrodingerDesmondMD(EMProtocol):
     _restrainTypes = ['None', 'Ligand', 'Protein', 'Solute_heavy_atom', 'Solute']
 
     _omitParamNames = ['runName', 'runMode', 'insertStep', 'summarySteps', 'deleteStep', 'watchStep',
-                       'workFlowSteps', 'hostName', 'numberOfThreads', 'numberOfMpi']
+                       'workFlowSteps', 'hostName', 'numberOfThreads', 'numberOfMpi',
+                       'inputStruct', 'defSteps']
 
     _defParams = {'simTime': 100, 'bondedT': 0.002, 'nearT': 0.002, 'farT': 0.006,
                   'annealTemps': '[300, 0]', 'annealing': False,
