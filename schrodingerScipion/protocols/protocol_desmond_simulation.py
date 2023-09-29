@@ -53,10 +53,9 @@ class ProtSchrodingerDesmondMD(EMProtocol):
     _barostats = ['Martyna-Tobias-Klein', 'Langevin', 'None']
     _coupleStyle = ['Isotropic', 'Semi-isotropic', 'Anisotropic', 'Constant area']
     _restrainTypes = ['None', 'Ligand', 'Protein', 'Solute_heavy_atom', 'Solute']
-    _paramNames = ['simTime', 'annealTemps', 'bondedT', 'nearT', 'farT', 'velResamp', 'glueSolute', 'trajInterval',
-                   'temperature', 'deltaMax', 'tempMDCons', 'annealing',
-                   'pressure', 'presMDCons', 'surfTension', 'restrainForce']
-    _enumParamNames = ['ensemType', 'thermostat', 'barostat', 'coupleStyle', 'restrains']
+
+    _omitParamNames = ['runName', 'runMode', 'insertStep', 'summarySteps', 'deleteStep', 'watchStep',
+                       'workFlowSteps', 'hostName', 'numberOfThreads', 'numberOfMpi']
 
     _defParams = {'simTime': 100, 'bondedT': 0.002, 'nearT': 0.002, 'farT': 0.006,
                   'annealTemps': '[300, 0]', 'annealing': False,
@@ -285,6 +284,20 @@ class ProtSchrodingerDesmondMD(EMProtocol):
                                   format(eval(aSt)[1], msjDic['simTime']))
         return errors
 
+    def getStageParamsDic(self, type='All'):
+      '''Return a dictionary as {paramName: param} of the stage parameters of the formulary.
+      Type'''
+      paramsDic = {}
+      for paramName, param in self._definition.iterAllParams():
+        if not paramName in self._omitParamNames and not isinstance(param, Group) and not isinstance(param, Line):
+          if type == 'All':
+            paramsDic[paramName] = param
+          elif type == 'Enum' and isinstance(param, EnumParam):
+            paramsDic[paramName] = param
+          elif type == 'Normal' and not isinstance(param, EnumParam):
+            paramsDic[paramName] = param
+      return paramsDic
+
     ############# UTILS
     def buildSimulateStr(self, msjDic):
         '''Checks the values stored in the msjDic and trnaslates them into msjStr.
@@ -334,11 +347,12 @@ class ProtSchrodingerDesmondMD(EMProtocol):
         return msj_str
 
     def addDefaultForMissing(self, msjDic):
-        '''Add default values for missing parameters in the msjDic'''
-        for pName in [*self._paramNames, *self._enumParamNames]:
-            if not pName in msjDic:
-                msjDic[pName] = self._defParams[pName]
-        return msjDic
+      '''Add default values for missing parameters in the msjDic'''
+      paramDic = self.getStageParamsDic()
+      for pName in paramDic.keys():
+        if not pName in msjDic:
+          msjDic[pName] = paramDic[pName].default
+      return msjDic
 
     def buildMSJ_str(self):
         '''Build the .msj (file used by multisim to specify the jobs performed by Schrodinger)
@@ -357,21 +371,21 @@ class ProtSchrodingerDesmondMD(EMProtocol):
                 msj_str += self.buildSimulateStr(msjDic)
 
         return msj_str
-    
-    def createMSJDic(self):
-        msjDic = {}
-        for pName in self._paramNames:
-            if hasattr(self, pName):
-                msjDic[pName] = getattr(self, pName).get()
-            else:
-                print('Something is wrong with parameter ', pName)
 
-        for pName in self._enumParamNames:
-            if hasattr(self, pName):
-                msjDic[pName] = self.getEnumText(pName)
-            else:
-                print('Something is wrong with parameter ', pName)
-        return msjDic
+    def createMSJDic(self):
+      msjDic = {}
+      for pName in self.getStageParamsDic(type='Normal').keys():
+        if hasattr(self, pName):
+          msjDic[pName] = getattr(self, pName).get()
+        else:
+          print('Something is wrong with parameter ', pName)
+
+      for pName in self.getStageParamsDic(type='Enum').keys():
+        if hasattr(self, pName):
+          msjDic[pName] = self.getEnumText(pName)
+        else:
+          print('Something is wrong with parameter ', pName)
+      return msjDic
 
     def createGUISummary(self):
         with open(self._getExtraPath("summary.txt"), 'w') as f:

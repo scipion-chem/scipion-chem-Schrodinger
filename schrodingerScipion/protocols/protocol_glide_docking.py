@@ -81,8 +81,8 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
                        help='Input grids defining the space where the docking will be performed')
         return form
 
-    def _defineGlideParams(self, form):
-        group = form.addGroup('Docking')
+    def _defineGlideParams(self, form, condition='True'):
+        group = form.addGroup('Docking', condition=condition)
         group.addParam('posesPerLig', IntParam, default=5, label='No. Poses to report per ligand: ',
                        help='Maximum number of final poses to report per ligand')
         group.addParam('dockingMethod', EnumParam, default=0, label='Docking method',
