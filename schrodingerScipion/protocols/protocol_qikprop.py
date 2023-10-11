@@ -95,7 +95,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 			deps.append(self._insertFunctionStep('runQikpropStep', baseCommand, molecule))
 		
 		# Clean tmp files if selected
-		if self.cleanTmp.get():
+		if self.cleanTmps.get():
 			for molecule in self.getInputFiles():
 				self._insertFunctionStep('runQikpropStep', baseCommand, molecule, prerequisites=deps)
 
