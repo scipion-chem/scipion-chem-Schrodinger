@@ -181,5 +181,5 @@ class ProtSchrodingerQikprop(EMProtocol):
 	
 	def getTmpFiles(self, molecule):
 		""" This  function returns the temporary files related to the execution of qikprop for the given molecule. """
-		print(molecule)
-		return ''
+		moleculeName = os.path.splitext(molecule)[0]
+		return f'{moleculeName}.log {moleculeName}.out {moleculeName}-out.sdf {moleculeName}.qpsa'
