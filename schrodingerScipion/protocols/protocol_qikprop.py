@@ -90,17 +90,25 @@ class ProtSchrodingerQikprop(EMProtocol):
 		baseCommand = self.getQikpropBaseCmd()
 
 		# For every SmallMolecule in the input set, build complete command
+		deps = []
 		for molecule in self.getInputFiles():
-			self._insertFunctionStep('runQikpropStep', baseCommand, molecule)
+			deps.append(self._insertFunctionStep('runQikpropStep', baseCommand, molecule))
+		
+		# Clean tmp files if selected
+		if self.cleanTmp.get():
+			for molecule in self.getInputFiles():
+				self._insertFunctionStep('runQikpropStep', baseCommand, molecule, prerequisites=deps)
 
 	def runQikpropStep(self, baseCommand, molecule):
 		""" This function runs the schrodinger binary file with the given params. """
 		self.runJob(baseCommand, f' {molecule}', cwd=self._getExtraPath())
-
-		# Clean tmp files if selected
-		if self.cleanTmps.get():
-			self.runJob('rm -rf', f' {self.getTmpFiles(molecule)}', cwd=self._getExtraPath())
 	
+	def cleanTmpFiles(self, molecule):
+		""" This  function returns the temporary files related to the execution of qikprop for the given molecule. """
+		moleculeBasePath = os.path.join(os.path.abspath(self._getExtraPath()), os.path.splitext(os.path.basename(molecule))[0])
+		tmpFiles = f'{moleculeBasePath}.log {moleculeBasePath}.out {moleculeBasePath}-out.sdf {moleculeBasePath}.qpsa'
+		self.runJob('rm -rf', f' {tmpFiles}', cwd=self._getExtraPath())
+
 	# --------------------------- INFO functions --------------------------------------------
 	def _validate(self):
 		"""
@@ -179,7 +187,3 @@ class ProtSchrodingerQikprop(EMProtocol):
 		""" This function returns the flag string corresponding to the sim recap param. """
 		return ' -recap' if self.recap.get() else ''
 	
-	def getTmpFiles(self, molecule):
-		""" This  function returns the temporary files related to the execution of qikprop for the given molecule. """
-		moleculeBasePath = os.path.join(os.path.abspath(self._getExtraPath()), os.path.splitext(os.path.basename(molecule))[0])
-		return f'{moleculeBasePath}.log {moleculeBasePath}.out {moleculeBasePath}-out.sdf {moleculeBasePath}.qpsa'
