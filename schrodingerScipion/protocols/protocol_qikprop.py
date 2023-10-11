@@ -57,6 +57,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 		# Create form
 		form.addSection(label='Input')
+		# Main params
 		form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
 			label='Input small molecules:', help='Input small molecules to be treated.')
 		form.addParam('fast', BooleanParam, default=False, label='Run in fast mode:',
@@ -65,6 +66,8 @@ class ProtSchrodingerQikprop(EMProtocol):
 			help='Generate a list of known drugs most similar to each processed molecule.')
 		form.addParam('nsim', IntParam, default=5, label='Number of most similar drugs:', condition="sim==True",
 			help="Number of most similar drug molecules to report.")
+		
+		# Additional optional params
 		form.addParam('neut', BooleanParam, default=True, label='Neutralize molecules:', expertLevel=LEVEL_ADVANCED,
 			help='Neutralize molecules in Maestro formatted files prior to processing.')
 		form.addParam('altclass', BooleanParam, default=False, label='Alternative class:', expertLevel=LEVEL_ADVANCED,
@@ -75,6 +78,10 @@ class ProtSchrodingerQikprop(EMProtocol):
 		form.addParam('recap', BooleanParam, default=False, label='Replace CombiGlide with methyl:', expertLevel=LEVEL_ADVANCED,
 			help='Replace the CombiGlide functional group with a methyl group prior to processing.\n'
 				'When used in the CombiGlide reagent-preparation process, gives properties for the \'naked sidechain\'.')
+		
+		# Utils params
+		form.addParam('cleanTmps', BooleanParam, default='True', label='Clean temporary files: ', expertLevel=LEVEL_ADVANCED,
+			help='Clean temporary files after finishing the execution.\nThis is useful to reduce unnecessary disk usage.')
 
 	# --------------------------- INSERT steps functions --------------------
 	def _insertAllSteps(self):
@@ -89,6 +96,10 @@ class ProtSchrodingerQikprop(EMProtocol):
 	def runQikpropStep(self, baseCommand, molecule):
 		""" This function runs the schrodinger binary file with the given params. """
 		self.runJob(baseCommand, f' {molecule}', cwd=self._getExtraPath())
+
+		# Clean tmp files if selected
+		if self.cleanTmps.get():
+			self.runJob('rm -rf', f' {self.getTmpFiles(molecule)}', cwd=self._getExtraPath())
 	
 	# --------------------------- INFO functions --------------------------------------------
 	def _validate(self):
@@ -167,3 +178,8 @@ class ProtSchrodingerQikprop(EMProtocol):
 	def getRecapFlag(self):
 		""" This function returns the flag string corresponding to the sim recap param. """
 		return ' -recap' if self.recap.get() else ''
+	
+	def getTmpFiles(self, molecule):
+		""" This  function returns the temporary files related to the execution of qikprop for the given molecule. """
+		print(molecule)
+		return ''
