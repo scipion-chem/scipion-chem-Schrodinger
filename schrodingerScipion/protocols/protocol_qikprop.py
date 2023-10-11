@@ -36,7 +36,7 @@ from pyworkflow.utils import redStr
 from schrodingerScipion import Plugin
 
 class ProtSchrodingerQikprop(EMProtocol):
-	""" TODO: find out & place here """
+	""" Qikprop analyzes the properties of a given set of small molecules. """
 	_label = 'qikprop'
 	_program = ""
 
@@ -80,7 +80,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 				'When used in the CombiGlide reagent-preparation process, gives properties for the \'naked sidechain\'.')
 		
 		# Utils params
-		form.addParam('cleanTmps', BooleanParam, default='True', label='Clean temporary files: ', expertLevel=LEVEL_ADVANCED,
+		form.addParam('cleanTmps', BooleanParam, default=True, label='Clean temporary files: ', expertLevel=LEVEL_ADVANCED,
 			help='Clean temporary files after finishing the execution.\nThis is useful to reduce unnecessary disk usage.')
 
 	# --------------------------- INSERT steps functions --------------------
