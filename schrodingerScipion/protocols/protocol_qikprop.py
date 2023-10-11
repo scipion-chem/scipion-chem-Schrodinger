@@ -116,10 +116,10 @@ class ProtSchrodingerQikprop(EMProtocol):
 		command = self.getQikpropBinaryFile()
 
 		# Add permanent flags
-		command += f' {self.getFastFlag()} {self.getSimFlag()}{self.getNSim()} {self.getNeutFlag()} -LOCAL'
+		command += f' {self.getFastFlag()} {self.getSimFlag()} {self.getNeutFlag()} -LOCAL'
 
 		# Add optional flags
-		command += self.getAltClassFlag() + self.getAltProbeFlag() + self.getRecapFlag()
+		command += self.getNSim() + self.getAltClassFlag() + self.getAltProbeFlag() + self.getRecapFlag()
 
 		# Return formatted command string
 		return command
