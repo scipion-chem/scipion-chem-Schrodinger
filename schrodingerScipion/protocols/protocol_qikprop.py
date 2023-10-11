@@ -29,7 +29,7 @@ import os
 
 # Scipion em imports
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, FloatParam
+from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, FloatParam, IntParam, LEVEL_ADVANCED
 from pyworkflow.utils import redStr
 
 # Plugin imports
@@ -61,16 +61,18 @@ class ProtSchrodingerQikprop(EMProtocol):
 			label='Input small molecules:', help='Input small molecules to be treated.')
 		form.addParam('fast', BooleanParam, default=False, label='Run in fast mode:',
 			help='Run job in fast mode (no dipole, homo or lumo).')
-		form.addParam('neut', BooleanParam, default=True, label='Neutralize molecules:',
-			help='Neutralize molecules in Maestro formatted files prior to processing.')
 		form.addParam('sim', BooleanParam, default=True, label='Generate similar known drugs:',
 			help='Generate a list of known drugs most similar to each processed molecule.')
-		form.addParam('altclass', BooleanParam, default=False, label='Alternative class:',
+		form.addParam('nsim', IntParam, default=5, label='Number of most similar drugs:', condition="sim==True",
+			help="Number of most similar drug molecules to report.")
+		form.addParam('neut', BooleanParam, default=True, label='Neutralize molecules:', expertLevel=LEVEL_ADVANCED,
+			help='Neutralize molecules in Maestro formatted files prior to processing.')
+		form.addParam('altclass', BooleanParam, default=False, label='Alternative class:', expertLevel=LEVEL_ADVANCED,
 			help='Run additional SASA, PSA calculations using an alternative class definition.')
-		form.addParam('useAltprobe', BooleanParam, default=False, label='Use alternative probe:',
+		form.addParam('useAltprobe', BooleanParam, default=False, label='Use alternative probe:', expertLevel=LEVEL_ADVANCED,
 			help='Run additional SASA, PSA calculations using an alternative probe radii (1.4A by default).')
-		form.addParam('altprobe', FloatParam, default=1.4, label='Alternative probe:', condition='useAltprobe==True')
-		form.addParam('recap', BooleanParam, default=False, label='Replace CombiGlide with methyl:',
+		form.addParam('altprobe', FloatParam, default=1.4, label='Alternative probe:', expertLevel=LEVEL_ADVANCED, condition='useAltprobe==True')
+		form.addParam('recap', BooleanParam, default=False, label='Replace CombiGlide with methyl:', expertLevel=LEVEL_ADVANCED,
 			help='Replace the CombiGlide functional group with a methyl group prior to processing.\n'
 				'When used in the CombiGlide reagent-preparation process, gives properties for the \'naked sidechain\'.')
 
@@ -114,7 +116,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		command = self.getQikpropBinaryFile()
 
 		# Add permanent flags
-		command += f' {self.getFastFlag()} {self.getNeutFlag()} {self.getSimFlag()} -LOCAL'
+		command += f' {self.getFastFlag()} {self.getSimFlag()}{self.getNSim()} {self.getNeutFlag()} -LOCAL'
 
 		# Add optional flags
 		command += self.getAltClassFlag() + self.getAltProbeFlag() + self.getRecapFlag()
@@ -142,13 +144,17 @@ class ProtSchrodingerQikprop(EMProtocol):
 		""" This function returns the flag string corresponding to the fast flag param. """
 		return '-fast' if self.fast.get() else '-nofast'
 
-	def getNeutFlag(self):
-		""" This function returns the flag string corresponding to the neut flag param. """
-		return '-neut' if self.neut.get() else '-noneut'
-	
 	def getSimFlag(self):
 		""" This function returns the flag string corresponding to the sim flag param. """
 		return '-sim' if self.sim.get() else '-nosim'
+	
+	def getNSim(self):
+		""" This function returns the flag string corresponding to the nsim flag param. """
+		return f' -nsim {self.nsim.get()}' if self.sim.get() else ''
+	
+	def getNeutFlag(self):
+		""" This function returns the flag string corresponding to the neut flag param. """
+		return '-neut' if self.neut.get() else '-noneut'
 	
 	def getAltClassFlag(self):
 		""" This function returns the flag string corresponding to the altclass flag param. """
