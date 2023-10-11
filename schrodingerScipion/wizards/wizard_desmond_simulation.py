@@ -52,6 +52,18 @@ WatchElementWizard().addTarget(protocol=ProtSchrodingerDesmondMD,
                                inputs=['watchStep'],
                                outputs=['workFlowSteps', 'summarySteps'])
 
+AddElementSummaryWizard().addTarget(protocol=ProtSchrodingerIFD,
+                                    targets=['insertStep'],
+                                    inputs=['insertStep'],
+                                    outputs=['workFlowSteps', 'summarySteps'])
+DeleteElementWizard().addTarget(protocol=ProtSchrodingerIFD,
+                                targets=['deleteStep'],
+                                inputs=['deleteStep'],
+                                outputs=['workFlowSteps', 'summarySteps'])
+WatchElementWizard().addTarget(protocol=ProtSchrodingerIFD,
+                               targets=['watchStep'],
+                               inputs=['watchStep'],
+                               outputs=['workFlowSteps', 'summarySteps'])
 
 class AddDefaultStepsWizard(pwizard.Wizard):
     """Delete the step of the workflow defined by the index"""

@@ -33,8 +33,8 @@ information such as name and number of residues.
 """
 
 # Imports
-from pwchem.wizards import SelectChainWizardQT, SelectResidueWizardQT, AddResidueWizard
-from schrodingerScipion.protocols import ProtSchrodingerPrepWizard, ProtSchrodingerPrime
+from pwchem.wizards import SelectChainWizardQT, SelectResidueWizardQT, AddResidueWizard, SetResidueWizard
+from ..protocols import ProtSchrodingerPrepWizard, ProtSchrodingerPrime, ProtSchrodingerIFD
 
 SelectChainWizardQT().addTarget(protocol=ProtSchrodingerPrepWizard,
                                 targets=['chain_name'],
@@ -56,3 +56,37 @@ AddResidueWizard().addTarget(protocol=ProtSchrodingerPrime,
                              inputs=['resChain', 'resPosition'],
                              outputs=['residueList'])
 
+SelectChainWizardQT().addTarget(protocol=ProtSchrodingerIFD,
+                                targets=['selChain'],
+                                inputs=[{'fromPockets': ['inputAtomStruct', 'inputStructROIs']}],
+                                outputs=['selChain'])
+
+SelectResidueWizardQT().addTarget(protocol=ProtSchrodingerIFD,
+                                  targets=['selResidue'],
+                                  inputs=[{'fromPockets': ['inputAtomStruct', 'inputStructROIs']}, 'selChain'],
+                                  outputs=['selResidue'])
+
+AddResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
+                             targets=['addResAdd'],
+                             inputs=['selChain', 'selResidue'],
+                             outputs=['residuesAdd'])
+
+AddResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
+                             targets=['addResOmit'],
+                             inputs=['selChain', 'selResidue'],
+                             outputs=['residuesOmit'])
+
+AddResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
+                             targets=['addResTrim'],
+                             inputs=['selChain', 'selResidue'],
+                             outputs=['residuesTrim'])
+
+SetResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
+                             targets=['residuesRegion'],
+                             inputs=['selChain', 'selResidue'],
+                             outputs=['residuesRegion'])
+
+SetResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
+                             targets=['residuesHelix'],
+                             inputs=['selChain', 'selResidue'],
+                             outputs=['residuesHelix'])
