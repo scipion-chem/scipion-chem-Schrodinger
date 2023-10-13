@@ -127,6 +127,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
 			self.addCSVProperties(molecule)
+			print("TEST: ", molecule.PSA)
 
 		# Generate output
 		self._defineOutputs(**{self._OUTNAME: inputMolecules})
@@ -242,7 +243,6 @@ class ProtSchrodingerQikprop(EMProtocol):
 			
 			for header, value in zip(rows[0], rows[1]):
 				value = self.getTextValue(value)
-				print("ATTR -- ", header, ' = ', value)
 				if header != 'molecule' and value != None:
 					setattr(molecule, header, value)
 
