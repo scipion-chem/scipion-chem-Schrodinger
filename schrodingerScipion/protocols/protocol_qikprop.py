@@ -25,7 +25,8 @@
 # **************************************************************************
 
 # General imports
-import os
+import os, csv
+from typing import Union, List
 
 # Scipion em imports
 from pwem.protocols import EMProtocol
@@ -33,7 +34,7 @@ from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanPara
 from pyworkflow.utils import redStr, Message
 
 # Scipion chem imports
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 # Plugin imports
 from .. import Plugin
@@ -125,8 +126,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
-			filename = molecule.getFileName()
-			print(filename)
+			self.addCSVProperties(molecule)
 
 		# Generate output
 		self._defineOutputs(**{self._OUTNAME: inputMolecules})
@@ -170,7 +170,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		return summary
 	
 	# --------------------------- Utils functions --------------------
-	def getQikpropBaseCmd(self):
+	def getQikpropBaseCmd(self) -> str:
 		""" This function returns the command string to run qikprop. """
 		# Command starts with the executable file
 		command = self.getQikpropBinaryFile()
@@ -184,7 +184,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Return formatted command string
 		return command
 
-	def getQikpropBinaryFile(self):
+	def getQikpropBinaryFile(self) -> str:
 		""" This function returns the location for the Schrodinger qikprop binary file. """
 		# Getting path to the binary
 		binaryPath = os.path.join(Plugin.getVar('SCHRODINGER_HOME'), 'qikprop')
@@ -196,35 +196,71 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# If path was not found, raise exception
 		raise FileNotFoundError(redStr(f"Path \"{binaryPath}\" not found. Is variable SCHRODINGER_HOME properly set within scipion.conf file?"))
 	
-	def getInputFiles(self):
+	def getInputFiles(self) -> List[str]:
 		""" This function returns a list with the full path to each one of the input files. """
 		return [os.path.abspath(molecule.getFileName()) for molecule in self.inputSmallMolecules.get()]
 	
-	def getFastFlag(self):
+	def getFastFlag(self) -> str:
 		""" This function returns the flag string corresponding to the fast flag param. """
 		return '-fast' if self.fast.get() else '-nofast'
 
-	def getSimFlag(self):
+	def getSimFlag(self) -> str:
 		""" This function returns the flag string corresponding to the sim flag param. """
 		return '-sim' if self.sim.get() else '-nosim'
 	
-	def getNSim(self):
+	def getNSim(self) -> str:
 		""" This function returns the flag string corresponding to the nsim flag param. """
 		return f' -nsim {self.nsim.get()}' if self.sim.get() else ''
 	
-	def getNeutFlag(self):
+	def getNeutFlag(self) -> str:
 		""" This function returns the flag string corresponding to the neut flag param. """
 		return '-neut' if self.neut.get() else '-noneut'
 	
-	def getAltClassFlag(self):
+	def getAltClassFlag(self) -> str:
 		""" This function returns the flag string corresponding to the altclass flag param. """
 		return ' -altclass' if self.altclass.get() else ''
 	
-	def getAltProbeFlag(self):
+	def getAltProbeFlag(self) -> str:
 		""" This function returns the flag string corresponding to the altprobe flag param. """
 		return f' -altprobe {self.altprobe.get()}' if self.useAltprobe.get() else ''
 	
-	def getRecapFlag(self):
+	def getRecapFlag(self) -> str:
 		""" This function returns the flag string corresponding to the sim recap param. """
 		return ' -recap' if self.recap.get() else ''
-	
+
+	def addCSVProperties(self, molecule : SmallMolecule):
+		""" This function adds the properties dumped by Qikprop in a CSV file for a given molecule. """
+		csvFile = os.path.splitext(os.path.abspath(self._getExtraPath(os.path.basename(molecule.getFileName()))))[0] + '.CSV'
+
+		with open(csvFile, mode='r') as attrFile:
+			rows = list(csv.reader(attrFile))
+
+			if len(rows[0]) != len(rows[1]):
+				raise ValueError(redStr(f"{csvFile}: Number of headers and data columns do not match."))
+			
+			for header, value in zip(rows[0], rows[1]):
+				value = self.getTextValue(value)
+				print("ATTR -- ", header, ' = ', value)
+				if header != 'molecule' and value:
+					setattr(molecule, header, value)
+
+	def getTextValue(self, text : str) -> Union[int, float, str, None]:
+		"""
+		This function returns the value of the given text in the appropiate data type.
+		Supported values are int, float, and str.
+		"""
+		# If string is empty, return None
+		if not text:
+			return None
+		
+		# If all characters are a number, it must be an integer
+		if text.isnumeric():
+			return int(text)
+		
+		# Try to convert to float.
+		# If possible, it is float
+		# If not, it is an str
+		try:
+			return float(text)
+		except ValueError:
+			return text
