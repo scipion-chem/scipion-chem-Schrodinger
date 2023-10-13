@@ -43,7 +43,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 	""" Qikprop analyzes the properties of a given set of small molecules. """
 	_label = 'qikprop'
 	_program = ""
-	_OUTNAME = ""
+	_OUTNAME = "outputSmallMolecules"
 	_possibleOutputs = {_OUTNAME: SetOfSmallMolecules}
 
 	# --------------------------- Class constructor --------------------------------------------
