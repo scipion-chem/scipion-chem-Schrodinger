@@ -123,13 +123,14 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Obtaining input small molecules
 		inputMolecules = self.inputSmallMolecules.get()
 
-		outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getExtraPath(), suffix='outputSmallMols')
+		outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='outputSmallMols')
 		outputSmallMolecules.copy(inputMolecules)
 
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
 			self.addCSVProperties(molecule)
 			outputSmallMolecules.append(molecule)
+		outputSmallMolecules.write()
 		
 		# Generate output
 		self._defineOutputs(**{self._OUTNAME: outputSmallMolecules})
