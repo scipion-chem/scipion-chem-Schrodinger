@@ -235,8 +235,10 @@ class ProtSchrodingerQikprop(EMProtocol):
 		with open(csvFile, mode='r') as attrFile:
 			rows = list(csv.reader(attrFile))
 
+			# If number of headers does not match number of row columns, values will be empty
+			# thus, not storing them 
 			if len(rows[0]) != len(rows[1]):
-				raise ValueError(redStr(f"{csvFile}: Number of headers ({len(rows[0])}) and data columns ({len(rows[1])}) do not match."))
+				return
 			
 			for header, value in zip(rows[0], rows[1]):
 				value = self.getTextValue(value)
