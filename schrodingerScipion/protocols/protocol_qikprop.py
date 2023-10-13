@@ -133,7 +133,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Input checks
 		for molecule in inputMolecules:
 			try:
-				print("TEST INPUT: ", getattr(outMol, sampleParam))
+				print("TEST INPUT: ", getattr(molecule, sampleParam))
 			except AttributeError:
 				print("INPUT: molecule does not have attribute ", sampleParam)
 
@@ -150,7 +150,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Output checks
 		for molecule in outputSmallMolecules:
 			try:
-				print("TEST OUTPUT: ", getattr(outMol, sampleParam))
+				print("TEST OUTPUT: ", getattr(molecule, sampleParam))
 			except AttributeError:
 				print("OUTPUT: molecule does not have attribute ", sampleParam)
 		
