@@ -241,7 +241,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 			for header, value in zip(rows[0], rows[1]):
 				value = self.getTextValue(value)
 				print("ATTR -- ", header, ' = ', value)
-				if header != 'molecule' and value:
+				if header != 'molecule' and value != None:
 					setattr(molecule, header, value)
 
 	def getTextValue(self, text : str) -> Union[int, float, str, None]:
