@@ -241,7 +241,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 			# If number of headers does not match number of row columns, values will be empty
 			# thus, not storing them. Also discard csv if it contains less than 2 columns (1st is id)
-			if len(rows[0]) != len(rows[1]) or len(rows[1] < 2):
+			if len(rows[0]) != len(rows[1]) or len(rows[1]) < 2:
 				return
 			
 			# Creating new molecule that will be a clone of the input one, with extra attributes
