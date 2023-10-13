@@ -124,13 +124,13 @@ class ProtSchrodingerQikprop(EMProtocol):
 		inputMolecules = self.inputSmallMolecules.get()
 
 		outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='outputSmallMols')
-		outputSmallMolecules.copy(inputMolecules)
+		outputSmallMolecules.copyAttributes(inputMolecules)
 
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
-			self.addCSVProperties(molecule)
-			outputSmallMolecules.append(molecule)
-		outputSmallMolecules.write()
+			outMol = self.addCSVProperties(molecule)
+			print(outMol)
+			outputSmallMolecules.append(outMol)
 		
 		# Generate output
 		self._defineOutputs(**{self._OUTNAME: outputSmallMolecules})
@@ -232,7 +232,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		""" This function returns the flag string corresponding to the sim recap param. """
 		return ' -recap' if self.recap.get() else ''
 
-	def addCSVProperties(self, molecule : SmallMolecule):
+	def addCSVProperties(self, molecule : SmallMolecule) -> SmallMolecule:
 		""" This function adds the properties dumped by Qikprop in a CSV file for a given molecule. """
 		csvFile = os.path.splitext(os.path.abspath(self._getExtraPath(os.path.basename(molecule.getFileName()))))[0] + '.CSV'
 
@@ -240,14 +240,20 @@ class ProtSchrodingerQikprop(EMProtocol):
 			rows = list(csv.reader(attrFile))
 
 			# If number of headers does not match number of row columns, values will be empty
-			# thus, not storing them 
-			if len(rows[0]) != len(rows[1]):
+			# thus, not storing them. Also discard csv if it contains less than 2 columns (1st is id)
+			if len(rows[0]) != len(rows[1]) or len(rows[1] < 2):
 				return
 			
+			# Creating new molecule that will be a clone of the input one, with extra attributes
+			outputMolecule = molecule.clone()
+
+			# Setting info into output molecule
 			for header, value in zip(rows[0], rows[1]):
 				value = self.getTextValue(value)
 				if header != 'molecule' and value != None:
-					setattr(molecule, header, value)
+					setattr(outputMolecule, header, value)
+			
+			return outputMolecule
 
 	def getTextValue(self, text : str) -> Union[int, float, str, None]:
 		"""
