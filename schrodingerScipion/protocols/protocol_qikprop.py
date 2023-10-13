@@ -127,7 +127,6 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
 			self.addCSVProperties(molecule)
-			print("TEST: ", molecule.QPlogPC16)
 		
 		# Copying input object to define output
 		outputMolecules = SetOfSmallMolecules()
