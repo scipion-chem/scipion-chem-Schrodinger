@@ -127,6 +127,8 @@ class ProtSchrodingerQikprop(EMProtocol):
 		outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='outputSmallMols')
 		outputSmallMolecules.copyAttributes(inputMolecules)
 
+		test = []
+
 		# Test:
 		sampleParam = 'QPPMDCK'
 
@@ -146,6 +148,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 			except AttributeError:
 				print("LOOP: molecule does not have attribute ", sampleParam)
 			outputSmallMolecules.append(outMol)
+			test.append(outMol)
 		
 		# Output checks
 		for molecule in outputSmallMolecules:
@@ -153,6 +156,13 @@ class ProtSchrodingerQikprop(EMProtocol):
 				print("TEST OUTPUT: ", getattr(molecule, sampleParam))
 			except AttributeError:
 				print("OUTPUT: molecule does not have attribute ", sampleParam)
+		
+		# List
+		for element in test:
+			try:
+				print("TEST LIST: ", getattr(element, sampleParam))
+			except AttributeError:
+				print("LIST: molecule does not have attribute ", sampleParam)
 		
 		# Generate output
 		self._defineOutputs(**{self._OUTNAME: outputSmallMolecules})
