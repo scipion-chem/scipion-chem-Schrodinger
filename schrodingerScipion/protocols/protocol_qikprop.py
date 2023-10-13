@@ -30,15 +30,20 @@ import os
 # Scipion em imports
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, FloatParam, IntParam, LEVEL_ADVANCED
-from pyworkflow.utils import redStr
+from pyworkflow.utils import redStr, Message
+
+# Scipion chem imports
+from pwchem.objects import SetOfSmallMolecules
 
 # Plugin imports
-from schrodingerScipion import Plugin
+from .. import Plugin
 
 class ProtSchrodingerQikprop(EMProtocol):
 	""" Qikprop analyzes the properties of a given set of small molecules. """
 	_label = 'qikprop'
 	_program = ""
+	_OUTNAME = ""
+	_possibleOutputs = {_OUTNAME: SetOfSmallMolecules}
 
 	# --------------------------- Class constructor --------------------------------------------
 	def __init__(self, **args):
@@ -56,7 +61,8 @@ class ProtSchrodingerQikprop(EMProtocol):
 		form.addParallelSection(threads=4)
 
 		# Create form
-		form.addSection(label='Input')
+		form.addSection(label=Message.LABEL_INPUT)
+
 		# Main params
 		form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
 			label='Input small molecules:', help='Input small molecules to be treated.')
@@ -108,6 +114,19 @@ class ProtSchrodingerQikprop(EMProtocol):
 		moleculeBasePath = os.path.join(os.path.abspath(self._getExtraPath()), os.path.splitext(os.path.basename(molecule))[0])
 		tmpFiles = f'{moleculeBasePath}.log {moleculeBasePath}.out {moleculeBasePath}-out.sdf {moleculeBasePath}.qpsa'
 		self.runJob('rm -rf', f' {tmpFiles}', cwd=self._getExtraPath())
+	
+	def createOutputStep(self):
+		""" This function generates the output of the protocol. """
+		# Obtaining input small molecules
+		inputMolecules = self.inputSmallMolecules.get()
+
+		# Add analyzed properties for each molecule
+		for molecule in inputMolecules:
+			filename = molecule.getFileName()
+			print(filename)
+
+		# Generate output
+		self._defineOutputs(**{self._OUTNAME: inputMolecules})
 
 	# --------------------------- INFO functions --------------------------------------------
 	def _validate(self):
