@@ -130,15 +130,24 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Test:
 		sampleParam = 'QPPMDCK'
 
+		# Input checks
+		for molecule in inputMolecules:
+			try:
+				print("TEST INPUT: ", getattr(outMol, sampleParam))
+			except AttributeError:
+				print("INPUT: molecule does not have attribute ", sampleParam)
+
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
 			outMol = self.addCSVProperties(molecule)
+			# Middle checks
 			try:
 				print("TEST LOOP: ", getattr(outMol, sampleParam))
 			except AttributeError:
 				print("LOOP: molecule does not have attribute ", sampleParam)
 			outputSmallMolecules.append(outMol)
 		
+		# Output checks
 		for molecule in outputSmallMolecules:
 			try:
 				print("TEST OUTPUT: ", getattr(outMol, sampleParam))
