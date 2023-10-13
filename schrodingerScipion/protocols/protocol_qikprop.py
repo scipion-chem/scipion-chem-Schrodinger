@@ -42,7 +42,6 @@ from .. import Plugin
 class ProtSchrodingerQikprop(EMProtocol):
 	""" Qikprop analyzes the properties of a given set of small molecules. """
 	_label = 'qikprop'
-	_program = ""
 	_OUTNAME = "outputSmallMolecules"
 	_possibleOutputs = {_OUTNAME: SetOfSmallMolecules}
 
@@ -128,12 +127,11 @@ class ProtSchrodingerQikprop(EMProtocol):
 		for molecule in inputMolecules:
 			self.addCSVProperties(molecule)
 		
-		# Copying input object to define output
-		outputMolecules = SetOfSmallMolecules()
-		outputMolecules.copy(inputMolecules)
-
+		outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getExtraPath(), suffix='outputSmallMols')
+		outputSmallMolecules.copy(inputMolecules)
+		
 		# Generate output
-		self._defineOutputs(**{self._OUTNAME: outputMolecules})
+		self._defineOutputs(**{self._OUTNAME: outputSmallMolecules})
 
 	# --------------------------- INFO functions --------------------------------------------
 	def _validate(self):
