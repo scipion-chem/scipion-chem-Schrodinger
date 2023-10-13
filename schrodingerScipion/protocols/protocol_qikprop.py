@@ -104,6 +104,9 @@ class ProtSchrodingerQikprop(EMProtocol):
 		if self.cleanTmps.get():
 			for molecule in self.getInputFiles():
 				self._insertFunctionStep('cleanTmpFiles', molecule, prerequisites=deps)
+		
+		# Create output
+		self._insertFunctionStep('createOutputStep', prerequisites=deps)
 
 	def runQikpropStep(self, baseCommand, molecule):
 		""" This function runs the schrodinger binary file with the given params. """
