@@ -128,6 +128,25 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 		return errors
 	
+	def _summary(self):
+		"""
+		This method dumps the contents of the .warning files produced by Qikprop into the summary text.
+		"""
+		summary = []
+
+		# Getting a list of all .warning files
+		warningFiles = []
+		for extraFile in os.listdir(os.path.abspath(self._getExtraPath())):
+			if extraFile.endswith(".warning"):
+				warningFiles.append(extraFile)
+
+		# Read each .warning file and dump the contents into summary
+		for warningFile in warningFiles:
+			with open(warningFile) as wf:
+				summary.append(wf.read())
+
+		return summary
+	
 	# --------------------------- Utils functions --------------------
 	def getQikpropBaseCmd(self):
 		""" This function returns the command string to run qikprop. """
