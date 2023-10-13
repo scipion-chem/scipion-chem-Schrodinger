@@ -25,7 +25,7 @@
 # **************************************************************************
 
 # General imports
-import os, csv
+import os, csv, copy
 from typing import Union, List
 
 # Scipion em imports
@@ -127,10 +127,13 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
 			self.addCSVProperties(molecule)
-			print("TEST: ", molecule.PSA)
+			print("TEST: ", molecule.QPlogPC16)
+		
+		# Copying input object to define output
+		outputMolecules = copy.deepcopy(inputMolecules)
 
 		# Generate output
-		self._defineOutputs(**{self._OUTNAME: inputMolecules})
+		self._defineOutputs(**{self._OUTNAME: outputMolecules})
 
 	# --------------------------- INFO functions --------------------------------------------
 	def _validate(self):
