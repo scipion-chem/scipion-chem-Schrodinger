@@ -138,7 +138,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		warningFiles = []
 		for extraFile in os.listdir(os.path.abspath(self._getExtraPath())):
 			if extraFile.endswith(".warning"):
-				warningFiles.append(extraFile)
+				warningFiles.append(os.path.abspath(self._getExtraPath(extraFile)))
 
 		# Read each .warning file and dump the contents into summary
 		for warningFile in warningFiles:
