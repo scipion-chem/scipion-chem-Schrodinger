@@ -246,20 +246,21 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 		# Getting CSV file path
 		csvFile = os.path.splitext(os.path.abspath(self._getExtraPath(os.path.basename(molecule.getFileName()))))[0] + '.CSV'
-		with open(csvFile, mode='r') as attrFile:
-			rows = list(csv.reader(attrFile))
+		if os.path.isfile(csvFile):
+			with open(csvFile, mode='r') as attrFile:
+				rows = list(csv.reader(attrFile))
 
-			# If number of headers does not match number of row columns, values will be empty
-			# thus, not storing them. Also discard csv if it contains less than 2 columns (1st is id)
-			if len(rows[0]) != len(rows[1]) or len(rows[1]) < 2:
-				return
-			
-			# Setting info into output molecule
-			for header, value in zip(rows[0], rows[1]):
-				header = header.replace('.', '_') # Dots must be replaced with underscore to avoid errors
-				value = self.getCSVTextValue(value)
-				if header != 'molecule' and value is not None:
-					setattr(outputMolecule, header, value)
+				# If number of headers does not match number of row columns, values will be empty
+				# thus, not storing them. Also discard csv if it contains less than 2 columns (1st is id)
+				if len(rows[0]) != len(rows[1]) or len(rows[1]) < 2:
+					return
+				
+				# Setting info into output molecule
+				for header, value in zip(rows[0], rows[1]):
+					header = header.replace('.', '_') # Dots must be replaced with underscore to avoid errors
+					value = self.getCSVTextValue(value)
+					if header != 'molecule' and value is not None:
+						setattr(outputMolecule, header, value)
 			
 		return outputMolecule
 
