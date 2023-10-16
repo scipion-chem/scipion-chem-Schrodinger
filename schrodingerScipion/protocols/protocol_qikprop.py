@@ -112,7 +112,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		""" This function runs the schrodinger binary file with the given params. """
 		self.runJob(baseCommand, f' {molecule}', cwd=self._getExtraPath())
 	
-	def cleanTmpFiles(self, molecule):
+	def cleanTmpFiles(self, molecule : str):
 		""" This  function returns the temporary files related to the execution of qikprop for the given molecule. """
 		moleculeBasePath = os.path.join(os.path.abspath(self._getExtraPath()), os.path.splitext(os.path.basename(molecule))[0])
 		tmpFiles = f'{moleculeBasePath}.log {moleculeBasePath}.out {moleculeBasePath}-out.sdf {moleculeBasePath}.qpsa'
@@ -125,7 +125,6 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 		# Creating output small molecule set
 		outputSmallMolecules = inputMolecules.createCopy(self._getPath(), copyInfo=True)
-		print("OUTPUT:", outputSmallMolecules)
 
 		test = []
 
@@ -283,7 +282,8 @@ class ProtSchrodingerQikprop(EMProtocol):
 			for header, value in zip(rows[0], rows[1]):
 				value = self.getCSVTextValue(value)
 				if header != 'molecule' and value != None:
-					setattr(outputMolecule, header, value)
+					#setattr(outputMolecule, header, value)
+					outputMolecule = self.setAttribute(outputMolecule, header, value)
 			
 			return outputMolecule
 
@@ -307,3 +307,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 			return float(text)
 		except ValueError:
 			return text
+
+	def setAttribute(self, obj, atKey, atValue, atType=None):
+		obj.__setattr__(atKey, atValue)
+		return obj
