@@ -241,8 +241,11 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 	def addCSVProperties(self, molecule : SmallMolecule) -> SmallMolecule:
 		""" This function adds the properties dumped by Qikprop in a CSV file for a given molecule. """
-		csvFile = os.path.splitext(os.path.abspath(self._getExtraPath(os.path.basename(molecule.getFileName()))))[0] + '.CSV'
+		# Creating new molecule that will be a clone of the input one, with extra attributes
+		outputMolecule = molecule.clone()
 
+		# Getting CSV file path
+		csvFile = os.path.splitext(os.path.abspath(self._getExtraPath(os.path.basename(molecule.getFileName()))))[0] + '.CSV'
 		with open(csvFile, mode='r') as attrFile:
 			rows = list(csv.reader(attrFile))
 
@@ -251,9 +254,6 @@ class ProtSchrodingerQikprop(EMProtocol):
 			if len(rows[0]) != len(rows[1]) or len(rows[1]) < 2:
 				return
 			
-			# Creating new molecule that will be a clone of the input one, with extra attributes
-			outputMolecule = molecule.clone()
-
 			# Setting info into output molecule
 			for header, value in zip(rows[0], rows[1]):
 				header = header.replace('.', '_') # Dots must be replaced with underscore to avoid errors
@@ -261,7 +261,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 				if header != 'molecule' and value is not None:
 					setattr(outputMolecule, header, value)
 			
-			return outputMolecule
+		return outputMolecule
 
 	def getCSVTextValue(self, text : str) -> Union[Integer, Float, String, None]:
 		"""
