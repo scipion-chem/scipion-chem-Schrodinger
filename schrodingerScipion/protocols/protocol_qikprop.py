@@ -30,6 +30,7 @@ from typing import Union, List
 
 # Scipion em imports
 from pwem.protocols import EMProtocol
+from pwem.objects import String, Float, Integer
 from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, FloatParam, IntParam, LEVEL_ADVANCED
 from pyworkflow.utils import redStr, Message
 
@@ -282,12 +283,11 @@ class ProtSchrodingerQikprop(EMProtocol):
 			for header, value in zip(rows[0], rows[1]):
 				value = self.getCSVTextValue(value)
 				if header != 'molecule' and value != None:
-					#setattr(outputMolecule, header, value)
-					outputMolecule = self.setAttribute(outputMolecule, header, value)
+					setattr(outputMolecule, header, value)
 			
 			return outputMolecule
 
-	def getCSVTextValue(self, text : str) -> Union[int, float, str, None]:
+	def getCSVTextValue(self, text : str) -> Union[Integer, Float, String, None]:
 		"""
 		This function returns the value of the given text in the appropiate data type.
 		Supported values are int, float, and str.
@@ -298,16 +298,12 @@ class ProtSchrodingerQikprop(EMProtocol):
 		
 		# If all characters are a number, it must be an integer
 		if text.isnumeric():
-			return int(text)
+			return Integer(text)
 		
 		# Try to convert to float.
 		# If possible, it is float
 		# If not, it is an str
 		try:
-			return float(text)
+			return Float(text)
 		except ValueError:
-			return text
-
-	def setAttribute(self, obj, atKey, atValue, atType=None):
-		obj.__setattr__(atKey, atValue)
-		return obj
+			return String(text)
