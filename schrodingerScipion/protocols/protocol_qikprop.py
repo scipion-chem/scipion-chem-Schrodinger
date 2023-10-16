@@ -103,8 +103,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 		
 		# Clean tmp files if selected
 		if self.cleanTmps.get():
-			for molecule in self.getInputFiles():
-				self._insertFunctionStep('cleanTmpFiles', molecule, prerequisites=deps)
+			self._insertFunctionStep('cleanTmpFiles', prerequisites=deps)
 		
 		# Create output
 		self._insertFunctionStep('createOutputStep', prerequisites=deps)
@@ -113,11 +112,19 @@ class ProtSchrodingerQikprop(EMProtocol):
 		""" This function runs the schrodinger binary file with the given params. """
 		self.runJob(baseCommand, f' {molecule}', cwd=self._getExtraPath())
 	
-	def cleanTmpFiles(self, molecule : str):
-		""" This  function returns the temporary files related to the execution of qikprop for the given molecule. """
-		moleculeBasePath = os.path.join(os.path.abspath(self._getExtraPath()), os.path.splitext(os.path.basename(molecule))[0])
-		tmpFiles = f'{moleculeBasePath}.log {moleculeBasePath}.out {moleculeBasePath}-out.sdf {moleculeBasePath}.qpsa'
-		self.runJob('rm -rf', f' {tmpFiles}', cwd=self._getExtraPath())
+	def cleanTmpFiles(self):
+		""" This function removes the temporary files related to the execution of qikprop for all the molecules. """
+		# Creating empty list to store all tmp files for all molecules
+		tmpFileList = []
+
+		# Generating tmp files for each molecule and adding them to the list
+		for molecule in self.getInputFiles():
+			moleculeBasePath = os.path.join(os.path.abspath(self._getExtraPath()), os.path.splitext(os.path.basename(molecule))[0])
+			tmpFiles = f'{moleculeBasePath}.log {moleculeBasePath}.out {moleculeBasePath}-out.sdf {moleculeBasePath}.qpsa'
+			tmpFileList.append(tmpFiles)
+		
+		# Deleting all tmp files
+		self.runJob('rm -rf', f' {" ".join(tmpFileList)}', cwd=self._getExtraPath())
 	
 	def createOutputStep(self):
 		""" This function generates the output of the protocol. """
@@ -126,8 +133,6 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 		# Creating output small molecule set
 		outputSmallMolecules = inputMolecules.createCopy(self._getPath(), copyInfo=True)
-
-		test = []
 
 		# Test:
 		sampleParam = 'QPPMDCK'
@@ -140,18 +145,13 @@ class ProtSchrodingerQikprop(EMProtocol):
 		for molecule in inputMolecules:
 			outMol = self.addCSVProperties(molecule)
 			# Middle checks
-			print(f"TEST INPUT {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
+			print(f"TEST MIDDLE {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
 			outputSmallMolecules.append(outMol)
-			test.append(outMol)
 		
 		print("OUTSIDE OF LOOP", outputSmallMolecules)
 		# Output checks
 		for molecule in outputSmallMolecules:
-			print(f"TEST INPUT {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
-		
-		# List
-		for element in test:
-			print(f"TEST INPUT {sampleParam}: ", getattr(element, sampleParam, 'Does not exist'))
+			print(f"TEST OUTPUT {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
 		
 		# Generate output
 		self._defineOutputs(**{self._OUTNAME: outputSmallMolecules})
@@ -270,9 +270,9 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 			# Setting info into output molecule
 			for header, value in zip(rows[0], rows[1]):
+				header = header.replace('.', '_') # Dots must be replaced with underscore to avoid errors
 				value = self.getCSVTextValue(value)
 				if header != 'molecule' and value is not None:
-					print(f"SETTING VALUE for {header}:", value)
 					setattr(outputMolecule, header, value)
 			
 			return outputMolecule
