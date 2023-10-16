@@ -124,8 +124,8 @@ class ProtSchrodingerQikprop(EMProtocol):
 		inputMolecules = self.inputSmallMolecules.get()
 
 		# Creating output small molecule set
-		outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='outputSmallMols')
-		outputSmallMolecules.copyAttributes(inputMolecules)
+		outputSmallMolecules = inputMolecules.createCopy(self._getPath(), copyInfo=True)
+		print("OUTPUT:", outputSmallMolecules)
 
 		test = []
 
@@ -281,13 +281,13 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 			# Setting info into output molecule
 			for header, value in zip(rows[0], rows[1]):
-				value = self.getTextValue(value)
+				value = self.getCSVTextValue(value)
 				if header != 'molecule' and value != None:
 					setattr(outputMolecule, header, value)
 			
 			return outputMolecule
 
-	def getTextValue(self, text : str) -> Union[int, float, str, None]:
+	def getCSVTextValue(self, text : str) -> Union[int, float, str, None]:
 		"""
 		This function returns the value of the given text in the appropiate data type.
 		Supported values are int, float, and str.
