@@ -124,7 +124,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 			tmpFileList.append(tmpFiles)
 		
 		# Deleting all tmp files
-		self.runJob('rm -rf', f' {" ".join(tmpFileList)}', cwd=self._getExtraPath())
+		self.runJob('rm -rf', f'{" ".join(tmpFileList)}', cwd=self._getExtraPath())
 	
 	def createOutputStep(self):
 		""" This function generates the output of the protocol. """
@@ -134,24 +134,10 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Creating output small molecule set
 		outputSmallMolecules = inputMolecules.createCopy(self._getPath(), copyInfo=True)
 
-		# Test:
-		sampleParam = 'QPPMDCK'
-
-		# Input checks
-		for molecule in inputMolecules:
-			print(f"TEST INPUT {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
-
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
 			outMol = self.addCSVProperties(molecule)
-			# Middle checks
-			print(f"TEST MIDDLE {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
 			outputSmallMolecules.append(outMol)
-		
-		print("OUTSIDE OF LOOP", outputSmallMolecules)
-		# Output checks
-		for molecule in outputSmallMolecules:
-			print(f"TEST OUTPUT {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
 		
 		# Generate output
 		self._defineOutputs(**{self._OUTNAME: outputSmallMolecules})
