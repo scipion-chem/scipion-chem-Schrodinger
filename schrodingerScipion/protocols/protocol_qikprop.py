@@ -134,35 +134,24 @@ class ProtSchrodingerQikprop(EMProtocol):
 
 		# Input checks
 		for molecule in inputMolecules:
-			try:
-				print("TEST INPUT: ", getattr(molecule, sampleParam))
-			except AttributeError:
-				print("INPUT: molecule does not have attribute ", sampleParam)
+			print(f"TEST INPUT {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
 
 		# Add analyzed properties for each molecule
 		for molecule in inputMolecules:
 			outMol = self.addCSVProperties(molecule)
 			# Middle checks
-			try:
-				print("TEST LOOP: ", getattr(outMol, sampleParam))
-			except AttributeError:
-				print("LOOP: molecule does not have attribute ", sampleParam)
+			print(f"TEST INPUT {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
 			outputSmallMolecules.append(outMol)
 			test.append(outMol)
 		
+		print("OUTSIDE OF LOOP", outputSmallMolecules)
 		# Output checks
 		for molecule in outputSmallMolecules:
-			try:
-				print("TEST OUTPUT: ", getattr(molecule, sampleParam))
-			except AttributeError:
-				print("OUTPUT: molecule does not have attribute ", sampleParam)
+			print(f"TEST INPUT {sampleParam}: ", getattr(molecule, sampleParam, 'Does not exist'))
 		
 		# List
 		for element in test:
-			try:
-				print("TEST LIST: ", getattr(element, sampleParam))
-			except AttributeError:
-				print("LIST: molecule does not have attribute ", sampleParam)
+			print(f"TEST INPUT {sampleParam}: ", getattr(element, sampleParam, 'Does not exist'))
 		
 		# Generate output
 		self._defineOutputs(**{self._OUTNAME: outputSmallMolecules})
@@ -282,7 +271,8 @@ class ProtSchrodingerQikprop(EMProtocol):
 			# Setting info into output molecule
 			for header, value in zip(rows[0], rows[1]):
 				value = self.getCSVTextValue(value)
-				if header != 'molecule' and value != None:
+				if header != 'molecule' and value is not None:
+					print(f"SETTING VALUE for {header}:", value)
 					setattr(outputMolecule, header, value)
 			
 			return outputMolecule
