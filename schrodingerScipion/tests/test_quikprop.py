@@ -62,13 +62,13 @@ class TestSchroQikprop(BaseTest):
 		# Launching ligand preparation and obtaining output
 		ligPrepProtocol = ligandPrep._runLigandPreparation()
 		rawSmallMols = getattr(ligPrepProtocol, 'inputSmallMolecules', None)
-		cls.assertIsNotNone(rawSmallMols, "There was an error obtaining the input raw small molecules.")
+		cls.assertIsNotNone(rawSmallMols, msg="There was an error obtaining the input raw small molecules.")
 		ligprepSmallMols = getattr(ligPrepProtocol, LIGPREP_OUTPUTATTRIBUTE, None)
-		cls.assertIsNotNone(ligprepSmallMols, "There was an error obtaining the input ligand prepared small molecules.")
+		cls.assertIsNotNone(ligprepSmallMols, msg="There was an error obtaining the input ligand prepared small molecules.")
 
 		# Getting output details to input for import small molecules protocol
 		rawMoleculesPath = cls._getRawInputMolsPath(rawSmallMols)
-		cls.assertIsNotNone(rawMoleculesPath, "There was an error obtaining the path for the input raw small molecules.")
+		cls.assertIsNotNone(rawMoleculesPath, msg="There was an error obtaining the path for the input raw small molecules.")
 		ligPrepMoleculesPath = os.path.abspath(ligPrepProtocol._getExtraPath())
 
 		# Setting up project again to overwrite temp project variables
@@ -116,9 +116,23 @@ class TestSchroQikprop(BaseTest):
 			return None
 
 	def test1(self):
-		""" This function tests a qikprop execution with the proper input received. """
+		""" This function tests a qikprop execution when the proper input is received. """
+		# Running Qikprop
 		print(yellowStr("Running Qikprop with a ligand prepared set of small molecules."))
 		qikpropProt = self._runQikprop(processed=True)
-		self.assertIsNotNone(getattr(qikpropProt, QIKPROP_OUTPUTATTRIBUTE, None), "There was an error running Qikprop and it did not produce output.")
-		summaryList = qikpropProt._summary()
-		print("SUMMARY:", summaryList)
+		self.assertIsNotNone(getattr(qikpropProt, QIKPROP_OUTPUTATTRIBUTE, None), msg="There was an error running Qikprop and it did not produce output.")
+		
+		# Getting summary (should be an empty list, as no warnings are produced)
+		summaryString = '\n'.join(qikpropProt._summary())
+		self.assertEqual(summaryString, '', msg=f"There was an error running Qikprop and some warnings were printed into summary:\n{summaryString}")
+
+	def test2(self):
+		""" This function tests a qikprop execution when no proper input is received. """
+		# Running Qikprop
+		print(yellowStr("Running Qikprop with a raw set of small molecules."))
+		qikpropProt = self._runQikprop()
+		self.assertIsNotNone(getattr(qikpropProt, QIKPROP_OUTPUTATTRIBUTE, None), msg="There was an error running Qikprop and it did not produce output.")
+		
+		# Getting summary (should be a list with an element for each warning produced)
+		summaryString = '\n'.join(qikpropProt._summary())
+		self.assertNotEqual(summaryString, '', msg="There was an error running Qikprop and no warnings were printed into summary when there should be some.")
