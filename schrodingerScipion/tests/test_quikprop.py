@@ -67,7 +67,7 @@ class TestSchroQikprop(BaseTest):
 		cls.assertIsNotNone(ligprepSmallMols, "There was an error obtaining the ligand prepared small molecules.")
 
 		# Getting output details to input for import small molecules protocol
-		print("RAWW SMALL MOLS:", rawSmallMols)
+		print("RAWW SMALL MOLS:", rawSmallMols.get().getFirstItem())
 		#rawMoleculesPath = os.path.abspath(rawSmallMols)
 		ligPrepMoleculesPath = os.path.abspath(ligPrepProtocol._getExtraPath())
 
@@ -98,6 +98,14 @@ class TestSchroQikprop(BaseTest):
 		)
 		cls.launchProtocol(protQikprop)
 		return protQikprop
+	
+	@classmethod
+	def _getRawInputMolsPath(cls, rawInputMols):
+		""" This method returns the path for the given raw input small molecules. """
+		if rawInputMols is not None and rawInputMols.get() is not None:
+			rawInputMols = rawInputMols.get().getFirstItem()
+			print(rawInputMols.getFileName())
+			#return 
 
 	def test1(self):
 		""" This function tests a qikprop execution with the proper input received. """
