@@ -259,7 +259,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 				for header, value in zip(rows[0], rows[1]):
 					header = header.replace('.', '_') # Dots must be replaced with underscore to avoid errors
 					value = self.getCSVTextValue(value)
-					if header != 'molecule' and value is not None:
+					if header != 'molecule':
 						setattr(outputMolecule, header, value)
 			
 		return outputMolecule

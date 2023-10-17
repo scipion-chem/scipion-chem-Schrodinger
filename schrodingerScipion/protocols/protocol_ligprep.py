@@ -34,10 +34,14 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 progLigPrep=Plugin.getHome('ligprep')
 progStructConvert=Plugin.getHome('utilities/structconvert')
 
+# Output attribute names
+OUTPUTATTRIBUTE = "outputSmallMolecules"
+OUTPUTATTRIBUTEDROPPED = "outputSmallMoleculesDropped"
+
 class ProtSchrodingerLigPrep(EMProtocol):
     """Schrodinger's LigPrep is a program to prepare ligand libraries"""
     _label = 'ligand preparation (ligprep)'
-    _program = ""
+    _possibleOutputs = {OUTPUTATTRIBUTE: SetOfSmallMolecules, OUTPUTATTRIBUTEDROPPED: SetOfSmallMolecules}
     saving = False
 
     def __init__(self, **kwargs):
@@ -150,7 +154,7 @@ class ProtSchrodingerLigPrep(EMProtocol):
                 args = "%s %s -split-nstructures 1" % (fnSDF, fnOsdf)
                 self.runJob(progStructConvert, args, cwd=self._getPath())
                 for fn in glob.glob(self._getExtraPath("o%s*.sdf" % fnRoot)):
-                    fnDir, fnOut = os.path.split(fn)
+                    fnOut = os.path.split(fn)[1]
                     fnOut = self._getExtraPath(fnOut[1:])
                     moveFile(fn, fnOut)
                     self.saveMolecule(fnOut, self.outputSmallMolecules, mol)
@@ -166,10 +170,10 @@ class ProtSchrodingerLigPrep(EMProtocol):
 
     def createOutputStep(self):
         if len(self.outputSmallMolecules)>0:
-            self._defineOutputs(outputSmallMolecules=self.outputSmallMolecules)
+            self._defineOutputs(**{OUTPUTATTRIBUTE: self.outputSmallMolecules})
             self._defineSourceRelation(self.inputSmallMolecules, self.outputSmallMolecules)
         if len(self.outputSmallMoleculesDropped)>0:
-            self._defineOutputs(outputSmallMoleculesDropped=self.outputSmallMoleculesDropped)
+            self._defineOutputs(**{OUTPUTATTRIBUTEDROPPED: self.outputSmallMoleculesDropped})
             self._defineSourceRelation(self.inputSmallMolecules, self.outputSmallMoleculesDropped)
 
     def saveMolecule(self, molFn, molSet, oriMol):
@@ -189,5 +193,5 @@ class ProtSchrodingerLigPrep(EMProtocol):
     def getConfId(self, molFn, molName):
         try:
             return molFn.split(molName)[1].split('-')[1].split('.')[0]
-        except:
+        except Exception:
             return None
