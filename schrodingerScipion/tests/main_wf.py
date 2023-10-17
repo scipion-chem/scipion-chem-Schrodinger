@@ -103,7 +103,6 @@ class TestSchroLigPrep(BaseTest):
             ProtChemImportSmallMolecules,
             filesPath=cls.dsLig.getFile('mol2'), filesPattern='*9.mol2')
         cls.launchProtocol(cls.protImportSmallMols)
-        cls.proj.launchProtocol(cls.protImportSmallMols, wait=False)
 
     @classmethod
     def _runLigandPreparation(cls):
