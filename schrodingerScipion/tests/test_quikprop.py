@@ -82,7 +82,7 @@ class TestSchroQikprop(BaseTest):
 		cls.protImportSmallMols = cls.newProtocol(
 			ProtChemImportSmallMolecules,
 			filesPath=moleculesPath,
-			filesPattern='*.sdf' if processed else '*.mol2')
+			filesPattern=f'*.{"sdf" if processed else "mol2"}')
 		cls.launchProtocol(cls.protImportSmallMols)
 	
 	@classmethod
