@@ -59,15 +59,16 @@ class TestSchroQikprop(BaseTest):
 		# running import small molecules and obtainig input set
 		print(yellowStr("Launching Ligand preparation test to reuse its outputs as inputs for qikprop."))
 		ligandPrep.setUpClass()
-		#rawSmallMols = getattr(ligandPrep.protImportSmallMols, 'outputSmallMolecules', None)
-		#cls.assertIsNotNone(rawSmallMols, "There was an error obtaining the raw small molecules.")
 		# Launching ligand preparation and obtaining output
 		ligPrepProtocol = ligandPrep._runLigandPreparation()
+		rawSmallMols = getattr(ligPrepProtocol, 'inputSmallMolecules', None)
+		cls.assertIsNotNone(rawSmallMols, "There was an error obtaining the raw small molecules.")
 		ligprepSmallMols = getattr(ligPrepProtocol, LIGPREP_OUTPUTATTRIBUTE, None)
 		cls.assertIsNotNone(ligprepSmallMols, "There was an error obtaining the ligand prepared small molecules.")
 
 		# Getting output details to input for import small molecules protocol
-		#rawMoleculesPath = os.path.abspath(ligPrepProtocol.inputSmallMolecules.get())
+		print("RAWW SMALL MOLS:", rawSmallMols)
+		#rawMoleculesPath = os.path.abspath(rawSmallMols)
 		ligPrepMoleculesPath = os.path.abspath(ligPrepProtocol._getExtraPath())
 
 		# Setting up project again to overwrite temp project variables
