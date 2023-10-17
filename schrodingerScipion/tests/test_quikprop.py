@@ -119,4 +119,6 @@ class TestSchroQikprop(BaseTest):
 		""" This function tests a qikprop execution with the proper input received. """
 		print(yellowStr("Running Qikprop with a ligand prepared set of small molecules."))
 		qikpropProt = self._runQikprop(processed=True)
-		self.assertIsNotNone(getattr(qikpropProt, QIKPROP_OUTPUTATTRIBUTE, None))
+		self.assertIsNotNone(getattr(qikpropProt, QIKPROP_OUTPUTATTRIBUTE, None), "There was an error running Qikprop and it did not produce output.")
+		summaryList = qikpropProt._summary()
+		print("SUMMARY:", summaryList)
