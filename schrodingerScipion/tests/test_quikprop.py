@@ -75,7 +75,7 @@ class TestSchroQikprop(BaseTest):
 
 		# Importing small molecules
 		#cls.rawMols = cls._runImportSmallMols(cls, rawMoleculesPath)
-		cls.ligPrepMols = cls._runImportSmallMols(cls, ligPrepMoleculesPath, processed=True)
+		cls.ligPrepMols = cls._runImportSmallMols(ligPrepMoleculesPath, processed=True)
 
 	@classmethod
 	def _runImportSmallMols(cls, moleculesPath, processed=False):
