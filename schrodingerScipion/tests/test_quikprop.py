@@ -33,8 +33,9 @@ from pyworkflow.tests import setupTestProject, BaseTest
 from pwchem.protocols import ProtChemImportSmallMolecules
 
 # Plugin imports
-from ..protocols import ProtSchrodingerLigPrep
+from ..protocols import ProtSchrodingerQikprop
 from ..protocols.protocol_ligprep import OUTPUTATTRIBUTE as LIGPREP_OUTPUTATTRIBUTE
+from ..protocols.protocol_qikprop import OUTPUTATTRIBUTE as QIKPROP_OUTPUTATTRIBUTE
 from ..tests import TestSchroLigPrep
 
 class TestSchroQikprop(BaseTest):
@@ -81,19 +82,19 @@ class TestSchroQikprop(BaseTest):
 			filesPath=moleculesPath,
 			filesPattern='*.sdf' if processed else '*.mol2')
 		cls.launchProtocol(cls.protImportSmallMols)
-
-	"""
+	
 	@classmethod
-	def _runLigandPreparation(cls):
-		protPrepLigand = cls.newProtocol(
-			ProtSchrodingerLigPrep,
+	def _runQikprop(cls):
+		""" This function creates, runs, and returns a Qikprop protocol. """
+		protQikprop = cls.newProtocol(
+			ProtSchrodingerQikprop,
 			inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
-			ionization=1)
-		cls.proj.launchProtocol(protPrepLigand, wait=False)
-		return protPrepLigand
+			fast=True)
+		cls.launchProtocol(protQikprop)
+		return protQikprop
 
-	def test(self):
-		ligProt = self._runLigandPreparation()
-		self._waitOutput(ligProt, 'outputSmallMolecules', sleepTime=5)
-		self.assertIsNotNone(getattr(ligProt, 'outputSmallMolecules', None))
-	"""
+	def test1(self):
+		""" This function tests a qikprop execution with the proper input received. """
+		print("Running Qikprop with a ligand prepared set of small molecules.")
+		qikpropProt = self._runQikprop()
+		self.assertIsNotNone(getattr(qikpropProt, QIKPROP_OUTPUTATTRIBUTE, None))

@@ -40,11 +40,13 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 # Plugin imports
 from .. import Plugin
 
+# Output variable name
+OUTPUTATTRIBUTE = "outputSmallMolecules"
+
 class ProtSchrodingerQikprop(EMProtocol):
 	""" Qikprop analyzes the properties of a given set of small molecules. """
 	_label = 'qikprop'
-	_OUTNAME = "outputSmallMolecules"
-	_possibleOutputs = {_OUTNAME: SetOfSmallMolecules}
+	_possibleOutputs = {OUTPUTATTRIBUTE: SetOfSmallMolecules}
 
 	# --------------------------- Class constructor --------------------------------------------
 	def __init__(self, **args):
@@ -140,7 +142,7 @@ class ProtSchrodingerQikprop(EMProtocol):
 			outputSmallMolecules.append(outMol)
 		
 		# Generate output
-		self._defineOutputs(**{self._OUTNAME: outputSmallMolecules})
+		self._defineOutputs(**{OUTPUTATTRIBUTE: outputSmallMolecules})
 
 	# --------------------------- INFO functions --------------------------------------------
 	def _validate(self):
