@@ -28,7 +28,7 @@ import os
 
 # Scipion em imports
 from pyworkflow.tests import setupTestProject, BaseTest
-from pyworkflow.utils import yellowStr
+from pyworkflow.utils import yellowStr, redStr
 
 # Scipion chem imports
 from pwchem.protocols import ProtChemImportSmallMolecules
@@ -62,21 +62,28 @@ class TestSchroQikprop(BaseTest):
 		# Launching ligand preparation and obtaining output
 		ligPrepProtocol = ligandPrep._runLigandPreparation()
 		rawSmallMols = getattr(ligPrepProtocol, 'inputSmallMolecules', None)
-		cls.assertIsNotNone(rawSmallMols, msg="There was an error obtaining the input raw small molecules.")
+		print("TEST", rawSmallMols)
+		# Checking if raw small molecules were properly obtained
+		if rawSmallMols is None:
+			raise AssertionError(redStr("There was an error obtaining the input raw small molecules."))
 		ligprepSmallMols = getattr(ligPrepProtocol, LIGPREP_OUTPUTATTRIBUTE, None)
-		cls.assertIsNotNone(ligprepSmallMols, msg="There was an error obtaining the input ligand prepared small molecules.")
+		# Checking if ligand prepared small molecules were properly obtained
+		if ligprepSmallMols is None:
+			raise AssertionError(redStr("There was an error obtaining the input ligand prepared small molecules."))
 
 		# Getting output details to input for import small molecules protocol
 		rawMoleculesPath = cls._getRawInputMolsPath(rawSmallMols)
-		cls.assertIsNotNone(rawMoleculesPath, msg="There was an error obtaining the path for the input raw small molecules.")
+		# Checking if raw small molecules's path was properly obtained
+		if rawMoleculesPath is None:
+			raise AssertionError(redStr("There was an error obtaining the path for the input raw small molecules."))
 		ligPrepMoleculesPath = os.path.abspath(ligPrepProtocol._getExtraPath())
 
 		# Setting up project again to overwrite temp project variables
 		setupTestProject(cls)
 
 		# Importing small molecules
-		cls.rawMols = cls._runImportSmallMols(cls, rawMoleculesPath)
-		cls.ligPrepMols = cls._runImportSmallMols(ligPrepMoleculesPath, processed=True)
+		cls.protRawImportSmallMols = cls._runImportSmallMols(cls, rawMoleculesPath)
+		cls.protLigPrepImportSmallMols = cls._runImportSmallMols(ligPrepMoleculesPath, processed=True)
 
 	@classmethod
 	def _runImportSmallMols(cls, moleculesPath, processed=False):
@@ -86,12 +93,7 @@ class TestSchroQikprop(BaseTest):
 			filesPath=moleculesPath,
 			filesPattern=f'*.{"sdf" if processed else "mol2"}')
 		cls.launchProtocol(protImportSmallMols)
-
-		# Assigning to class variable deppending on processed flag
-		if processed:
-			cls.protLigPrepImportSmallMols = protImportSmallMols
-		else:
-			cls.protRawImportSmallMols = protImportSmallMols
+		return protImportSmallMols
 	
 	@classmethod
 	def _runQikprop(cls, processed=False):
