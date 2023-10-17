@@ -68,7 +68,7 @@ class TestSchroQikprop(BaseTest):
 
 		# Getting output details to input for import small molecules protocol
 		rawMoleculesPath = cls._getRawInputMolsPath(rawSmallMols)
-		cls.assertIsNotNone(cls.rawMols, "There was an error obtaining the path for the input raw small molecules.")
+		cls.assertIsNotNone(rawMoleculesPath, "There was an error obtaining the path for the input raw small molecules.")
 		ligPrepMoleculesPath = os.path.abspath(ligPrepProtocol._getExtraPath())
 
 		# Setting up project again to overwrite temp project variables
