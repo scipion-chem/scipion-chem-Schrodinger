@@ -56,6 +56,7 @@ class TestSchroQikprop(BaseTest):
 		
 		# Launching TestSchroLigPrep and obtaining output
 		# running import small molecules and obtainig input set
+		print("Launching Ligand preparation test to reuse its outputs as inputs for qikprop.")
 		ligandPrep.setUpClass()
 		#rawSmallMols = getattr(ligandPrep.protImportSmallMols, 'outputSmallMolecules', None)
 		#cls.assertIsNotNone(rawSmallMols, "There was an error obtaining the raw small molecules.")
