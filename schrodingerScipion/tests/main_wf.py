@@ -110,12 +110,11 @@ class TestSchroLigPrep(BaseTest):
             ProtSchrodingerLigPrep,
             inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
             ionization=1)
-        cls.proj.launchProtocol(protPrepLigand, wait=False)
+        cls.proj.launchProtocol(protPrepLigand)
         return protPrepLigand
 
     def test(self):
         ligProt = self._runLigandPreparation()
-        self._waitOutput(ligProt, 'outputSmallMolecules', sleepTime=5)
         self.assertIsNotNone(getattr(ligProt, 'outputSmallMolecules', None))
 
 
