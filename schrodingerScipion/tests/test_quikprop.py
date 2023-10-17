@@ -28,6 +28,7 @@ import os
 
 # Scipion em imports
 from pyworkflow.tests import setupTestProject, BaseTest
+from pyworkflow.utils import yellowStr
 
 # Scipion chem imports
 from pwchem.protocols import ProtChemImportSmallMolecules
@@ -56,7 +57,7 @@ class TestSchroQikprop(BaseTest):
 		
 		# Launching TestSchroLigPrep and obtaining output
 		# running import small molecules and obtainig input set
-		print("Launching Ligand preparation test to reuse its outputs as inputs for qikprop.")
+		print(yellowStr("Launching Ligand preparation test to reuse its outputs as inputs for qikprop."))
 		ligandPrep.setUpClass()
 		#rawSmallMols = getattr(ligandPrep.protImportSmallMols, 'outputSmallMolecules', None)
 		#cls.assertIsNotNone(rawSmallMols, "There was an error obtaining the raw small molecules.")
@@ -96,6 +97,6 @@ class TestSchroQikprop(BaseTest):
 
 	def test1(self):
 		""" This function tests a qikprop execution with the proper input received. """
-		print("Running Qikprop with a ligand prepared set of small molecules.")
+		print(yellowStr("Running Qikprop with a ligand prepared set of small molecules."))
 		qikpropProt = self._runQikprop()
 		self.assertIsNotNone(getattr(qikpropProt, QIKPROP_OUTPUTATTRIBUTE, None))
