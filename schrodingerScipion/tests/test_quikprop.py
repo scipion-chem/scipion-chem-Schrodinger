@@ -91,7 +91,10 @@ class TestSchroQikprop(BaseTest):
 		protQikprop = cls.newProtocol(
 			ProtSchrodingerQikprop,
 			inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
-			fast=True)
+			fast=True,
+			numberOfMpi=1,
+			numberOfThreads=5
+		)
 		cls.launchProtocol(protQikprop)
 		return protQikprop
 
