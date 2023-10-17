@@ -67,6 +67,7 @@ class TestSchroQikprop(BaseTest):
 		if rawSmallMols is None:
 			raise AssertionError(redStr("There was an error obtaining the input raw small molecules."))
 		ligprepSmallMols = getattr(ligPrepProtocol, LIGPREP_OUTPUTATTRIBUTE, None)
+		print("TEST 2", ligprepSmallMols)
 		# Checking if ligand prepared small molecules were properly obtained
 		if ligprepSmallMols is None:
 			raise AssertionError(redStr("There was an error obtaining the input ligand prepared small molecules."))
@@ -83,7 +84,9 @@ class TestSchroQikprop(BaseTest):
 
 		# Importing small molecules
 		cls.protRawImportSmallMols = cls._runImportSmallMols(cls, rawMoleculesPath)
+		print("RAW", cls.protRawImportSmallMols.outputSmallMolecules)
 		cls.protLigPrepImportSmallMols = cls._runImportSmallMols(ligPrepMoleculesPath, processed=True)
+		print("PROCESSED", cls.protLigPrepImportSmallMols.outputSmallMolecules)
 
 	@classmethod
 	def _runImportSmallMols(cls, moleculesPath, processed=False):
@@ -92,7 +95,7 @@ class TestSchroQikprop(BaseTest):
 			ProtChemImportSmallMolecules,
 			filesPath=moleculesPath,
 			filesPattern=f'*.{"sdf" if processed else "mol2"}')
-		cls.launchProtocol(protImportSmallMols)
+		cls.launchProtocol(protImportSmallMols, wait=True)
 		return protImportSmallMols
 	
 	@classmethod
@@ -106,7 +109,7 @@ class TestSchroQikprop(BaseTest):
 			numberOfMpi=1,
 			numberOfThreads=5
 		)
-		cls.launchProtocol(protQikprop)
+		cls.launchProtocol(protQikprop, wait=True)
 		return protQikprop
 	
 	@classmethod

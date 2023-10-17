@@ -102,7 +102,7 @@ class TestSchroLigPrep(BaseTest):
         cls.protImportSmallMols = cls.newProtocol(
             ProtChemImportSmallMolecules,
             filesPath=cls.dsLig.getFile('mol2'), filesPattern='*9.mol2')
-        cls.launchProtocol(cls.protImportSmallMols)
+        cls.launchProtocol(cls.protImportSmallMols, wait=True)
 
     @classmethod
     def _runLigandPreparation(cls):
@@ -110,11 +110,12 @@ class TestSchroLigPrep(BaseTest):
             ProtSchrodingerLigPrep,
             inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
             ionization=1)
-        cls.proj.launchProtocol(protPrepLigand)
+        cls.launchProtocol(protPrepLigand, wait=True)
         return protPrepLigand
 
     def test(self):
         ligProt = self._runLigandPreparation()
+        #self._waitOutput(ligProt, 'outputSmallMolecules', sleepTime=5)
         self.assertIsNotNone(getattr(ligProt, 'outputSmallMolecules', None))
 
 
