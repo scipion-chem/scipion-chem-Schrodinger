@@ -160,6 +160,10 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Checking if altprobe is used, and, if so, that the value is 0 or greater
 		if self.useAltprobe.get() and self.altprobe.get() < 0:
 			errors.append('Altprobe has to be a number equal or greater than 0.')
+		
+		# Checking if the number of elements of the input set is at least 1
+		if len(self.inputSmallMolecules.get()) < 1:
+			errors.append('The input set of molecules must at least contain 1 molecule.')
 
 		return errors
 	
