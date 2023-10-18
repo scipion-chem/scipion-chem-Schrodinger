@@ -36,6 +36,7 @@ from pyworkflow.utils import redStr, Message
 
 # Scipion chem imports
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.utils import removeElements
 
 # Plugin imports
 from .. import Plugin
@@ -122,11 +123,13 @@ class ProtSchrodingerQikprop(EMProtocol):
 		# Generating tmp files for each molecule and adding them to the list
 		for molecule in self.getInputFiles():
 			moleculeBasePath = os.path.join(os.path.abspath(self._getExtraPath()), os.path.splitext(os.path.basename(molecule))[0])
-			tmpFiles = f'{moleculeBasePath}.log {moleculeBasePath}.out {moleculeBasePath}-out.sdf {moleculeBasePath}.qpsa'
-			tmpFileList.append(tmpFiles)
+			tmpFileList.append(moleculeBasePath + '.log')
+			tmpFileList.append(moleculeBasePath + '.out')
+			tmpFileList.append(moleculeBasePath + '-out.sdf')
+			tmpFileList.append(moleculeBasePath + '.qpsa')
 		
 		# Deleting all tmp files
-		self.runJob('rm -rf', f'{" ".join(tmpFileList)}', cwd=self._getExtraPath())
+		removeElements(tmpFileList)
 	
 	def createOutputStep(self):
 		""" This function generates the output of the protocol. """
