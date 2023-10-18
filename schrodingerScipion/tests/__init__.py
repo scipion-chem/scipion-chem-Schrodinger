@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from schrodingerScipion.tests.md_wf import *
-from schrodingerScipion.tests.test_utils import *
-from schrodingerScipion.tests.main_wf import *
-
+from ..tests.main_wf import TestGlideDocking, TestSchroLigPrep, TestGridSchro, TestSchroProtPrep, TestSitemap
+from ..tests.md_wf import TestDesmondMD, TestDesmondSysPrep
+from ..tests.test_utils import TestPrimeSchro, TestSchroConvert, TestSchroProtPrep, TestSplitSchro
+from ..tests.test_quikprop import TestSchroQikprop
