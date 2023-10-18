@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 # General imports
-import os
+import os, shutil
 
 # Scipion em imports
 from pyworkflow.tests import setupTestProject, BaseTest
@@ -32,6 +32,7 @@ from pyworkflow.utils import yellowStr, redStr
 
 # Scipion chem imports
 from pwchem.protocols import ProtChemImportSmallMolecules
+from pwchem.utils import rem
 
 # Plugin imports
 from ..protocols import ProtSchrodingerQikprop
@@ -117,6 +118,17 @@ class TestSchroQikprop(BaseTest):
 			return os.path.dirname(os.path.abspath(rawInputMols.get().getFirstItem().getFileName()))
 		except AttributeError:
 			return None
+	
+	@classmethod
+	def _removeTmpElements(cls, tmpElements):
+		""" This function removes all given temporary files and directories. """
+		# Removing selected elements
+		for item in tmpElements:
+			if os.path.exists(item):
+				if os.path.isdir(item):
+					shutil.rmtree(item)
+				else:
+					os.remove(item)
 
 	def test1(self):
 		""" This function tests a qikprop execution when the proper input is received. """
@@ -139,3 +151,6 @@ class TestSchroQikprop(BaseTest):
 		# Getting summary (should be a list with an element for each warning produced)
 		summaryString = '\n'.join(qikpropProt._summary())
 		self.assertNotEqual(summaryString, '', msg="There was an error running Qikprop and no warnings were printed into summary when there should be some.")
+		
+		# Last test calls cleaning function so it does not count as a separate test
+		self._removeTmpElements(self.tmpElements)
