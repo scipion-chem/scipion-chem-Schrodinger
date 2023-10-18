@@ -32,6 +32,7 @@ from pyworkflow.utils import yellowStr, redStr
 
 # Scipion chem imports
 from pwchem.protocols import ProtChemImportSmallMolecules
+from pwchem.utils import removeElements
 
 # Plugin imports
 from ..protocols import ProtSchrodingerQikprop
@@ -121,17 +122,6 @@ class TestSchroQikprop(BaseTest):
 		except AttributeError:
 			return None
 	
-	@classmethod
-	def _removeTmpElements(cls, tmpElements):
-		""" This function removes all given temporary files and directories. """
-		# Removing selected elements
-		for item in tmpElements:
-			if os.path.exists(item):
-				if os.path.isdir(item):
-					shutil.rmtree(item)
-				else:
-					os.remove(item)
-
 	def test1(self):
 		""" This function tests a qikprop execution when the proper input is received. """
 		# Running Qikprop
@@ -155,4 +145,4 @@ class TestSchroQikprop(BaseTest):
 		self.assertNotEqual(summaryString, '', msg="There was an error running Qikprop and no warnings were printed into summary when there should be some.")
 
 		# Last test calls cleaning function so it does not count as a separate test
-		self._removeTmpElements(self.tmpElements)
+		removeElements(self.tmpElements)
