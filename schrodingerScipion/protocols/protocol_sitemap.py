@@ -92,12 +92,11 @@ class ProtSchrodingerSiteMap(EMProtocol):
             proteinFile, pocketFiles = self.createOutputPDBFile()
             outPockets = SetOfStructROIs(filename=self._getPath('structROIs.sqlite'))
             for oFile in pocketFiles:
-              pock = StructROI(os.path.abspath(oFile), os.path.abspath(proteinFile), os.path.abspath(fnLog),
-                                   pClass='SiteMap')
-              pock._maeFile = pwobj.String(os.path.abspath(fnStructure))
+              pock = StructROI(oFile, proteinFile, fnLog, pClass='SiteMap')
+              pock._maeFile = pwobj.String(fnStructure)
               outPockets.append(pock)
 
-            pdbOutFile = outPockets.buildPDBhetatmFile()
+            outPockets.buildPDBhetatmFile()
             self._defineOutputs(outputStructROIs=outPockets)
 
     def _citations(self):
