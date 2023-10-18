@@ -79,12 +79,15 @@ class TestSchroQikprop(BaseTest):
 		if rawMoleculesPath is None:
 			raise AssertionError(redStr("There was an error obtaining the path for the input raw small molecules."))
 
+		# Getting path to ligand prepared small molecules before path variables are overwritten by setupTestProject
+		ligprepSmallMolsPath = os.path.abspath(ligPrepProtocol._getExtraPath())
+
 		# Setting up project again to overwrite temp project variables
 		setupTestProject(cls)
 
 		# Importing small molecules
 		cls.protRawImportSmallMols = cls._runImportSmallMols(rawMoleculesPath)
-		cls.protLigPrepImportSmallMols = cls._runImportSmallMols(os.path.abspath(ligPrepProtocol._getExtraPath()), processed=True)
+		cls.protLigPrepImportSmallMols = cls._runImportSmallMols(ligprepSmallMolsPath, processed=True)
 
 	@classmethod
 	def _runImportSmallMols(cls, moleculesPath, processed=False):
