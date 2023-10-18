@@ -92,10 +92,8 @@ class TestSchroLigPrep(BaseTest):
     @classmethod
     def setUpClass(cls):
         cls.dsLig = DataSet.getDataSet("smallMolecules")
-
         setupTestProject(cls)
         cls._runImportSmallMols()
-        cls._waitOutput(cls.protImportSmallMols, 'outputSmallMolecules', sleepTime=5)
 
     @classmethod
     def _runImportSmallMols(cls):
@@ -115,7 +113,6 @@ class TestSchroLigPrep(BaseTest):
 
     def test(self):
         ligProt = self._runLigandPreparation()
-        #self._waitOutput(ligProt, 'outputSmallMolecules', sleepTime=5)
         self.assertIsNotNone(getattr(ligProt, 'outputSmallMolecules', None))
 
 
