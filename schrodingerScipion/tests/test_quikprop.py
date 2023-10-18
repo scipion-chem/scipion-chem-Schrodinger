@@ -32,7 +32,6 @@ from pyworkflow.utils import yellowStr, redStr
 
 # Scipion chem imports
 from pwchem.protocols import ProtChemImportSmallMolecules
-from pwchem.utils import rem
 
 # Plugin imports
 from ..protocols import ProtSchrodingerQikprop
@@ -151,6 +150,6 @@ class TestSchroQikprop(BaseTest):
 		# Getting summary (should be a list with an element for each warning produced)
 		summaryString = '\n'.join(qikpropProt._summary())
 		self.assertNotEqual(summaryString, '', msg="There was an error running Qikprop and no warnings were printed into summary when there should be some.")
-		
+
 		# Last test calls cleaning function so it does not count as a separate test
 		self._removeTmpElements(self.tmpElements)
