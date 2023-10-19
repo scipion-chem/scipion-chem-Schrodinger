@@ -330,12 +330,15 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
                     small.ligandEfficiency = pwobj.Float(tokens[2])
                     small.ligandEfficiencySA = pwobj.Float(tokens[3])
                     small.ligandEfficiencyLn = pwobj.Float(tokens[4])
-                    small.poseFile = pwobj.String("%d@%s" % (i+1, fnPv))
-                    small.setPoseId(i)
-                    small.maeFile = pwobj.String(allMaeFile)
                     small.setMolClass('Schrodinger')
                     small.setDockId(self.getObjId())
                     small.setGridId(gridId)
+
+                    recFile, posFile = self.divideMaeComplex(fnPv, posIdx=i+1)
+                    small.setProteinFile(recFile)
+                    small.setPoseFile(posFile)
+                    small.setPoseId(i + 1)
+
                     smallList.append(small)
 
             allSmallList += smallList
@@ -357,6 +360,16 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         outputSet.structFile = pwobj.String(fnStruct)
         self._defineOutputs(outputSmallMolecules=outputSet)
 
+    def divideMaeComplex(self, maeFile, posIdx=1, outDir=None):
+      if not outDir:
+        outDir = os.path.dirname(maeFile)
+      molFile, recFile = os.path.join(outDir, getBaseName(maeFile) + f'_lig_{posIdx+1}.maegz'), \
+                         os.path.join(outDir, getBaseName(maeFile) + '_rec.maegz')
+      args = f' -n 1 {os.path.abspath(maeFile)} -o {os.path.abspath(recFile)}'
+      self.runJob(maeSubsetProg, args, cwd=outDir)
+      args = f' -n {posIdx+1} {os.path.abspath(maeFile)} -o {os.path.abspath(molFile)}'
+      self.runJob(maeSubsetProg, args, cwd=outDir)
+      return recFile, molFile
 
     def _validate(self):
         errors = []
@@ -367,22 +380,15 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     ###########################  Utils functions #####################
     def convertOutputStep(self, curMolSet, molLists, it, outDir):
         for i, mol in enumerate(curMolSet):
-            poseId, fnRaw = mol.poseFile.get().split('@')
-            poseId = str(int(poseId) + 1)
-            mol.setPoseId(poseId)
-
             molName = mol.getUniqueName()
-            fnAux = os.path.abspath(self._getExtraPath(f"tmp_{molName}_{it}_{i}.mae"))
             fnOut = os.path.join(outDir, f'{molName}.mol2')
 
             if not os.path.exists(fnOut):
-                args = "-n %s %s -o %s" % (poseId, os.path.abspath(fnRaw), fnAux)
-                subprocess.call([maeSubsetProg, *args.split()])
-
-                args = f'{fnAux} {os.path.abspath(fnOut)}'
+                posFile = os.path.abspath(mol.getPoseFile())
+                args = f'{posFile} {os.path.abspath(fnOut)}'
                 subprocess.call([structConvertProg, *args.split()])
-                os.remove(fnAux)
                 fnOut = relabelAtomsMol2(fnOut)
+
             mol.setPoseFile(fnOut)
             molLists[it].append(mol)
 
@@ -431,8 +437,16 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             gridId = gridDir.split('_')[1]
             maeFiles.append(gridDir + '/job_{}_pv.maegz'.format(gridId))
 
+        noRecMaeFiles = [maeFiles[0]]
+        for mFile in maeFiles[1:]:
+            mFile = os.path.abspath(self._getExtraPath(mFile))
+            tFile = os.path.abspath(self._getTmpPath(getBaseName(mFile) + '.maegz'))
+            args = f' -n 2: {mFile} -o {tFile}'
+            self.runJob(maeSubsetProg, args, cwd=self._getTmpPath())
+            noRecMaeFiles.append(tFile)
+
         outName = 'allMolecules.maegz'
-        command = 'zcat {} | gzip -c > {}'.format(' '.join(maeFiles), outName)
+        command = 'zcat {} | gzip -c > {}'.format(' '.join(noRecMaeFiles), outName)
         self.runJob('', command, cwd=self._getExtraPath())
         return self._getExtraPath(outName)
 

@@ -29,7 +29,7 @@ import os
 from pyworkflow.protocol.params import EnumParam
 from pwchem.viewers import SmallMoleculesViewer
 
-from schrodingerScipion.protocols.protocol_glide_docking import ProtSchrodingerGlideDocking
+from schrodingerScipion.protocols import ProtSchrodingerGlideDocking, ProtSchrodingerMMGBSA
 from schrodingerScipion.viewers.viewers_data import MaestroView
 
 SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
@@ -37,7 +37,7 @@ SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 class ProtGlideDockingViewer(SmallMoleculesViewer):
     """ Visualize the output of protocol autodock """
     _label = 'Viewer glide schrodinger docking'
-    _targets = [ProtSchrodingerGlideDocking]
+    _targets = [ProtSchrodingerGlideDocking, ProtSchrodingerMMGBSA]
 
     def __init__(self, **args):
         super().__init__(**args)
@@ -47,16 +47,47 @@ class ProtGlideDockingViewer(SmallMoleculesViewer):
         form.addSection(label='Maestro view')
         form.addParam('displayMaestroPocket', EnumParam,
                        choices=self.getChoices(vType=SET, pymol=False)[0], default=0,
-                       label='Display one ligand type: ',
-                       help='Display all conformers and positions of this molecule')
+                       label='Display ligands in Maestro: ',
+                       help='Display output ligand set using Maestro')
 
     def _getVisualizeDict(self):
         visDic = super()._getVisualizeDict()
         visDic.update({'displayMaestroPocket': self._viewPocketMaestroDock})
         return visDic
 
+    def buildComplexDic(self, mols):
+        '''Return a dic of the form: {receptorFile: [ligandFiles]}'''
+        recDic = {}
+        for mol in mols:
+            molFile, recFile = mol.getPoseFile(), mol.getProteinFile()
+            if recFile in recDic:
+                recDic[recFile].append(molFile)
+            else:
+                recDic[recFile] = [molFile]
+        return recDic
+
+    def buildMaestroScript(self, mols, sFile):
+        recDic = self.buildComplexDic(mols)
+        with open(sFile, 'w') as f:
+            ci, cr = 1, 1
+            for recFile, molFiles in recDic.items():
+                entrStr = '"\nentryimport "'.join([recFile, *molFiles])
+                f.write(f'entryimport "{entrStr}"\n')
+
+                f.write(f'entryselectonly entry {ci}\nentryandgroupcreatewithselectedattoplevel "Complex{cr}" {ci}\n')
+                f.write(f'entrysetprop property=s_m_title value="Receptor{cr}" entry {ci}\n')
+                for cii, molFile in enumerate(molFiles):
+                    f.write(f'entryselectonly entry {ci+cii+1}\n'
+                            f'entrygroupmoveselectionbyposition 1 parent_group="Complex{cr}"\n')
+                ci += len(molFiles) + 1
+                cr += 1
+        return sFile
+
+
     def _viewPocketMaestroDock(self, e=None):
         ligandLabel = self.getEnumText('displayMaestroPocket')
         mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
-        return [MaestroView(os.path.abspath(mols[0].maeFile.get()), cwd=self.protocol._getExtraPath())]
+        maestroScript = self.buildMaestroScript(mols, self.protocol._getExtraPath(f'{ligandLabel}_mae.txt'))
+        return [MaestroView(f'-c {maestroScript}')]
+
 

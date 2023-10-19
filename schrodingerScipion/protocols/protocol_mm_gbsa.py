@@ -25,13 +25,16 @@
 # *
 # **************************************************************************
 
-import os, time, gzip, sys
+import os
 
 from pyworkflow.protocol import params
+import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toPdb
 
-from pwchem.utils import pdbqt2other, convertToSdf, performBatchThreading
+
+from pwchem.utils import pdbqt2other, convertToSdf, performBatchThreading, getBaseName
+from pwchem.objects import SmallMolecule
 
 from ..utils import getNumberOfStructures
 from .. import Plugin as schrodingerPlugin
@@ -42,8 +45,10 @@ progPrepWizard = schrodingerPlugin.getHome('utilities/prepwizard')
 maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
 mmgbsaProg = schrodingerPlugin.getHome('prime_mmgbsa')
 
+FNONE, FTHRES, FAUT = 0, 1, 2
+
 class ProtSchrodingerMMGBSA(EMProtocol):
-    """Optimizes the docking position and claculates the binding energy"""
+    """Optimizes the docking position and calculates the binding energy"""
     _label = 'mm-gbsa'
     _program = ""
 
@@ -60,11 +65,41 @@ class ProtSchrodingerMMGBSA(EMProtocol):
                        help='Prepare target with Schrodinger LigPrep to ensure correct structure in case it was not '
                             'originally a Schrodinger molecule. It may subtly variate the ligand atom positions. '
                             'Might be necessary if docking was not performed in Schrodinger')
-        form.addParam('prepareReceptor', params.BooleanParam, default=True, label='Prepare target: ',
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help='Prepare receptor with Schrodinger PrepWizard to ensure correct structure in case it was '
-                           'not originally a Schrodinger receptor. It may subtly variate the atom positions. '
-                           'Might be necessary if docking was not performed in Schrodinger')
+        group.addParam('prepareReceptor', params.BooleanParam, default=True, label='Prepare target: ',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help='Prepare receptor with Schrodinger PrepWizard to ensure correct structure in case it was '
+                            'not originally a Schrodinger receptor. It may subtly variate the atom positions. '
+                            'Might be necessary if docking was not performed in Schrodinger')
+
+        group = form.addGroup('Target')
+        group.addParam('flexOption', params.EnumParam, default=0, label='Flexible group: ',
+                       choices=['None', 'Threshold distance', 'Flexibility estimation'],
+                       help='Select the way to determine the target flexible residues.\n'
+                            'None: target residues will remain rigid\n'
+                            'Threshold distance: flexible residues will be determined by a distance to the ligand\n'
+                            'Flexibility estimation: run a two-stage MMGBSA calculation where the second stage runs '
+                            'with the subset of flexible protein residues identified by the first')
+        group.addParam('flexDist', params.FloatParam, default=3.0, label='Flexible threshold (A): ',
+                       condition='flexOption==1',
+                       help='Treat all residues within this distance of the ligand as flexible. '
+                            'By default the entire receptor is frozen')
+        group.addParam('flexGroup', params.EnumParam, default=0, label='Flexible group: ',
+                       choices=['Residue', 'Side', 'PolarH'], condition='flexOption==1',
+                       help='Select a portion of the region defined with "flexible threshold" to be flexible.'
+                            '\nResidue: Choose the entire residue.'
+                            '\nSide: Choose the sidechain of each residue. '
+                            '\nPolarH: Choose the polar hydrogens on each residue.')
+        group.addParam('flexTargetCutOff', params.FloatParam, default=3.0, label='Flexible threshold (A): ',
+                       condition='flexOption==2',
+                       help='Cutoff for determining movement for target flexibility in Angstroms')
+
+        group = form.addGroup('Ligand', expertLevel=params.LEVEL_ADVANCED,)
+        group.addParam('useCharges', params.BooleanParam, default=False, label='Use ligand charges: ',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help='Use the partial charges in the input ligand file rather than from the force field')
+        group.addParam('rigidLigand', params.BooleanParam, default=False, label='Rigid ligand: ',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help='Minimize the ligand as a rigid body')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -73,7 +108,7 @@ class ProtSchrodingerMMGBSA(EMProtocol):
         """ This function inserts all steps functions that will be run when running the protocol """
         convStep = self._insertFunctionStep('convertStep', prerequisites=[])
         mmStep = self._insertFunctionStep('runMMGBSAStep', prerequisites=[convStep])
-        # self._insertFunctionStep('createOutputStep', prerequisites=[mmStep])
+        self._insertFunctionStep('createOutputStep', prerequisites=[mmStep])
         # todo: add parse and create output
 
     def convertStep(self):
@@ -105,118 +140,233 @@ class ProtSchrodingerMMGBSA(EMProtocol):
         dockFiles = [os.path.join(dockDir, dockFile) for dockFile in os.listdir(dockDir)]
         performBatchThreading(self.performMMGBSA, dockFiles, nt, cloneItem=False)
 
+    def createOutputStep(self):
+      inMols = self.inputSmallMolecules.get()
+
+      molDic, molIdxDic = {}, {}
+      for mol in inMols:
+        fnSmall = mol.getPoseFile()
+        if mol.getMolClass() == 'Schrodinger':
+          posId = fnSmall.split('@')[0]
+          molIdxDic[int(posId)] = mol.clone()
+        else:
+          fnBase = getBaseName(fnSmall)
+          molDic[fnBase] = mol.clone()
+
+      outComplexFiles = {}
+      for batchDir in self.getBatchDirs(complete=True):
+        for file in os.listdir(batchDir):
+          if file.endswith('-out.maegz'):
+            maeFile = os.path.join(batchDir, file)
+            csvFile = maeFile.replace('.maegz', '.csv')
+            outComplexFiles[maeFile] = csvFile
+
+      outputSet = inMols.createCopy(self._getPath(), copyInfo=True)
+      for maeFile, csvFile in outComplexFiles.items():
+        csvBasesDic, csvIdxsDic = self.parseOutputCSVFile(csvFile)
+        for fnBase in csvBasesDic:
+          if fnBase in molDic:
+            newMol = SmallMolecule()
+            newMol.copy(molDic[fnBase], copyId=False)
+
+            newMol._mmGBSA_BindEnergy = pwobj.Float(csvBasesDic[fnBase])
+            outputSet.append(newMol)
+
+        for posId in csvIdxsDic:
+          if posId in molIdxDic:
+            newMol = SmallMolecule()
+            newMol.copy(molIdxDic[posId], copyId=False)
+
+            recFile, posFile = self.divideMaeComplex(maeFile)
+            newMol.setProteinFile(recFile)
+            newMol.setPoseFile(posFile)
+
+            newMol._mmGBSA_BindEnergy = pwobj.Float(csvIdxsDic[posId])
+            outputSet.append(newMol)
+      self._defineOutputs(outputSmallMolecules=outputSet)
+
+
+    def divideMaeComplex(self, maeFile, outDir=None):
+      if not outDir:
+        outDir = os.path.dirname(maeFile)
+
+      molFile, recFile = os.path.join(outDir, getBaseName(maeFile) + '_ligand1.maegz'), \
+                         os.path.join(outDir, getBaseName(maeFile) + '_receptor1.maegz')
+
+      args = schrodingerPlugin.getMMshareDir('python/common/split_structure.py ')
+      args += f'-m pdb -many_files {os.path.abspath(maeFile)} {os.path.abspath(maeFile)}'
+      self.runJob(schrodingerPlugin.getHome('run'), args)
+      return recFile, molFile
+
+    # --------------------------- System functions --------------------------
+
+    def _validate(self):
+        """ Try to find warnings on define params. """
+        validations = []
+        pSet = self.inputSmallMolecules.get()
+        if not pSet.isDocked():
+            validations.append('Input molecules must be docked first.\nSet: {} has not been docked'.format(pSet))
+        return validations
+
     # --------------------------- Parallelization functions --------------------
     def prepareLigandFile(self, mols, molLists, it):
-        '''Return the corresponding MAE file for the molecule'''
-        for mol in mols:
-            molFile = mol.getPoseFile()
-            baseName = os.path.splitext(os.path.basename(molFile))[0]
-            if not molFile.endswith('.sdf'):
-                # Use openbabel first to convert to sdf (usable by Schrodinger)
-                molFile = convertToSdf(self, molFile)
+      '''Return the corresponding MAE file for the molecule'''
+      for mol in mols:
+        molFile = mol.getPoseFile()
+        baseName = os.path.splitext(os.path.basename(molFile))[0]
+        if not molFile.endswith('.sdf'):
+          # Use openbabel first to convert to sdf (usable by Schrodinger)
+          molFile = convertToSdf(self, molFile)
 
-            if self.prepareLigand.get():
-                # Prepare sdf file using LigPrep
-                tmpmaeFile = os.path.abspath(self._getTmpPath(baseName + '_tmp.maegz'))
-                args = " -WAIT -R h -a -isd {} -omae {}".format(molFile, tmpmaeFile)
-                self.runJob(progLigPrep, args, cwd=self._getTmpPath())
-                maeFile = os.path.abspath(self._getTmpPath(baseName + '.maegz'))
-                os.rename(tmpmaeFile, maeFile)
+        if self.prepareLigand.get():
+          # Prepare sdf file using LigPrep
+          tmpmaeFile = os.path.abspath(self._getTmpPath(baseName + '_tmp.maegz'))
+          args = " -WAIT -R h -a -isd {} -omae {}".format(molFile, tmpmaeFile)
+          self.runJob(progLigPrep, args, cwd=self._getTmpPath())
+          maeFile = os.path.abspath(self._getTmpPath(baseName + '.maegz'))
+          os.rename(tmpmaeFile, maeFile)
 
-            else:
-                # Convert sdf to mae file
-                maeFile = os.path.abspath(self._getTmpPath(mol.getUniqueName() + '.maegz'))
-                self.runJob(structConvertProg, '{} {}'.format(molFile, maeFile))
+        else:
+          # Convert sdf to mae file
+          maeFile = os.path.abspath(self._getTmpPath(mol.getUniqueName() + '.maegz'))
+          self.runJob(structConvertProg, '{} {}'.format(molFile, maeFile))
 
-            molLists[it].append(maeFile)
+        molLists[it].append(maeFile)
+
+    def getMMGBSAArgs(self):
+      args = ''
+      if self.flexOption.get() == FTHRES:
+        args += f'-rflexdist {self.flexDist.get()} -rflexgroup {self.getEnumText("flexGroup").lower()} '
+      elif self.flexOption.get() == FAUT:
+        args += f'-target_flexibility -target_flexibility_cutoff {self.flexTargetCutOff.get()} '
+
+      if self.useCharges.get():
+        args += '-use_ligand_charges '
+      if self.rigidLigand.get():
+        args += '-rigid_body '
+      return args
 
     def performMMGBSA(self, dockFiles, molLists, it):
-        #  todo: add args
-        for dockFile in dockFiles:
-            print('Performing prime mm-gbsa on : ', dockFile)
-            args = f"-WAIT {os.path.abspath(dockFile)}"
-            self.runJob(mmgbsaProg, args, cwd=self._getExtraPath())
+      outDir = self._getExtraPath(f'batch_{it}')
+      os.mkdir(outDir)
+      for dockFile in dockFiles:
+        print('Performing prime mm-gbsa on : ', dockFile)
+        args = f"-WAIT {os.path.abspath(dockFile)} -out_type COMPLEX "
+        args += self.getMMGBSAArgs()
+        self.runJob(mmgbsaProg, args, cwd=outDir)
 
     # --------------------------- Utils functions --------------------
     def getNMolsPerThread(self, nMols, nt):
-        '''Return a list with the number of element to process per thread'''
-        nSubMols = [0 for _ in range(nt)]
-        for i in range(nMols):
-            nSubMols[i % nt] += 1
-        return nSubMols
+      '''Return a list with the number of element to process per thread'''
+      nSubMols = [0 for _ in range(nt)]
+      for i in range(nMols):
+          nSubMols[i % nt] += 1
+      return nSubMols
 
     def divideInThreads(self, dockFile, nt, outDir):
-        '''Divide the complex file into several containing the same receptor (first mol) so the following
-        process of these complex files can be parallelized in nt threads'''
-        nMols = getNumberOfStructures(dockFile) - 1
-        if nMols < nt:
-            nt = nMols
+      '''Divide the complex file into several containing the same receptor (first mol) so the following
+      process of these complex files can be parallelized in nt threads'''
+      nMols = getNumberOfStructures(dockFile) - 1
+      if nMols < nt:
+        nt = nMols
 
-        if nt > 1:
-            nSubMols = self.getNMolsPerThread(nMols, nt)
-            firstMol, maeFiles = 2, []
-            for i, nSubMol in enumerate(nSubMols):
-                maeFile = os.path.basename(dockFile).replace('.mae', f'_{i}.mae')
-                lastMol = firstMol + nSubMol
-                args = ' -n "1, {}:{}" {} -o {}'.format(firstMol, lastMol, os.path.abspath(dockFile), maeFile)
-                self.runJob(maeSubsetProg, args, cwd=outDir)
-                firstMol = lastMol
-                maeFiles.append(os.path.join(outDir, maeFile))
-        else:
-            maeFiles = [os.path.join(outDir, os.path.basename(dockFile))]
-            os.link(dockFile, maeFiles[0])
-        return maeFiles
+      if nt > 1:
+        nSubMols = self.getNMolsPerThread(nMols, nt)
+        firstMol, maeFiles = 2, []
+        for nSubMol in nSubMols:
+          lastMol = firstMol + nSubMol
+          maeFile = os.path.basename(dockFile).replace('.mae', f'_{firstMol}_{lastMol-1}.mae')
+          args = f' -n "1, {firstMol}:{lastMol-1}" {os.path.abspath(dockFile)} -o {maeFile}'
+          self.runJob(maeSubsetProg, args, cwd=outDir)
+          firstMol = lastMol
+          maeFiles.append(os.path.join(outDir, maeFile))
+      else:
+        maeFiles = [os.path.join(outDir, os.path.basename(dockFile))]
+        os.link(dockFile, maeFiles[0])
+      return maeFiles
 
     def getMaestroDockGroups(self, molSet):
-        '''Return the complex (receptor-molecules) files in a molSet'''
-        gFiles = []
-        for mol in molSet:
-            g = mol.getPoseFile().split('@')[1]
-            if not g in gFiles:
-                gFiles.append(g)
-        return gFiles
+      '''Return the complex (receptor-molecules) files in a molSet'''
+      gFiles = []
+      for mol in molSet:
+        g = mol.getPoseFile().split('@')[1]
+        if not g in gFiles:
+          gFiles.append(g)
+      return gFiles
 
     def getInputComplexDir(self):
-        cDir = self._getExtraPath('inputComplex')
-        if not os.path.exists(cDir):
-            os.mkdir(cDir)
-        return os.path.abspath(cDir)
+      cDir = self._getExtraPath('inputComplex')
+      if not os.path.exists(cDir):
+        os.mkdir(cDir)
+      return os.path.abspath(cDir)
 
     def getInputComplexFiles(self):
-        cFiles = []
-        cDir = self.getInputComplexDir()
-        for file in os.listdir(cDir):
-            cFiles.append(os.path.join(cDir, file))
-        return cFiles
+      cFiles = []
+      cDir = self.getInputComplexDir()
+      for file in os.listdir(cDir):
+        cFiles.append(os.path.join(cDir, file))
+      return cFiles
 
     def getPdbFile(self, molSet):
       proteinFile = molSet.getProteinFile()
       inName, inExt = os.path.splitext(os.path.basename(proteinFile))
 
       if inExt == '.pdb':
-          return os.path.abspath(proteinFile)
+        return os.path.abspath(proteinFile)
       else:
         pdbFile = os.path.abspath(os.path.join(self._getTmpPath(inName + '.pdb')))
         if inExt == '.pdbqt':
-            pdbqt2other(self, proteinFile, pdbFile)
+          pdbqt2other(self, proteinFile, pdbFile)
         else:
-            toPdb(proteinFile, pdbFile)
-        return os.path.abspath(pdbFile)
+          toPdb(proteinFile, pdbFile)
+      return os.path.abspath(pdbFile)
 
     def prepareReceptorFile(self, molSet):
-        '''Return the corresponding MAE file for the receptor the molecule is docked to'''
-        mol = molSet.getFirstItem()
-        if hasattr(mol, 'structFile'):
-            targetMaeFile = molSet.structFile
+      '''Return the corresponding MAE file for the receptor the molecule is docked to'''
+      mol = molSet.getFirstItem()
+      if hasattr(mol, 'structFile'):
+        targetMaeFile = molSet.structFile
+      else:
+        pdbFile = self.getPdbFile(molSet)
+        targetName = os.path.splitext(os.path.basename(pdbFile))[0]
+        targetMaeFile = os.path.abspath(self._getTmpPath(targetName + '.maegz'))
+        if self.prepareReceptor.get():
+          args = '-WAIT -noprotassign -noimpref -noepik '
+          args += '%s %s' % (os.path.abspath(pdbFile), os.path.abspath(targetMaeFile))
+          self.runJob(progPrepWizard, args, cwd=self._getTmpPath())
         else:
-            pdbFile = self.getPdbFile(molSet)
-            targetName = os.path.splitext(os.path.basename(pdbFile))[0]
-            targetMaeFile = os.path.abspath(self._getTmpPath(targetName + '.maegz'))
-            if self.prepareReceptor.get():
-                args = '-WAIT -noprotassign -noimpref -noepik '
-                args += '%s %s' % (os.path.abspath(pdbFile), os.path.abspath(targetMaeFile))
-                self.runJob(progPrepWizard, args, cwd=self._getTmpPath())
-            else:
-                self.runJob(structConvertProg, '{} {}'.format(pdbFile, targetMaeFile), cwd=self._getTmpPath())
-        return targetMaeFile
+          self.runJob(structConvertProg, '{} {}'.format(pdbFile, targetMaeFile), cwd=self._getTmpPath())
+      return targetMaeFile
 
+    def getBatchDirs(self, complete=False):
+      batchDirs = []
+      for bdir in os.listdir(self._getExtraPath()):
+        if bdir.startswith('batch_'):
+          if not complete:
+            batchDirs.append(self._getExtraPath(bdir))
+          else:
+            add = False
+            for file in os.listdir(self._getExtraPath(bdir)):
+              if file.endswith("-out.maegz"):
+                add = True
+                break
+
+            if add:
+              batchDirs.append(self._getExtraPath(bdir))
+            else:
+              print('No good poses found in batch ' + bdir.split('_')[1])
+      return batchDirs
+
+    def parseOutputCSVFile(self, csvFile):
+      csvDic, csvIdxsDic = {}, {}
+      posFIdx = csvFile.split('_')[-2]
+      with open(csvFile) as f:
+        f.readline()
+        for i, line in enumerate(f):
+          fnBase, mmgbsaBindEnergy = line.split(',')[:2]
+          csvDic[fnBase] = float(mmgbsaBindEnergy)
+          csvIdxsDic[int(posFIdx) + i - 1] = float(mmgbsaBindEnergy)
+      return csvDic, csvIdxsDic
+
+    def getOriginalReceptorFile(self):
+        return self.inputSmallMolecules.get().getProteinFile()
