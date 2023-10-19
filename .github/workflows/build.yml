@@ -56,6 +56,9 @@ jobs:
       uses: actions/checkout@v3
       with:
         ref: ${{ github.head_ref }}
+    
+    - name: Test ls
+      run: ls /home/runner/work/scipion-chem-schrodingerScipion/miniconda/envs/scipion3/lib/python3.8/site-packages | grep scipion-chem
 
     # Install plugin from the pull request using the Scipion3 installp command
     - name: Install plugin from pull request
