@@ -84,14 +84,14 @@ class GetSoluteCharge(pwizard.Wizard):
                 if pdbFile.endswith('.pdbqt'):
                     pdbqtFile = pdbFile
                     pdbFile = pdbqt2other(protocol, pdbqtFile,
-                                          os.path.join('/tmp', getBaseFileName(pdbqtFile) + '.pdb'))
+                                          protocol._getTmpPath(getBaseFileName(pdbqtFile) + '.pdb'))
                 structName = os.path.splitext(os.path.basename(pdbFile))[0]
                 soluteFile = protocol._getTmpPath(structName + '.mae')
                 if not os.path.exists(soluteFile):
                     check_call('{} {} {}'.format(structConvertProg, pdbFile, soluteFile), shell=True)
 
         elif protocol.inputFrom.get() == LIGAND:
-            soluteFile = os.path.join('/tmp', 'complexSolute.mae')
+            soluteFile = protocol._getTmpPath('complexSolute.mae')
             if not os.path.exists(soluteFile):
                 mol = protocol.getSpecifiedMol()
                 molFile = mol.getPoseFile()
@@ -99,7 +99,7 @@ class GetSoluteCharge(pwizard.Wizard):
                     sdfFile = protocol._getTmpPath(getBaseFileName(molFile) + '.sdf')
                     molFile = convertToSdf(protocol, molFile, sdfFile)
 
-                molMaeFile = os.path.join('/tmp', mol.getUniqueName() + '.maegz')
+                molMaeFile = protocol._getTmpPath(mol.getUniqueName() + '.maegz')
                 check_call('{} {} {}'.format(structConvertProg, molFile, molMaeFile), shell=True)
 
                 if hasattr(mol, 'structFile'):
