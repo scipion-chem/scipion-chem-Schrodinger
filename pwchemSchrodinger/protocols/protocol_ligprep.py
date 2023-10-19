@@ -23,13 +23,20 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+# General imports
 import os, time, glob
 
+# Scipion em imports
+from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam, STEPS_PARALLEL
 from pyworkflow.utils.path import copyFile, moveFile, cleanPath
-from pwem.protocols import EMProtocol
+
+# Scipion chem imports
+from pwchem.objects import SetOfSmallMolecules
+
+# Plugin imports
 from .. import Plugin
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from ..utils import saveMolecule
 
 progLigPrep=Plugin.getHome('ligprep')
 progStructConvert=Plugin.getHome('utilities/structconvert')
@@ -157,16 +164,15 @@ class ProtSchrodingerLigPrep(EMProtocol):
                     fnOut = os.path.split(fn)[1]
                     fnOut = self._getExtraPath(fnOut[1:])
                     moveFile(fn, fnOut)
-                    self.saveMolecule(fnOut, self.outputSmallMolecules, mol)
+                    saveMolecule(self, fnOut, self.outputSmallMolecules, mol)
                 if len(glob.glob(self._getExtraPath("%s-*.sdf" % fnRoot))) > 0:
                     cleanPath(self._getPath(fnSDF))
             else:
-                self.saveMolecule(fnSmall, self.outputSmallMoleculesDropped, mol)
+                saveMolecule(self, fnSmall, self.outputSmallMoleculesDropped, mol)
         else:
             for fn in glob.glob(self._getExtraPath("%s*.sdf" % fnRoot)):
                 print("Reading %s" % fn)
-                self.saveMolecule(fn, self.outputSmallMolecules, mol)
-
+                saveMolecule(self, fn, self.outputSmallMolecules, mol)
 
     def createOutputStep(self):
         if len(self.outputSmallMolecules)>0:
@@ -175,23 +181,3 @@ class ProtSchrodingerLigPrep(EMProtocol):
         if len(self.outputSmallMoleculesDropped)>0:
             self._defineOutputs(**{OUTPUTATTRIBUTEDROPPED: self.outputSmallMoleculesDropped})
             self._defineSourceRelation(self.inputSmallMolecules, self.outputSmallMoleculesDropped)
-
-    def saveMolecule(self, molFn, molSet, oriMol):
-        while self.saving:
-            time.sleep(0.2)
-        self.saving = True
-        smallMolecule = SmallMolecule()
-        smallMolecule.copy(oriMol, copyId=False)
-        smallMolecule.setFileName(molFn)
-        confId = self.getConfId(molFn, oriMol.getMolName())
-        if confId:
-            smallMolecule.setConfId(molFn.split('-')[-1].split('.')[0])
-
-        molSet.append(smallMolecule.clone())
-        self.saving = False
-
-    def getConfId(self, molFn, molName):
-        try:
-            return molFn.split(molName)[1].split('-')[1].split('.')[0]
-        except Exception:
-            return None

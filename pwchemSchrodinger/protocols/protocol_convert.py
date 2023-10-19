@@ -23,15 +23,21 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, time
+# General imports
+import os
 
-from pyworkflow.protocol.params import PointerParam, EnumParam, STEPS_PARALLEL
+# Scipion em imports
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
+from pyworkflow.protocol.params import PointerParam, EnumParam, STEPS_PARALLEL
+
+# Scipion chem imports
+from pwchem.objects import SetOfSmallMolecules
+
+# Plugin imports
 from .. import Plugin
 from ..objects import SchrodingerAtomStruct
-from ..utils.utils import putMol2Title
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from ..utils.utils import putMol2Title, saveMolecule
 
 SMALLMOL, TARGET = 0, 1
 molChoices = {"Maestro": 'maegz', 'PDB': 'pdb', "Sybyl Mol2": 'mol2', "Smiles": 'smi', 'V2000 SD': 'sdf'}
@@ -99,7 +105,7 @@ class ProtSchrodingerConvert(EMProtocol):
         if outFormat == 'mol2':
             putMol2Title(fnOut)
 
-        self.saveMolecule(fnOut, self.outputSmallMolecules, mol)
+        saveMolecule(self, fnOut, self.outputSmallMolecules, mol)
 
     def convertTargetStep(self):
         progStructConvert = Plugin.getHome('utilities/structconvert')
@@ -123,26 +129,6 @@ class ProtSchrodingerConvert(EMProtocol):
             self._defineOutputs(outputSmallMolecules=self.outputSmallMolecules)
         else:
             self._defineOutputs(outputStructure=self.target)
-
-    def saveMolecule(self, molFn, molSet, oriMol):
-        while self.saving:
-            time.sleep(0.2)
-        self.saving = True
-        smallMolecule = SmallMolecule()
-        smallMolecule.copy(oriMol, copyId=False)
-        smallMolecule.setFileName(molFn)
-        confId = self.getConfId(molFn, oriMol.getMolName())
-        if confId:
-            smallMolecule.setConfId(molFn.split('-')[-1].split('.')[0])
-
-        molSet.append(smallMolecule.clone())
-        self.saving = False
-
-    def getConfId(self, molFn, molName):
-        try:
-            return molFn.split(molName)[1].split('-')[1].split('.')[0]
-        except Exception:
-            return None
 
     def _summary(self):
         summary=[]
