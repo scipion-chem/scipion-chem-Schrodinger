@@ -28,7 +28,7 @@ import pwem.objects.data as data
 from pwchem.objects import StructROI
 from pwchem.constants import *
 from pyworkflow.object import (Float, Integer, List, String)
-from schrodingerScipion import Plugin as schrodinger_plugin
+from . import Plugin as schrodinger_plugin
 
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 

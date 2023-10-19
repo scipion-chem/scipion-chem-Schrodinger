@@ -29,8 +29,8 @@ import os
 from pyworkflow.protocol.params import EnumParam
 from pwchem.viewers import SmallMoleculesViewer
 
-from schrodingerScipion.protocols.protocol_glide_docking import ProtSchrodingerGlideDocking
-from schrodingerScipion.viewers.viewers_data import MaestroView
+from ..protocols.protocol_glide_docking import ProtSchrodingerGlideDocking
+from ..viewers.viewers_data import MaestroView
 
 SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 

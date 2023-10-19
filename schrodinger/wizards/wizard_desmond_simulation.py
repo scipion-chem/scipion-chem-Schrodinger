@@ -33,7 +33,7 @@ information such as name and number of residues.
 """
 
 # Imports
-from schrodingerScipion.protocols.protocol_desmond_simulation import *
+from ..protocols.protocol_desmond_simulation import *
 from ..constants import *
 import pyworkflow.wizard as pwizard
 from pwchem.wizards import AddElementSummaryWizard, DeleteElementWizard

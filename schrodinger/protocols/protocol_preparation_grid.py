@@ -33,8 +33,8 @@ from pyworkflow.utils.path import createLink, makePath
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import AtomicStructHandler
 
-from schrodingerScipion.objects import SchrodingerGrid, SetOfSchrodingerGrids
-from schrodingerScipion import Plugin as schrodinger_plugin
+from ..objects import SchrodingerGrid, SetOfSchrodingerGrids
+from .. import Plugin as schrodinger_plugin
 
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 

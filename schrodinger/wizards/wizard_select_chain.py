@@ -34,7 +34,7 @@ information such as name and number of residues.
 
 # Imports
 from pwchem.wizards import SelectChainWizardQT, SelectResidueWizardQT, AddResidueWizard
-from schrodingerScipion.protocols import ProtSchrodingerPrepWizard, ProtSchrodingerPrime
+from ..protocols import ProtSchrodingerPrepWizard, ProtSchrodingerPrime
 
 SelectChainWizardQT().addTarget(protocol=ProtSchrodingerPrepWizard,
                                 targets=['chain_name'],

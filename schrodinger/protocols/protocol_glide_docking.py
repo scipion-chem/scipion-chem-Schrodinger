@@ -35,8 +35,8 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2, calculate_centerMass, performBatchThreading
 from pwchem import Plugin as pwchemPlugin
 
-from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.utils.utils import putMol2Title
+from .. import Plugin as schrodinger_plugin
+from ..utils.utils import putMol2Title
 
 glideProg = schrodinger_plugin.getHome('glide')
 progLigPrep = schrodinger_plugin.getHome('ligprep')

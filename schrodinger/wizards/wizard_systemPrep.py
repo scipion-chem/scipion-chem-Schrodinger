@@ -40,10 +40,10 @@ from pwchem.wizards import SelectElementWizard, GetRadiusProtein
 from pwchem.utils import pdbqt2other, getBaseFileName, convertToSdf
 from pwchem.objects import SetOfSmallMolecules
 
-from schrodingerScipion.protocols import *
-from schrodingerScipion.protocols.protocol_desmond_systemPrep import *
-from schrodingerScipion.utils.utils import getChargeFromMAE
-from schrodingerScipion.objects import SchrodingerAtomStruct
+from ..protocols import *
+from ..protocols.protocol_desmond_systemPrep import *
+from ..utils.utils import getChargeFromMAE
+from ..objects import SchrodingerAtomStruct
 
 SelectElementWizard().addTarget(protocol=ProtSchrodingerDesmondSysPrep,
                                targets=['inputLigand'],

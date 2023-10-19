@@ -34,8 +34,8 @@ from pyworkflow.object import String
 from pwem.protocols import EMProtocol
 from pwem.objects.data import AtomStruct
 from pwem.convert.atom_struct import AtomicStructHandler
-from schrodingerScipion import Plugin
-from schrodingerScipion.objects import SchrodingerAtomStruct
+from .. import Plugin
+from ..objects import SchrodingerAtomStruct
 
 class ProtSchrodingerPrepWizard(EMProtocol):
     """Calls the preparation wizard"""

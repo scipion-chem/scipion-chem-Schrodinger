@@ -30,7 +30,7 @@ from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, IntParam, StringParam
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin
+from .. import Plugin
 
 from pwchem import Plugin as pwchemPlugin
 from pwchem.objects import SetOfStructROIs, StructROI

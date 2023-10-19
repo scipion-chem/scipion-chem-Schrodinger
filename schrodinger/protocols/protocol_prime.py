@@ -29,8 +29,8 @@ from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, StringParam, EnumParam, FloatParam, LabelParam, TextParam
 from pyworkflow.utils.path import createLink
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin
-from schrodingerScipion.objects import SchrodingerAtomStruct
+from .. import Plugin
+from ..objects import SchrodingerAtomStruct
 
 progPrime = Plugin.getHome('prime')
 

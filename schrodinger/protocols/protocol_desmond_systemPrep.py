@@ -35,10 +35,10 @@ from pwem.convert.atom_struct import toPdb
 
 from pwchem.utils import pdbqt2other, convertToSdf
 
-from schrodingerScipion import Plugin as schrodingerPlugin
-from schrodingerScipion.constants import *
-from schrodingerScipion.objects import SchrodingerAtomStruct, SchrodingerSystem
-from schrodingerScipion.utils import getChargeFromMAE
+from .. import Plugin as schrodingerPlugin
+from ..constants import *
+from ..objects import SchrodingerAtomStruct, SchrodingerSystem
+from ..utils import getChargeFromMAE
 
 multisimProg = schrodingerPlugin.getHome('utilities/multisim')
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')

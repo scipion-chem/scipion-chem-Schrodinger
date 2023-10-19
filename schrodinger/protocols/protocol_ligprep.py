@@ -28,7 +28,7 @@ import os, time, glob
 from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam, STEPS_PARALLEL
 from pyworkflow.utils.path import copyFile, moveFile, cleanPath
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin
+from .. import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 progLigPrep=Plugin.getHome('ligprep')

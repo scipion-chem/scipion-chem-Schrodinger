@@ -28,9 +28,9 @@ import os, time
 from pyworkflow.protocol.params import PointerParam, EnumParam, STEPS_PARALLEL
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin
-from schrodingerScipion.objects import SchrodingerAtomStruct
-from schrodingerScipion.utils.utils import putMol2Title
+from .. import Plugin
+from ..objects import SchrodingerAtomStruct
+from ..utils.utils import putMol2Title
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 SMALLMOL, TARGET = 0, 1

@@ -88,8 +88,8 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getPluginHome(cls, path=""):
-        import schrodingerScipion
-        fnDir = os.path.split(schrodingerScipion.__file__)[0]
+        import schrodinger
+        fnDir = os.path.split(schrodinger.__file__)[0]
         return os.path.join(fnDir,path)
 
     @classmethod

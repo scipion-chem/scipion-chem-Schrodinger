@@ -30,9 +30,9 @@ from subprocess import check_call
 from pyworkflow.protocol.params import *
 from pwem.protocols import EMProtocol
 from pwchem.utils import natural_sort
-from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.constants import *
-from schrodingerScipion.objects import SchrodingerSystem
+from .. import Plugin as schrodinger_plugin
+from ..constants import *
+from ..objects import SchrodingerSystem
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
 jobControlProg = schrodinger_plugin.getHome('jobcontrol')
