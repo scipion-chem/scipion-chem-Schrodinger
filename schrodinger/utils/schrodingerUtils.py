@@ -23,7 +23,6 @@
 # *
 # **************************************************************************
 
-import os
 import sys
 import schrodinger.structure as structure
 

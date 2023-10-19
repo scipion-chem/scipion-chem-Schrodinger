@@ -36,7 +36,7 @@ from pwem.convert.atom_struct import toPdb
 from pwchem.utils import pdbqt2other, convertToSdf
 
 from .. import Plugin as schrodingerPlugin
-from ..constants import *
+from ..constants import ADD_COUNTERION, SIZE_LIST, ANGLES, SIZE_SINGLE, ADD_SALT, SOLVENT, MSJ_SYSPREP
 from ..objects import SchrodingerAtomStruct, SchrodingerSystem
 from ..utils import getChargeFromMAE
 
@@ -68,6 +68,10 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         EMProtocol.__init__(self, **kwargs)
 
     def _defineParams(self, form):
+        # Condition variables
+        boundaryShapeCondition = 'boundaryShape == 2'
+        placeIonsCondition = 'placeIons!=0'
+
         form.addSection(label='Input')
         form.addParam('inputFrom', EnumParam, default=STRUCTURE,
                       label='Input from: ', choices=['AtomStruct', 'SetOfSmallMolecules'],
@@ -109,13 +113,13 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
                        default=10.0, label='B: ')
         line.addParam('distC', FloatParam, condition='boundaryShape in [1, 2]',
                        default=10.0, label='C: ')
-        line = group.addLine('Angles:', condition='boundaryShape == 2',
+        line = group.addLine('Angles:', condition=boundaryShapeCondition,
                              help='Angles of the bounding box')
-        line.addParam('angleA', FloatParam, condition='boundaryShape == 2',
+        line.addParam('angleA', FloatParam, condition=boundaryShapeCondition,
                        default=90.0, label='A: ')
-        line.addParam('angleB', FloatParam, condition='boundaryShape == 2',
+        line.addParam('angleB', FloatParam, condition=boundaryShapeCondition,
                        default=90.0, label='B: ')
-        line.addParam('angleC', FloatParam, condition='boundaryShape == 2',
+        line.addParam('angleC', FloatParam, condition=boundaryShapeCondition,
                        default=90.0, label='C: ')
         group.addParam('minimize', BooleanParam, default=False,
                       label='Minimize volume: ',
@@ -135,23 +139,23 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         group.addParam('placeIons', EnumParam, default=1,
                        label='Add ions: ', choices=['None', 'Neutralize', 'Add number'],
                        help='Whether to add ions to the system')
-        line = group.addLine('Solute charge:', condition='placeIons!=0', expertLevel=LEVEL_ADVANCED)
-        line.addParam('solCharge', IntParam, default=0, condition='placeIons!=0', readOnly=True,
+        line = group.addLine('Solute charge:', condition=placeIonsCondition, expertLevel=LEVEL_ADVANCED)
+        line.addParam('solCharge', IntParam, default=0, condition=placeIonsCondition, readOnly=True,
                       help='Check charge of the solute before the addition of ions')
-        line = group.addLine('Cation type:', condition='placeIons!=0',
+        line = group.addLine('Cation type:', condition=placeIonsCondition,
                              help='Type of the cations to add into the system. '
                                   '(If neutralize, only added when solute has negative charge)')
-        line.addParam('cationType', EnumParam, condition='placeIons!=0',
+        line.addParam('cationType', EnumParam, condition=placeIonsCondition,
                        label='Cation to add: ', choices=self._cations, default=0,
                        help='Which cations to add in the system')
         line.addParam('cationNum', IntParam, condition='placeIons==2',
                       label='Number of cations to add: ',
                       help='Number of cations to add')
 
-        line = group.addLine('Anion type:', condition='placeIons!=0',
+        line = group.addLine('Anion type:', condition=placeIonsCondition,
                              help='Type of the anions to add into the system. '
                                   '(If neutralize, only added when solute has positive charge)')
-        line.addParam('anionType', EnumParam, condition='placeIons!=0',
+        line.addParam('anionType', EnumParam, condition=placeIonsCondition,
                       label='Anion to add: ', choices=self._anions, default=1,
                       help='Which anions to add in the system')
         line.addParam('anionNum', IntParam, condition='placeIons==2',
@@ -187,7 +191,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
     def solutePreparationStep(self):
         if self.inputFrom.get() == STRUCTURE:
-            if type(self.inputStruct.get()) == SchrodingerAtomStruct:
+            if isinstance(self.inputStruct.get(), SchrodingerAtomStruct):
                 self.soluteFile = self.inputStruct.get().getFileName()
             else:
                 pdbFile = self.getPdbFile()
@@ -232,7 +236,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         jobName = sysName + '_' + str(rd.randint(1000000, 9999999))
 
         msjFile = self._getExtraPath('{}.msj'.format(sysName))
-        msjStr = self.buildMSJ_str(maeFile)
+        msjStr = self.buildMSJStr(maeFile)
         with open(msjFile, 'w') as f:
             f.write(msjStr)
 
@@ -260,7 +264,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
     ############# UTILS
 
-    def buildMSJ_str(self, maeFile):
+    def buildMSJStr(self, maeFile):
         '''Build the .msj (file used by multisim to specify the jobs performed by Schrodinger)
         defining the input parameters'''
         addIonsArg = ''
@@ -295,9 +299,9 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         if self.solvate:
             solventArg = SOLVENT % self.getEnumText('solventType')
 
-        msj_str = MSJ_SYSPREP % (addIonsArg, *boxArgs, self.getEnumText('ffType'), "true",
+        msjStr = MSJ_SYSPREP % (addIonsArg, *boxArgs, self.getEnumText('ffType'), "true",
                                  saltArg, solventArg, self.getEnumText('ffType'))
-        return msj_str
+        return msjStr
 
 
     def getSpecifiedMol(self):

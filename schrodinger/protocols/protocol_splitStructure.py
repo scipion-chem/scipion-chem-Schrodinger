@@ -40,6 +40,9 @@ class ProtSchrodingerSplitStructure(EMProtocol):
     _program = ""
 
     def _defineParams(self, form):
+        # Defining param help texts
+        aSLHelp = 'For help on ASL (Atom Specification Language), see Chap. 3 of https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf'
+
         form.addSection(label='Input')
         form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
                       label='Input structure:',)
@@ -61,20 +64,16 @@ class ProtSchrodingerSplitStructure(EMProtocol):
                       label='Split cofactors and metals into different structures')
         form.addParam('ligandASL', StringParam, default="", expertLevel=LEVEL_ADVANCED,
                       label='ASL used to define ligand structures',
-                      help='For help on ASL (Atom Specification Language), see Chap. 3 of '
-                           'https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
+                      help=aSLHelp)
         form.addParam('cofactorASL', StringParam, default="", expertLevel=LEVEL_ADVANCED,
                       label='ASL used to define cofactor structures',
-                      help='For help on ASL (Atom Specification Language), see Chap. 3 of '
-                           'https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
+                      help=aSLHelp)
         form.addParam('positiveASL', StringParam, default="", expertLevel=LEVEL_ADVANCED, condition="splitMode==2",
                       label='ASL used to define non-metal positive ions',
-                      help='For help on ASL (Atom Specification Language), see Chap. 3 of '
-                           'https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
+                      help=aSLHelp)
         form.addParam('negativeASL', StringParam, default="", expertLevel=LEVEL_ADVANCED, condition="splitMode==2",
                       label='ASL used to define negative ions',
-                      help='For help on ASL (Atom Specification Language), see Chap. 3 of '
-                           'https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
+                      help=aSLHelp)
 
         # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):

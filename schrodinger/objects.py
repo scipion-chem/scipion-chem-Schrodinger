@@ -26,7 +26,7 @@
 import os, re, subprocess
 import pwem.objects.data as data
 from pwchem.objects import StructROI
-from pwchem.constants import *
+from pwchem.constants import FUNCTION_BOUNDING_BOX, PML_BBOX_STR_EACH, PML_BBOX_STR
 from pyworkflow.object import (Float, Integer, List, String)
 from . import Plugin as schrodinger_plugin
 

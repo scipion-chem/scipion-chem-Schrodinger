@@ -48,19 +48,22 @@ class ProtSchrodingerConvert(EMProtocol):
         self.stepsExecutionMode = STEPS_PARALLEL
 
     def _defineParams(self, form):
+        # Input comparison variable
+        inputTypeComparison = 'inputType=='
+
         form.addSection(label='Input')
         form.addParam('inputType', EnumParam, default=0, choices=["Small molecules", 'Target structure'],
                       label='Input type', help='Type of input you want to convert')
         form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
-                      condition='inputType=={}'.format(SMALLMOL), label='Input small molecules:',
+                      condition='{}{}'.format(inputTypeComparison, SMALLMOL), label='Input small molecules:',
                       help='Input small molecules to convert')
-        form.addParam('outputFormatSmall', EnumParam, default=0, condition='inputType=={}'.format(SMALLMOL),
+        form.addParam('outputFormatSmall', EnumParam, default=0, condition='{}{}'.format(inputTypeComparison, SMALLMOL),
                       choices=list(molChoices.keys()), label='Output format',
                       help='Output format for the small molecules')
         form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct, AtomStruct",
-                      condition='inputType=={}'.format(TARGET), label='Input structure:',
+                      condition='{}{}'.format(inputTypeComparison, TARGET), label='Input structure:',
                       help='Input atomic structure to convert')
-        form.addParam('outputFormatTarget', EnumParam, default=0, condition='inputType=={}'.format(TARGET),
+        form.addParam('outputFormatTarget', EnumParam, default=0, condition='{}{}'.format(inputTypeComparison, TARGET),
                       choices=list(targetChoices.keys()), label='Output format',
                       help='Output format for the atomic structure')
 
@@ -138,7 +141,7 @@ class ProtSchrodingerConvert(EMProtocol):
     def getConfId(self, molFn, molName):
         try:
             return molFn.split(molName)[1].split('-')[1].split('.')[0]
-        except:
+        except Exception:
             return None
 
     def _summary(self):

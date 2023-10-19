@@ -25,13 +25,13 @@
 # **************************************************************************
 
 import random as rd
-import glob, os
+import glob, os, re
 from subprocess import check_call
-from pyworkflow.protocol.params import *
+from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, StringParam, TextParam, LEVEL_ADVANCED
 from pwem.protocols import EMProtocol
 from pwchem.utils import natural_sort
 from .. import Plugin as schrodinger_plugin
-from ..constants import *
+from ..constants import TIMESTEP, PRESSURE, BAROSTAT, BROWNIAN, TENSION, RESTRAINS, MSJ_SYSMD_INIT, MSJ_SYSMD_SIM
 from ..objects import SchrodingerSystem
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
@@ -195,7 +195,7 @@ class ProtSchrodingerDesmondMD(EMProtocol):
         if not lastCheckFile:
             maeFile = self.inputStruct.get().getFileName()
 
-            msjStr = self.buildMSJ_str()
+            msjStr = self.buildMSJStr()
             with open(msjFile, 'w') as f:
                 f.write(msjStr)
             self.createGUISummary()
@@ -327,36 +327,36 @@ class ProtSchrodingerDesmondMD(EMProtocol):
             annealArg = 'on'
             tempArg = self.parseAnnealing(msjDic['annealTemps'])
 
-        msj_str = MSJ_SYSMD_SIM % (annealArg, os.path.abspath(self._getTmpPath()),
+        msjStr = MSJ_SYSMD_SIM % (annealArg, os.path.abspath(self._getTmpPath()),
                                       glueArg, msjDic['simTime'], timeStepArg, tempArg, pressureArg,
                                       tensionArg, ensemType, method, msjDic['tempMDCons'], barostatArg, brownianArg,
                                       restrainArg, msjDic['velResamp'], msjDic['trajInterval'])
-        return msj_str
+        return msjStr
 
     def addDefaultForMissing(self, msjDic):
         '''Add default values for missing parameters in the msjDic'''
         for pName in [*self._paramNames, *self._enumParamNames]:
-            if not pName in msjDic:
+            if pName not in msjDic:
                 msjDic[pName] = self._defParams[pName]
         return msjDic
 
-    def buildMSJ_str(self):
+    def buildMSJStr(self):
         '''Build the .msj (file used by multisim to specify the jobs performed by Schrodinger)
         defining the input parameters'''
-        msj_str = MSJ_SYSMD_INIT
+        msjStr = MSJ_SYSMD_INIT
 
         if self.workFlowSteps.get() in ['', None]:
             msjDic = self.createMSJDic()
-            msj_str += self.buildSimulateStr(msjDic)
+            msjStr += self.buildSimulateStr(msjDic)
         else:
             workSteps = self.workFlowSteps.get().split('\n')
             if '' in workSteps:
                 workSteps.remove('')
             for wStep in workSteps:
                 msjDic = eval(wStep)
-                msj_str += self.buildSimulateStr(msjDic)
+                msjStr += self.buildSimulateStr(msjDic)
 
-        return msj_str
+        return msjStr
     
     def createMSJDic(self):
         msjDic = {}
@@ -436,9 +436,9 @@ class ProtSchrodingerDesmondMD(EMProtocol):
         def atoi(text):
           return int(text) if text.isdigit() else text
 
-        def natural_keys(text):
+        def naturalKeys(text):
           '''
-          alist.sort(key=natural_keys) sorts in human order
+          alist.sort(key=naturalKeys) sorts in human order
           http://nedbatchelder.com/blog/200712/human_sorting.html
           (See Toothy's implementation in the comments)
           '''
@@ -451,7 +451,7 @@ class ProtSchrodingerDesmondMD(EMProtocol):
                 trjDirs.append(file)
 
 
-        trjDirs.sort(key=natural_keys)
+        trjDirs.sort(key=naturalKeys)
         return trjDirs
 
     def parseAnnealing(self, annealTemps):
@@ -486,26 +486,20 @@ class ProtSchrodingerDesmondMD(EMProtocol):
             check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
 
     def findLastCheckPoint(self):
-        CP_files = glob.glob(self._getTmpPath('*_checkpoint'))
-        if CP_files:
-            return natural_sort(CP_files)[-1]
-        return CP_files
+        cpFiles = glob.glob(self._getTmpPath('*_checkpoint'))
+        if cpFiles:
+            return natural_sort(cpFiles)[-1]
+        return cpFiles
 
     def findLastDataTgz(self):
-        data_files = glob.glob(self._getTmpPath('*-out.tgz'))
-        if data_files:
-            return natural_sort(data_files)[-1]
-        return data_files
+        dataFiles = glob.glob(self._getTmpPath('*-out.tgz'))
+        if dataFiles:
+            return natural_sort(dataFiles)[-1]
+        return dataFiles
 
     def getCurrentJobName(self):
-        msj_file = glob.glob(self._getTmpPath('simulation*.msj'))
-        if msj_file:
-            return os.path.basename(msj_file[-1]).replace('.msj', '')
+        msjFile = glob.glob(self._getTmpPath('simulation*.msj'))
+        if msjFile:
+            return os.path.basename(msjFile[-1]).replace('.msj', '')
         else:
             return 'simulation_' + str(rd.randint(1000000, 9999999))
-
-
-
-
-
-
