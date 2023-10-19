@@ -62,19 +62,19 @@ class ProtSchrodingerSplitStructure(EMProtocol):
         form.addParam('ligandASL', StringParam, default="", expertLevel=LEVEL_ADVANCED,
                       label='ASL used to define ligand structures',
                       help='For help on ASL (Atom Specification Language), see Chap. 3 of '
-                           'http://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
+                           'https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
         form.addParam('cofactorASL', StringParam, default="", expertLevel=LEVEL_ADVANCED,
                       label='ASL used to define cofactor structures',
                       help='For help on ASL (Atom Specification Language), see Chap. 3 of '
-                           'http://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
+                           'https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
         form.addParam('positiveASL', StringParam, default="", expertLevel=LEVEL_ADVANCED, condition="splitMode==2",
                       label='ASL used to define non-metal positive ions',
                       help='For help on ASL (Atom Specification Language), see Chap. 3 of '
-                           'http://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
+                           'https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
         form.addParam('negativeASL', StringParam, default="", expertLevel=LEVEL_ADVANCED, condition="splitMode==2",
                       label='ASL used to define negative ions',
                       help='For help on ASL (Atom Specification Language), see Chap. 3 of '
-                           'http://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
+                           'https://shaker.umh.es/computing/Schrodinger_suites/maestro_command_reference.pdf')
 
         # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
