@@ -139,7 +139,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
       '''Convert a maestro file (.mae) to a pdb file(s)
       maeIn: input maestro file (if contains several models, there will be several outputs
       pdbOut: name of the output (with or without .pdb)'''
-      pdbName, pdbOut = self.getPDBName(pdbOut)
+      pdbOut = self.getPDBName(pdbOut)[1]
 
       prog = Plugin.getHome('utilities/structconvert')
       args = '{} {}'.format(maeIn, pdbOut)
