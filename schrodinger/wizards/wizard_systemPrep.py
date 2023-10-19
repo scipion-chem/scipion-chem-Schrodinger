@@ -77,7 +77,7 @@ class GetSoluteCharge(pwizard.Wizard):
                 inSoluteFile = protocol.inputStruct.get().getFileName()
                 if inSoluteFile.endswith('gz'):
                     structName = os.path.splitext(os.path.basename(inSoluteFile))[0]
-                    soluteFile = os.path.join('/tmp', structName + '.mae')
+                    soluteFile = protocol._getTmpPath(structName + '.mae')
                     check_call('zcat {} > {}'.format(os.path.abspath(inSoluteFile), soluteFile), shell=True)
             else:
                 pdbFile = protocol.inputStruct.get().getFileName()
@@ -86,7 +86,7 @@ class GetSoluteCharge(pwizard.Wizard):
                     pdbFile = pdbqt2other(protocol, pdbqtFile,
                                           os.path.join('/tmp', getBaseFileName(pdbqtFile) + '.pdb'))
                 structName = os.path.splitext(os.path.basename(pdbFile))[0]
-                soluteFile = os.path.join('/tmp', structName + '.mae')
+                soluteFile = protocol._getTmpPath(structName + '.mae')
                 if not os.path.exists(soluteFile):
                     check_call('{} {} {}'.format(structConvertProg, pdbFile, soluteFile), shell=True)
 
@@ -96,7 +96,7 @@ class GetSoluteCharge(pwizard.Wizard):
                 mol = protocol.getSpecifiedMol()
                 molFile = mol.getPoseFile()
                 if molFile.endswith('.pdbqt'):
-                    sdfFile = os.path.join('/tmp', getBaseFileName(molFile) + '.sdf')
+                    sdfFile = protocol._getTmpPath(getBaseFileName(molFile) + '.sdf')
                     molFile = convertToSdf(protocol, molFile, sdfFile)
 
                 molMaeFile = os.path.join('/tmp', mol.getUniqueName() + '.maegz')
@@ -108,9 +108,9 @@ class GetSoluteCharge(pwizard.Wizard):
                     targetFile = protocol.inputSetOfMols.get().getProteinFile()
                     if targetFile.endswith('.pdbqt'):
                         targetFile = pdbqt2other(protocol, targetFile,
-                                                 os.path.join('/tmp', getBaseFileName(targetFile) + '.pdb'))
+                                                 protocol._getTmpPath(getBaseFileName(targetFile) + '.pdb'))
                     targetName = os.path.splitext(os.path.basename(targetFile))[0]
-                    targetMaeFile = os.path.join('/tmp', targetName + '.maegz')
+                    targetMaeFile = protocol._getTmpPath(targetName + '.maegz')
                     check_call('{} {} {}'.format(structConvertProg, targetFile, targetMaeFile), shell=True)
 
                 check_call('zcat {} {} > {}'.format(molMaeFile, targetMaeFile, soluteFile), shell=True)
