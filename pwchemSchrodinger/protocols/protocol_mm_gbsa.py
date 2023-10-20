@@ -52,7 +52,7 @@ MAEFILE_EXTENSION = '.maegz'
 
 class ProtSchrodingerMMGBSA(EMProtocol):
     """Optimizes the docking position and calculates the binding energy"""
-    _label = 'mm-gbsa'
+    _label = 'MM-GBSA'
     _program = ""
 
     def _defineParams(self, form):
