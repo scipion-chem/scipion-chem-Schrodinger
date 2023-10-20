@@ -21,7 +21,7 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(
-    name='scipion-chem-schrodingerScipion',
+    name='scipion-chem-schrodinger',
     version='3.0.0',
     description='A Scipion plugin for Schrodinger methods',
     long_description=long_description,
@@ -33,9 +33,9 @@ setup(
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'schrodingerScipion': ['schrodingerScipion.png'],
+       'pwchemSchrodinger': ['schrodinger.png'],
     },
     entry_points={
-        'pyworkflow.plugin': 'schrodingerScipion = schrodingerScipion'
+        'pyworkflow.plugin': 'pwchemSchrodinger = pwchemSchrodinger'
     }
 )
