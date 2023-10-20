@@ -32,14 +32,11 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import Group, EnumParam, PointerParam, StringParam, FloatParam, LabelParam, TextParam, IntParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 
-# Scipion chem imports
-from pwchem.utils import natural_sort
-
 # Plugin imports
 from .. import Plugin as schrodingerPlugin
 from ..constants import MSJ_SYSMD_INIT
 from ..protocols.protocol_glide_docking import ProtSchrodingerGlideDocking
-from ..utils import createMSJDic, buildSimulateStr, setAborted
+from ..utils import createMSJDic, buildSimulateStr
 
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')
 structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
@@ -303,35 +300,3 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
         msjStr += buildSimulateStr(self, msjDic)
 
     return msjStr
-
-  def createGUISummary(self):
-    with open(self._getExtraPath("summary.txt"), 'w') as f:
-      if self.workFlowSteps.get():
-        f.write(self.createSummary())
-      else:
-        f.write(self.createSummary(createMSJDic(self)))
-
-  def createSummary(self, msjDic=None):
-    '''Creates the displayed summary from the internal state of the steps'''
-    sumStr = ''
-    if not msjDic:
-      for i, dicLine in enumerate(self.workFlowSteps.get().split('\n')):
-        if dicLine != '':
-          msjDic = eval(dicLine)
-          msjDic = self.addDefaultForMissing(msjDic)
-          sumStr += f'{i+1}) {msjDic["stageType"]}'
-          sumStr += '\n'
-    else:
-      msjDic = self.addDefaultForMissing(msjDic)
-      sumStr += f'{msjDic["stageType"]}'
-      sumStr += '\n'
-    return sumStr
-
-  def countSteps(self):
-    stepsStr = self.summarySteps.get() if self.summarySteps.get() is not None else ''
-    steps = stepsStr.split('\n')
-    return len(steps) - 1
-
-  def setAborted(self):
-    super().setAborted()
-    setAborted(self, jobControlProg)

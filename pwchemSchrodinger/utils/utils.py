@@ -250,19 +250,3 @@ def getJobName(protocol):
     for f in files:
         if f.endswith('.msj'):
             return f.replace('.msj', '')
-
-def getSchJobId(protocol, jobControlProg):
-    jobId = None
-    jobListFile = os.path.abspath(protocol._getTmpPath('jobList.txt'))
-    if getJobName(protocol):
-        check_call(jobControlProg + ' -list {} | grep {} > {}'.
-                    format(getJobName(protocol), getJobName(protocol), jobListFile), shell=True)
-        with open(jobListFile) as f:
-            jobId = f.read().split('\n')[0].split()[0]
-    return jobId
-
-def setAborted(protocol, jobControlProg):
-    jobId = getSchJobId(protocol, jobControlProg)
-    if jobId:
-        print('Killing job: {} with jobName {}'.format(jobId, getJobName(protocol)))
-        check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)

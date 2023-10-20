@@ -40,7 +40,7 @@ from pwchem.utils import pdbqt2other, convertToSdf
 from .. import Plugin as schrodingerPlugin
 from ..constants import ADD_COUNTERION, SIZE_LIST, ANGLES, SIZE_SINGLE, ADD_SALT, SOLVENT, MSJ_SYSPREP
 from ..objects import SchrodingerAtomStruct, SchrodingerSystem
-from ..utils import getChargeFromMAE, setAborted
+from ..utils import getChargeFromMAE
 
 multisimProg = schrodingerPlugin.getHome('utilities/multisim')
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')

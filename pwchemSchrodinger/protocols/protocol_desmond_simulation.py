@@ -26,6 +26,7 @@
 # General imports
 import random as rd
 import glob, os, re
+from subprocess import check_call
 
 # Scipion em imports
 from pwem.protocols import EMProtocol
@@ -38,7 +39,7 @@ from pwchem.utils import natural_sort
 from .. import Plugin as schrodinger_plugin
 from ..constants import MSJ_SYSMD_INIT
 from ..objects import SchrodingerSystem
-from ..utils import createMSJDic, buildSimulateStr, getJobName, setAborted
+from ..utils import createMSJDic, buildSimulateStr, getJobName
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
 jobControlProg = schrodinger_plugin.getHome('jobcontrol')
@@ -416,10 +417,23 @@ class ProtSchrodingerDesmondMD(EMProtocol):
         for aSt in annealStages:
             tempArg += '    [{} {}]\n'.format(eval(aSt)[0], eval(aSt)[1])
         return tempArg + ']'
-
+    
+    def getSchJobId(self):
+        jobId = None
+        jobListFile = os.path.abspath(self._getTmpPath('jobList.txt'))
+        if getJobName(self):
+            check_call(jobControlProg + ' -list {} | grep {} > {}'.
+                        format(getJobName(self), getJobName(self), jobListFile), shell=True)
+            with open(jobListFile) as f:
+                jobId = f.read().split('\n')[0].split()[0]
+        return jobId
+    
     def setAborted(self):
         super().setAborted()
-        setAborted(self, jobControlProg)
+        jobId = self.getSchJobId()
+        if jobId:
+            print('Killing job: {} with jobName {}'.format(jobId, getJobName(self)))
+            check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
 
     def findLastCheckPoint(self):
         cpFiles = glob.glob(self._getTmpPath('*_checkpoint'))
