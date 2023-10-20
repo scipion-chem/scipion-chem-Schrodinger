@@ -26,7 +26,6 @@
 # General imports
 import random as rd
 import glob, os
-from subprocess import check_call
 
 # Scipion em imports
 from pwem.protocols import EMProtocol
@@ -38,8 +37,9 @@ from pwchem.utils import natural_sort
 
 # Plugin imports
 from .. import Plugin as schrodingerPlugin
-from ..constants import TIMESTEP, PRESSURE, BAROSTAT, BROWNIAN, TENSION, RESTRAINS, MSJ_SYSMD_SIM, MSJ_SYSMD_INIT
+from ..constants import MSJ_SYSMD_INIT
 from ..protocols.protocol_glide_docking import ProtSchrodingerGlideDocking
+from ..utils import createMSJDic, buildSimulateStr, setAborted
 
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')
 structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
@@ -284,69 +284,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
         msjDic[pName] = paramDic[pName].default
     return msjDic
 
-  def createMSJDic(self):
-    msjDic = {}
-    for pName in self.getStageParamsDic(type='Normal').keys():
-      if hasattr(self, pName):
-        msjDic[pName] = getattr(self, pName).get()
-      else:
-        print('Something is wrong with parameter ', pName)
-
-    for pName in self.getStageParamsDic(type='Enum').keys():
-      if hasattr(self, pName):
-        msjDic[pName] = self.getEnumText(pName)
-      else:
-        print('Something is wrong with parameter ', pName)
-    return msjDic
-
   ############# UTILS
-  def buildSimulateStr(self, msjDic):
-    '''Checks the values stored in the msjDic and trnaslates them into msjStr.
-        If a value is not found in the msjDic, the default is used'''
-    msjDic = self.addDefaultForMissing(msjDic)
-
-    glueArg = '[]'
-    if msjDic['glueSolute']:
-      glueArg = 'solute'
-
-    # NearT and farT must be at least the boundT
-    msjDic['nearT'] = max(msjDic['bondedT'], msjDic['nearT'])
-    msjDic['farT'] = max(msjDic['bondedT'], msjDic['farT'])
-    timeStepArg = TIMESTEP % (msjDic['bondedT'], msjDic['nearT'], msjDic['farT'])
-
-    pressureArg, barostatArg = '', ''
-    method = self._thermoDic[msjDic['thermostat']]
-    ensemType = msjDic['ensemType']
-    if ensemType not in ['NVE', 'NVT', 'Minimization (Brownian)']:
-      pressureArg = PRESSURE % (msjDic['pressure'], msjDic['coupleStyle'].lower())
-      barostatArg = BAROSTAT % (msjDic['presMDCons'])
-      method = self._baroDic[msjDic['barostat']]
-
-    tensionArg, brownianArg = '', ''
-    if ensemType == 'Minimization (Brownian)':
-      ensemType = 'NVT'
-      method = 'Brownie'
-      brownianArg = BROWNIAN % (msjDic['deltaMax'])
-    elif ensemType == 'NPgT':
-      tensionArg = TENSION % msjDic['surfTension']
-
-    restrainArg = ''
-    if msjDic['restrains'] != 'None':
-      restrainArg = RESTRAINS % (msjDic['restrains'].lower(), msjDic['restrainForce'])
-
-    if not msjDic['annealing']:
-      annealArg = 'off'
-      tempArg = msjDic['temperature']
-    else:
-      annealArg = 'on'
-      tempArg = self.parseAnnealing(msjDic['annealTemps'])
-
-    msjStr = MSJ_SYSMD_SIM % (annealArg, os.path.abspath(self._getTmpPath()),
-                               glueArg, msjDic['simTime'], timeStepArg, tempArg, pressureArg,
-                               tensionArg, ensemType, method, msjDic['tempMDCons'], barostatArg, brownianArg,
-                               restrainArg, msjDic['velResamp'], msjDic['trajInterval'])
-    return msjStr
-
   def buildMSJ_str(self):
     # todo: write the file neccessary for IFD
     '''Build the .msj (file used by IFD to specify the jobs performed by Schrodinger)
@@ -354,15 +292,15 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     msjStr = MSJ_SYSMD_INIT
 
     if self.workFlowSteps.get() in ['', None]:
-      msjDic = self.createMSJDic()
-      msjStr += self.buildSimulateStr(msjDic)
+      msjDic = createMSJDic(self)
+      msjStr += buildSimulateStr(self, msjDic)
     else:
       workSteps = self.workFlowSteps.get().split('\n')
       if '' in workSteps:
         workSteps.remove('')
       for wStep in workSteps:
         msjDic = eval(wStep)
-        msjStr += self.buildSimulateStr(msjDic)
+        msjStr += buildSimulateStr(self, msjDic)
 
     return msjStr
 
@@ -371,7 +309,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       if self.workFlowSteps.get():
         f.write(self.createSummary())
       else:
-        f.write(self.createSummary(self.createMSJDic()))
+        f.write(self.createSummary(createMSJDic(self)))
 
   def createSummary(self, msjDic=None):
     '''Creates the displayed summary from the internal state of the steps'''
@@ -394,45 +332,6 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     steps = stepsStr.split('\n')
     return len(steps) - 1
 
-
-  def getJobName(self):
-    files = os.listdir(self._getTmpPath())
-    for f in files:
-      if f.endswith('.msj'):
-        return f.replace('.msj', '')
-
-  def getSchJobId(self):
-    jobId = None
-    jobListFile = os.path.abspath(self._getTmpPath('jobList.txt'))
-    if self.getJobName():
-      check_call(jobControlProg + ' -list {} | grep {} > {}'.
-                 format(self.getJobName(), self.getJobName(), jobListFile), shell=True)
-      with open(jobListFile) as f:
-        jobId = f.read().split('\n')[0].split()[0]
-    return jobId
-
   def setAborted(self):
     super().setAborted()
-    jobId = self.getSchJobId()
-    if jobId:
-      print('Killing job: {} with jobName {}'.format(jobId, self.getJobName()))
-      check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
-
-  def findLastCheckPoint(self):
-    cpFiles = glob.glob(self._getTmpPath('*_checkpoint'))
-    if cpFiles:
-      return natural_sort(cpFiles)[-1]
-    return cpFiles
-
-  def findLastDataTgz(self):
-    dataFiles = glob.glob(self._getTmpPath('*-out.tgz'))
-    if dataFiles:
-      return natural_sort(dataFiles)[-1]
-    return dataFiles
-
-  def getCurrentJobName(self):
-    msjFile = glob.glob(self._getTmpPath('simulation*.msj'))
-    if msjFile:
-      return os.path.basename(msjFile[-1]).replace('.msj', '')
-    else:
-      return 'simulation_' + str(rd.randint(1000000, 9999999))
+    setAborted(self, jobControlProg)

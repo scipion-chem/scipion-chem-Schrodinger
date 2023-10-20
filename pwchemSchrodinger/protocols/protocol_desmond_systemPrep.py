@@ -23,22 +23,24 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+# General imports
 import os, time
 import random as rd
-from subprocess import check_call
 
+# Scipion em imports
 from pyworkflow.protocol.params import PointerParam, StringParam,\
   EnumParam, BooleanParam, FloatParam, IntParam, LEVEL_ADVANCED
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toPdb
 
+# Scipion chem imports
 from pwchem.utils import pdbqt2other, convertToSdf
 
+# Plugin imports
 from .. import Plugin as schrodingerPlugin
 from ..constants import ADD_COUNTERION, SIZE_LIST, ANGLES, SIZE_SINGLE, ADD_SALT, SOLVENT, MSJ_SYSPREP
 from ..objects import SchrodingerAtomStruct, SchrodingerSystem
-from ..utils import getChargeFromMAE
+from ..utils import getChargeFromMAE, setAborted
 
 multisimProg = schrodingerPlugin.getHome('utilities/multisim')
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')
@@ -316,28 +318,9 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
         else:
             return myMol
 
-    def getJobName(self):
-        files = os.listdir(self._getExtraPath())
-        for f in files:
-            if f.endswith('.msj'):
-                return f.replace('.msj', '')
-
-    def getSchJobId(self):
-        jobId = None
-        jobListFile = os.path.abspath(self._getTmpPath('jobList.txt'))
-        if self.getJobName():
-            check_call(jobControlProg + ' -list {} | grep {} > {}'.
-                       format(self.getJobName(), self.getJobName(), jobListFile), shell=True)
-            with open(jobListFile) as f:
-                jobId = f.read().split('\n')[0].split()[0]
-        return jobId
-
     def setAborted(self):
         super().setAborted()
-        jobId = self.getSchJobId()
-        if jobId:
-            print('Killing job: {} with jobName {}'.format(jobId, self.getJobName()))
-            check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
+        setAborted(self, jobControlProg)
 
     def getPdbFile(self):
       if self.inputFrom.get() == STRUCTURE:

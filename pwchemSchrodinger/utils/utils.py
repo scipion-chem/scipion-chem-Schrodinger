@@ -26,6 +26,7 @@
 # General imports
 import numpy as np
 import os, subprocess, time
+from subprocess import check_call
 
 # Scipion em imports
 from pyworkflow.utils.path import moveFile
@@ -33,6 +34,9 @@ import pyworkflow.object as pwobj
 
 # Scipion chem imports
 from pwchem.objects import SmallMolecule
+
+# Plugin imports
+from ..constants import TIMESTEP, PRESSURE, BAROSTAT, BROWNIAN, TENSION, RESTRAINS, MSJ_SYSMD_SIM, MSJ_SYSMD_INIT
 
 def putMol2Title(fn, title=""):
     with open(fn) as fhIn:
@@ -178,3 +182,87 @@ def getConfId(molFn, molName):
         return molFn.split(molName)[1].split('-')[1].split('.')[0]
     except Exception:
         return None
+
+def createMSJDic(protocol):
+    msjDic = {}
+    for pName in protocol.getStageParamsDic(type='Normal').keys():
+      if hasattr(protocol, pName):
+        msjDic[pName] = getattr(protocol, pName).get()
+      else:
+        print('Something is wrong with parameter ', pName)
+
+    for pName in protocol.getStageParamsDic(type='Enum').keys():
+      if hasattr(protocol, pName):
+        msjDic[pName] = protocol.getEnumText(pName)
+      else:
+        print('Something is wrong with parameter ', pName)
+    return msjDic
+
+def buildSimulateStr(protocol, msjDic):
+    '''Checks the values stored in the msjDic and trnaslates them into msjStr.
+        If a value is not found in the msjDic, the default is used'''
+    msjDic = protocol.addDefaultForMissing(msjDic)
+
+    glueArg = '[]'
+    if msjDic['glueSolute']:
+      glueArg = 'solute'
+
+    # NearT and farT must be at least the boundT
+    msjDic['nearT'] = max(msjDic['bondedT'], msjDic['nearT'])
+    msjDic['farT'] = max(msjDic['bondedT'], msjDic['farT'])
+    timeStepArg = TIMESTEP % (msjDic['bondedT'], msjDic['nearT'], msjDic['farT'])
+
+    pressureArg, barostatArg = '', ''
+    method = protocol._thermoDic[msjDic['thermostat']]
+    ensemType = msjDic['ensemType']
+    if ensemType not in ['NVE', 'NVT', 'Minimization (Brownian)']:
+      pressureArg = PRESSURE % (msjDic['pressure'], msjDic['coupleStyle'].lower())
+      barostatArg = BAROSTAT % (msjDic['presMDCons'])
+      method = protocol._baroDic[msjDic['barostat']]
+
+    tensionArg, brownianArg = '', ''
+    if ensemType == 'Minimization (Brownian)':
+      ensemType = 'NVT'
+      method = 'Brownie'
+      brownianArg = BROWNIAN % (msjDic['deltaMax'])
+    elif ensemType == 'NPgT':
+      tensionArg = TENSION % msjDic['surfTension']
+
+    restrainArg = ''
+    if msjDic['restrains'] != 'None':
+      restrainArg = RESTRAINS % (msjDic['restrains'].lower(), msjDic['restrainForce'])
+
+    if not msjDic['annealing']:
+      annealArg = 'off'
+      tempArg = msjDic['temperature']
+    else:
+      annealArg = 'on'
+      tempArg = protocol.parseAnnealing(msjDic['annealTemps'])
+
+    msjStr = MSJ_SYSMD_SIM % (annealArg, os.path.abspath(protocol._getTmpPath()),
+                               glueArg, msjDic['simTime'], timeStepArg, tempArg, pressureArg,
+                               tensionArg, ensemType, method, msjDic['tempMDCons'], barostatArg, brownianArg,
+                               restrainArg, msjDic['velResamp'], msjDic['trajInterval'])
+    return msjStr
+
+def getJobName(protocol):
+    files = os.listdir(protocol._getTmpPath())
+    for f in files:
+        if f.endswith('.msj'):
+            return f.replace('.msj', '')
+
+def getSchJobId(protocol, jobControlProg):
+    jobId = None
+    jobListFile = os.path.abspath(protocol._getTmpPath('jobList.txt'))
+    if getJobName(protocol):
+        check_call(jobControlProg + ' -list {} | grep {} > {}'.
+                    format(getJobName(protocol), getJobName(protocol), jobListFile), shell=True)
+        with open(jobListFile) as f:
+            jobId = f.read().split('\n')[0].split()[0]
+    return jobId
+
+def setAborted(protocol, jobControlProg):
+    jobId = getSchJobId(protocol, jobControlProg)
+    if jobId:
+        print('Killing job: {} with jobName {}'.format(jobId, getJobName(protocol)))
+        check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
