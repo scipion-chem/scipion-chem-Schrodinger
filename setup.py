@@ -33,9 +33,9 @@ setup(
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'schrodinger': ['schrodinger.png'],
+       'pwchemschrodinger': ['schrodinger.png'],
     },
     entry_points={
-        'pyworkflow.plugin': 'schrodinger = schrodinger'
+        'pyworkflow.plugin': 'pwchemschrodinger = pwchemschrodinger'
     }
 )
