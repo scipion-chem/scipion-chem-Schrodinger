@@ -26,7 +26,7 @@
 
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
-from ..protocols import *
+from ..protocols import ProtSchrodingerPrepWizard, ProtSchrodingerDesmondSysPrep, ProtSchrodingerDesmondMD
 
 md_steps = '''{'simTime': 50.0, 'annealTemps': '[300, 0]', 'bondedT': 0.001, 'nearT': 0.001, 'farT': 0.003, 'velResamp': 1.0, 'glueSolute': True, 'trajInterval': 5.0, 'temperature': 10.0, 'deltaMax': 0.1, 'tempMDCons': 0.1, 'annealing': False, 'pressure': 1.01325, 'presMDCons': 2.0, 'surfTension': 0.0, 'restrainForce': 50.0, 'ensemType': 'Minimization (Brownian)', 'thermostat': 'Noose-Hover', 'barostat': 'Martyna-Tobias-Klein', 'coupleStyle': 'Isotropic', 'restrains': 'Solute_heavy_atom'}
 {'simTime': 24.0, 'temperature': 300.0, 'ensemType': 'NPT', 'thermostat': 'Langevin', 'barostat': 'Langevin', 'presMDCons': 2.0}'''
@@ -72,8 +72,7 @@ class TestDesmondSysPrep(BaseTest):
         if mode == 0:
             protDesmondPrep.inputStruct.set(inputProt)
             protDesmondPrep.inputStruct.setExtended('outputStructure')
-        elif mode == 1:
-            pass
+        
         cls.proj.launchProtocol(protDesmondPrep, wait=False)
         return protDesmondPrep
 

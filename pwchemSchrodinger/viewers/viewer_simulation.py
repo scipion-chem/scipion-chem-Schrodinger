@@ -28,8 +28,8 @@ import os
 
 import pyworkflow.viewer as pwviewer
 import pyworkflow.protocol.params as params
-from schrodingerScipion.protocols import ProtSchrodingerDesmondMD
-from schrodingerScipion import Plugin as schPlugin
+from ..protocols import ProtSchrodingerDesmondMD
+from .. import Plugin as schPlugin
 
 from .viewers_data import MaestroView
 

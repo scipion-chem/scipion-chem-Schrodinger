@@ -6,4 +6,4 @@ include *.txt
  include LICENSE
 
 # Include conf file
- include schrodingerScipion/protocols.conf
+ include schrodinger/protocols.conf

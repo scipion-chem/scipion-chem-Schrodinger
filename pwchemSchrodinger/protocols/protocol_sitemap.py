@@ -30,7 +30,7 @@ from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, IntParam, StringParam
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin
+from .. import Plugin
 
 from pwchem import Plugin as pwchemPlugin
 from pwchem.objects import SetOfStructROIs, StructROI
@@ -139,7 +139,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
       '''Convert a maestro file (.mae) to a pdb file(s)
       maeIn: input maestro file (if contains several models, there will be several outputs
       pdbOut: name of the output (with or without .pdb)'''
-      pdbName, pdbOut = self.getPDBName(pdbOut)
+      pdbOut = self.getPDBName(pdbOut)[1]
 
       prog = Plugin.getHome('utilities/structconvert')
       args = '{} {}'.format(maeIn, pdbOut)

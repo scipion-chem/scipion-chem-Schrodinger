@@ -28,7 +28,7 @@ from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
 from pwchem.protocols import ProtChemImportSmallMolecules
 
-from ..protocols import *
+from ..protocols import ProtSchrodingerConvert, ProtSchrodingerPrime, ProtSchrodingerSplitStructure
 from ..protocols.protocol_convert import molChoices, targetChoices
 
 from .main_wf import TestSchroProtPrep
@@ -99,7 +99,7 @@ class TestSchroConvert(BaseTest):
     def testSmallMols(self):
         protMols = []
         for i, outFormat in enumerate(molChoices.keys()):
-            if not 'mol2' in outFormat.lower():
+            if 'mol2' not in outFormat.lower():
                 protMols.append(self._runConvert(self.protImportSmallMols, outFormat=i, mode=0))
             else:
                 mol2Mols = i
@@ -139,8 +139,6 @@ class TestPrimeSchro(TestSchroProtPrep):
 
         if mode == 0:
             protPrime.residueList.set(sideChainList)
-        elif mode == 1:
-            pass
         elif mode == 2:
             protPrime.resChain.set(chainStr)
             protPrime.resPosition.set(posStr)

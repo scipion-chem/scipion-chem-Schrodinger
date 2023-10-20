@@ -26,15 +26,15 @@
 import os, shutil, glob
 from subprocess import CalledProcessError
 
-from pyworkflow.protocol.params import MultiPointerParam, STEPS_PARALLEL, PointerParam, BooleanParam, \
+from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, \
     FloatParam, IntParam, EnumParam
 from pyworkflow.object import String, Float
 from pyworkflow.utils.path import createLink, makePath
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import AtomicStructHandler
 
-from schrodingerScipion.objects import SchrodingerGrid, SetOfSchrodingerGrids
-from schrodingerScipion import Plugin as schrodinger_plugin
+from ..objects import SchrodingerGrid, SetOfSchrodingerGrids
+from .. import Plugin as schrodinger_plugin
 
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 
@@ -48,6 +48,9 @@ class ProtSchrodingerGrid(EMProtocol):
         self.stepsExecutionMode = STEPS_PARALLEL
 
     def _defineParams(self, form):
+        # Defining condition variables
+        notManualCondition = 'not manual'
+
         form.addSection(label='Input')
         form.addParam('manual', BooleanParam, default=False, label='Define grid manually: ',
                       help='Define the grid manually using Maestro GUI')
@@ -58,10 +61,10 @@ class ProtSchrodingerGrid(EMProtocol):
                            'https://www.youtube.com/watch?v=_AUKLGtrBR8')
 
         form.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                      label='Sets of Structural ROIs:', condition='not manual',
+                      label='Sets of Structural ROIs:', condition=notManualCondition,
                       help='Sets of known or predicted protein structural ROIs to center the grid on')
 
-        group = form.addGroup('Inner box', condition='not manual')
+        group = form.addGroup('Inner box', condition=notManualCondition)
         group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
                       help='How to set the inner box.'
@@ -78,7 +81,7 @@ class ProtSchrodingerGrid(EMProtocol):
                        label='Size of inner box vs diameter: ',
                        help='The diameter * n of each ROI will be used as inner box side')
 
-        group = form.addGroup('Outer box', condition='not manual')
+        group = form.addGroup('Outer box', condition=notManualCondition)
         group.addParam('outerAction', EnumParam, default=1, label='Determine outer box: ',
                        choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
                        help='How to set the outer box.'
@@ -95,7 +98,7 @@ class ProtSchrodingerGrid(EMProtocol):
                        label='Size of outer box vs diameter: ',
                        help='The diameter * n of each structural ROI will be used as outer box side')
 
-        group = form.addGroup('Hydrogen bonds', condition='not manual')
+        group = form.addGroup('Hydrogen bonds', condition=notManualCondition)
         group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
                       help='Accept aromatic hydrogens as potential H-bond donors.')
         group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
@@ -215,13 +218,12 @@ class ProtSchrodingerGrid(EMProtocol):
                 fnBase = os.path.split(fnDir)[1]
                 fnGrid = os.path.join(fnDir, '%s.zip' % fnBase)
                 if os.path.exists(fnGrid):
-                    SchGrid = SchrodingerGrid(filename=fnGrid, **self.getGridArgs(pocket))
-                    SchGrid.structureFile = String(self.getInputMaeFile())
+                    schGrid = SchrodingerGrid(filename=fnGrid, **self.getGridArgs(pocket))
+                    schGrid.structureFile = String(self.getInputMaeFile())
                     if str(pocket.getScore()) != 'None':
-                        SchGrid.pocketScore = Float(pocket.getScore())
-                    SchGrid.setObjId(gridId)
-                    # gridFile.bindingSiteDScore = Float(dscore)
-                    outGrids.append(SchGrid)
+                        schGrid.pocketScore = Float(pocket.getScore())
+                    schGrid.setObjId(gridId)
+                    outGrids.append(schGrid)
 
         outGrids.buildBBoxesPML()
         self._defineOutputs(outputGrids=outGrids)

@@ -40,10 +40,10 @@ from pwchem.wizards import SelectElementWizard, GetRadiusProtein
 from pwchem.utils import pdbqt2other, getBaseFileName, convertToSdf
 from pwchem.objects import SetOfSmallMolecules
 
-from schrodingerScipion.protocols import *
-from schrodingerScipion.protocols.protocol_desmond_systemPrep import *
-from schrodingerScipion.utils.utils import getChargeFromMAE
-from schrodingerScipion.objects import SchrodingerAtomStruct
+from ..protocols import *
+from ..protocols.protocol_desmond_systemPrep import *
+from ..utils.utils import getChargeFromMAE
+from ..objects import SchrodingerAtomStruct
 
 SelectElementWizard().addTarget(protocol=ProtSchrodingerDesmondSysPrep,
                                targets=['inputLigand'],
@@ -77,29 +77,29 @@ class GetSoluteCharge(pwizard.Wizard):
                 inSoluteFile = protocol.inputStruct.get().getFileName()
                 if inSoluteFile.endswith('gz'):
                     structName = os.path.splitext(os.path.basename(inSoluteFile))[0]
-                    soluteFile = os.path.join('/tmp', structName + '.mae')
+                    soluteFile = protocol._getTmpPath(structName + '.mae')
                     check_call('zcat {} > {}'.format(os.path.abspath(inSoluteFile), soluteFile), shell=True)
             else:
                 pdbFile = protocol.inputStruct.get().getFileName()
                 if pdbFile.endswith('.pdbqt'):
                     pdbqtFile = pdbFile
                     pdbFile = pdbqt2other(protocol, pdbqtFile,
-                                          os.path.join('/tmp', getBaseFileName(pdbqtFile) + '.pdb'))
+                                          protocol._getTmpPath(getBaseFileName(pdbqtFile) + '.pdb'))
                 structName = os.path.splitext(os.path.basename(pdbFile))[0]
-                soluteFile = os.path.join('/tmp', structName + '.mae')
+                soluteFile = protocol._getTmpPath(structName + '.mae')
                 if not os.path.exists(soluteFile):
                     check_call('{} {} {}'.format(structConvertProg, pdbFile, soluteFile), shell=True)
 
         elif protocol.inputFrom.get() == LIGAND:
-            soluteFile = os.path.join('/tmp', 'complexSolute.mae')
+            soluteFile = protocol._getTmpPath('complexSolute.mae')
             if not os.path.exists(soluteFile):
                 mol = protocol.getSpecifiedMol()
                 molFile = mol.getPoseFile()
                 if molFile.endswith('.pdbqt'):
-                    sdfFile = os.path.join('/tmp', getBaseFileName(molFile) + '.sdf')
+                    sdfFile = protocol._getTmpPath(getBaseFileName(molFile) + '.sdf')
                     molFile = convertToSdf(protocol, molFile, sdfFile)
 
-                molMaeFile = os.path.join('/tmp', mol.getUniqueName() + '.maegz')
+                molMaeFile = protocol._getTmpPath(mol.getUniqueName() + '.maegz')
                 check_call('{} {} {}'.format(structConvertProg, molFile, molMaeFile), shell=True)
 
                 if hasattr(mol, 'structFile'):
@@ -108,9 +108,9 @@ class GetSoluteCharge(pwizard.Wizard):
                     targetFile = protocol.inputSetOfMols.get().getProteinFile()
                     if targetFile.endswith('.pdbqt'):
                         targetFile = pdbqt2other(protocol, targetFile,
-                                                 os.path.join('/tmp', getBaseFileName(targetFile) + '.pdb'))
+                                                 protocol._getTmpPath(getBaseFileName(targetFile) + '.pdb'))
                     targetName = os.path.splitext(os.path.basename(targetFile))[0]
-                    targetMaeFile = os.path.join('/tmp', targetName + '.maegz')
+                    targetMaeFile = protocol._getTmpPath(targetName + '.maegz')
                     check_call('{} {} {}'.format(structConvertProg, targetFile, targetMaeFile), shell=True)
 
                 check_call('zcat {} {} > {}'.format(molMaeFile, targetMaeFile, soluteFile), shell=True)

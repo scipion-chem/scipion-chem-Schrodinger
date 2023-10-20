@@ -49,10 +49,6 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(SCHRODINGER_DIC['home'], 'Schrodinger{}'.format(SCHRODINGER_DIC['version']))
 
     @classmethod
-    def defineBinaries(cls, env):
-        pass
-
-    @classmethod
     def getEnviron(cls, schrodingerFirst=True):
         """ Create the needed environment for Schrodinger programs. """
         environ = pwutils.Environ(os.environ)
@@ -88,8 +84,8 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getPluginHome(cls, path=""):
-        import schrodingerScipion
-        fnDir = os.path.split(schrodingerScipion.__file__)[0]
+        import schrodinger
+        fnDir = os.path.split(schrodinger.__file__)[0]
         return os.path.join(fnDir,path)
 
     @classmethod

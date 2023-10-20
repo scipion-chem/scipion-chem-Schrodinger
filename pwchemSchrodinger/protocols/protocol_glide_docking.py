@@ -35,8 +35,8 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2, calculate_centerMass, performBatchThreading
 from pwchem import Plugin as pwchemPlugin
 
-from schrodingerScipion import Plugin as schrodinger_plugin
-from schrodingerScipion.utils.utils import putMol2Title
+from .. import Plugin as schrodinger_plugin
+from ..utils.utils import putMol2Title
 
 glideProg = schrodinger_plugin.getHome('glide')
 progLigPrep = schrodinger_plugin.getHome('ligprep')
@@ -202,7 +202,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
     def convertStep(self):
         inFile = self.getOriginalReceptorFile()
 
-        if not '.mae' in inFile:
+        if '.mae' not in inFile:
             maeFile = self._getExtraPath('inputReceptor.maegz')
             prog = schrodinger_plugin.getHome('utilities/prepwizard')
             args = ' -WAIT -noprotassign -noimpref -noepik {} {}'. \
@@ -254,7 +254,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 pdbFile = inAS.convert2PDB(self._getExtraPath('inputStructure.pdb'))
 
             pocket = self.radius.get()
-            structure, x, y, z = calculate_centerMass(pdbFile)
+            _, x, y, z = calculate_centerMass(pdbFile)
             pId = 1
         else:
             x, y, z = pocket.calculateMassCenter()
@@ -342,12 +342,13 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 fhIn.write("MAXKEEP %d\n"%self.maxkeep.get())
                 fhIn.write("SCORING_CUTOFF %f\n"%self.scoreCutoff.get())
                 if self.maxref.get()>0:
-                    fhIn.write("MAXREF %d\n" % self.maxref.get())
+                    maxRefValue = self.maxref.get()
                 else:
                     if self.dockingPrecision.get()==2:
-                        fhIn.write("MAXREF %d\n" % 800)
+                        maxRefValue = 800
                     else:
-                        fhIn.write("MAXREF %d\n" % 400)
+                        maxRefValue = 400
+                fhIn.write("MAXREF %d\n" % maxRefValue)
                 fhIn.write("POSES_PER_LIG %d\n"%self.posesPerLig.get())
 
                 fhIn.write("LIGANDFILE {}\n".format(os.path.abspath(self.getAllLigandsFile())))
@@ -403,7 +404,7 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         for small in self.inputLibrary.get():
             fnSmall = small.getFileName()
             fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
-            if not fnBase in smallDict:
+            if fnBase not in smallDict:
                 smallDict[fnBase] = small.clone()
 
         allMaeFile = self.mergeMAEfiles()

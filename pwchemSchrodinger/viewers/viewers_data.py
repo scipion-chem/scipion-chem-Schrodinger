@@ -21,13 +21,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+# General imports
+import os
 
+# Scipion em imports
+from pwem.viewers.views import ObjectView
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.browser import FileHandler
 import pyworkflow.utils as pwutils
-from schrodingerScipion import Plugin
-from subprocess import Popen
-from schrodingerScipion.objects import *
+
+# Plugin imports
+from .. import Plugin
+from ..objects import SchrodingerAtomStruct, SchrodingerBindingSites, SchrodingerSystem
 
 class SchrodingerDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects

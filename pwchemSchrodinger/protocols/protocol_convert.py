@@ -23,15 +23,21 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, time
+# General imports
+import os
 
-from pyworkflow.protocol.params import PointerParam, EnumParam, STEPS_PARALLEL
+# Scipion em imports
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
-from schrodingerScipion import Plugin
-from schrodingerScipion.objects import SchrodingerAtomStruct
-from schrodingerScipion.utils.utils import putMol2Title
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pyworkflow.protocol.params import PointerParam, EnumParam, STEPS_PARALLEL
+
+# Scipion chem imports
+from pwchem.objects import SetOfSmallMolecules
+
+# Plugin imports
+from .. import Plugin
+from ..objects import SchrodingerAtomStruct
+from ..utils.utils import putMol2Title, saveMolecule
 
 SMALLMOL, TARGET = 0, 1
 molChoices = {"Maestro": 'maegz', 'PDB': 'pdb', "Sybyl Mol2": 'mol2', "Smiles": 'smi', 'V2000 SD': 'sdf'}
@@ -48,19 +54,22 @@ class ProtSchrodingerConvert(EMProtocol):
         self.stepsExecutionMode = STEPS_PARALLEL
 
     def _defineParams(self, form):
+        # Input comparison variable
+        inputTypeComparison = 'inputType=='
+
         form.addSection(label='Input')
         form.addParam('inputType', EnumParam, default=0, choices=["Small molecules", 'Target structure'],
                       label='Input type', help='Type of input you want to convert')
         form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
-                      condition='inputType=={}'.format(SMALLMOL), label='Input small molecules:',
+                      condition='{}{}'.format(inputTypeComparison, SMALLMOL), label='Input small molecules:',
                       help='Input small molecules to convert')
-        form.addParam('outputFormatSmall', EnumParam, default=0, condition='inputType=={}'.format(SMALLMOL),
+        form.addParam('outputFormatSmall', EnumParam, default=0, condition='{}{}'.format(inputTypeComparison, SMALLMOL),
                       choices=list(molChoices.keys()), label='Output format',
                       help='Output format for the small molecules')
         form.addParam('inputStructure', PointerParam, pointerClass="SchrodingerAtomStruct, AtomStruct",
-                      condition='inputType=={}'.format(TARGET), label='Input structure:',
+                      condition='{}{}'.format(inputTypeComparison, TARGET), label='Input structure:',
                       help='Input atomic structure to convert')
-        form.addParam('outputFormatTarget', EnumParam, default=0, condition='inputType=={}'.format(TARGET),
+        form.addParam('outputFormatTarget', EnumParam, default=0, condition='{}{}'.format(inputTypeComparison, TARGET),
                       choices=list(targetChoices.keys()), label='Output format',
                       help='Output format for the atomic structure')
 
@@ -96,7 +105,7 @@ class ProtSchrodingerConvert(EMProtocol):
         if outFormat == 'mol2':
             putMol2Title(fnOut)
 
-        self.saveMolecule(fnOut, self.outputSmallMolecules, mol)
+        saveMolecule(self, fnOut, self.outputSmallMolecules, mol)
 
     def convertTargetStep(self):
         progStructConvert = Plugin.getHome('utilities/structconvert')
@@ -120,26 +129,6 @@ class ProtSchrodingerConvert(EMProtocol):
             self._defineOutputs(outputSmallMolecules=self.outputSmallMolecules)
         else:
             self._defineOutputs(outputStructure=self.target)
-
-    def saveMolecule(self, molFn, molSet, oriMol):
-        while self.saving:
-            time.sleep(0.2)
-        self.saving = True
-        smallMolecule = SmallMolecule()
-        smallMolecule.copy(oriMol, copyId=False)
-        smallMolecule.setFileName(molFn)
-        confId = self.getConfId(molFn, oriMol.getMolName())
-        if confId:
-            smallMolecule.setConfId(molFn.split('-')[-1].split('.')[0])
-
-        molSet.append(smallMolecule.clone())
-        self.saving = False
-
-    def getConfId(self, molFn, molName):
-        try:
-            return molFn.split(molName)[1].split('-')[1].split('.')[0]
-        except:
-            return None
 
     def _summary(self):
         summary=[]

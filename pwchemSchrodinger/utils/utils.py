@@ -23,11 +23,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+# General imports
 import numpy as np
-import os, subprocess
+import os, subprocess, time
+
+# Scipion em imports
 from pyworkflow.utils.path import moveFile
 import pyworkflow.object as pwobj
+
+# Scipion chem imports
+from pwchem.objects import SmallMolecule
 
 def putMol2Title(fn, title=""):
     with open(fn) as fhIn:
@@ -106,7 +111,7 @@ def getChargeFromMAE(maeFile):
         for line in f:
             if keys:
                 kList.append(line.strip())
-            if values and not line.strip().endswith('{') and not line.strip() == ':::':
+            if values and not line.strip().endswith('{') and line.strip() != ':::':
                 elements = maeLineSplit(line)
                 newCharge = float(elements[chargeIdx])
                 charge += newCharge
@@ -144,3 +149,24 @@ def maeLineSplit(maeLine):
                     stri = True
     elements.append(ele)
     return elements
+
+# ----------------------- Protocol utils -----------------------
+def saveMolecule(protocols, molFn, molSet, oriMol):
+    while protocols.saving:
+        time.sleep(0.2)
+    protocols.saving = True
+    smallMolecule = SmallMolecule()
+    smallMolecule.copy(oriMol, copyId=False)
+    smallMolecule.setFileName(molFn)
+    confId = getConfId(molFn, oriMol.getMolName())
+    if confId:
+        smallMolecule.setConfId(molFn.split('-')[-1].split('.')[0])
+
+    molSet.append(smallMolecule.clone())
+    protocols.saving = False
+
+def getConfId(molFn, molName):
+    try:
+        return molFn.split(molName)[1].split('-')[1].split('.')[0]
+    except Exception:
+        return None
