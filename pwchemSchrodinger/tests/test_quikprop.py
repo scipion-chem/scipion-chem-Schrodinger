@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 # General imports
-import os, shutil
+import os
 
 # Scipion em imports
 from pyworkflow.tests import setupTestProject, BaseTest
