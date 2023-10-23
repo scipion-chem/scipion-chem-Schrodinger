@@ -160,7 +160,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form = self._defineGlideReceptorParams(form)
-        form = self._defineGridParams(form, condition='fromPockets!=2')
+        form = self._defineGridParams(form, notManualCondition='fromPockets!=2')
 
         group = form.addGroup('Ligands')
         group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",

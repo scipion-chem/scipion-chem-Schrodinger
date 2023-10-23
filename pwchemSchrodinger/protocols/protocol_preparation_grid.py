@@ -51,23 +51,8 @@ class ProtSchrodingerGrid(EMProtocol):
         EMProtocol.__init__(self, **kwargs)
         self.stepsExecutionMode = STEPS_PARALLEL
 
-    def _defineParams(self, form):
+    def _defineGridParams(self, form, notManualCondition):
         # Defining condition variables
-        notManualCondition = 'not manual'
-
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('manual', BooleanParam, default=False, label='Define grid manually: ',
-                      help='Define the grid manually using Maestro GUI')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
-                      label='Atomic Structure: ', condition='manual',
-                      help='Input structure to generate the schrodinger grids on.'
-                           'A tutorial for grid generation can be found at '
-                           'https://www.youtube.com/watch?v=_AUKLGtrBR8')
-
-        form.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                      label='Sets of Structural ROIs:', condition=notManualCondition,
-                      help='Sets of known or predicted protein structural ROIs to center the grid on')
-
         group = form.addGroup('Inner box', condition=notManualCondition)
         group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
                        choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
@@ -133,7 +118,7 @@ class ProtSchrodingerGrid(EMProtocol):
                       label='Sets of Structural ROIs:', condition=notManualCondition,
                       help='Sets of known or predicted protein structural ROIs to center the grid on')
 
-        form = self._defineGridParams(form, condition=notManualCondition)
+        form = self._defineGridParams(form, notManualCondition=notManualCondition)
 
         form.addParallelSection(threads=4, mpi=1)
 
