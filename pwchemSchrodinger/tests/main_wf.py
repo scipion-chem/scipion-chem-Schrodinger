@@ -25,7 +25,7 @@
 # **************************************************************************
 
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
-from pwem.protocols import ProtImportPdb, ProtSetFilter
+from pwem.protocols import ProtImportPdb
 from pwchem.protocols import ProtChemImportSmallMolecules
 from ..protocols import ProtSchrodingerSiteMap, ProtSchrodingerPrepWizard, \
     ProtSchrodingerLigPrep, ProtSchrodingerGrid, ProtSchrodingerGlideDocking
