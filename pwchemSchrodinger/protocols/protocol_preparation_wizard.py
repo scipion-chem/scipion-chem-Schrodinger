@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 import os, json
-from pwchem.utils import clean_PDB
+from pwchem.utils import cleanPDB
 
 from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, FloatParam, \
   IntParam, EnumParam, LabelParam
@@ -313,7 +313,7 @@ class ProtSchrodingerPrepWizard(EMProtocol):
             chainId = chain["chain"].upper().strip()
         else:
             chainId = None
-        cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
+        cleanedPDB = cleanPDB(self.inputAtomStruct.get().getFileName(), fnPdb,
                                self.waters.get(), self.HETATM.get(), chainId)
         return cleanedPDB
 
