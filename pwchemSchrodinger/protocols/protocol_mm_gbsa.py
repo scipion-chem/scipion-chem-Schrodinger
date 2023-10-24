@@ -34,7 +34,7 @@ from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
 
 # Scipion chem imports
-from pwchem.utils import pdbqt2other, convertToSdf, performBatchThreading, getBaseName
+from pwchem.utils import pdbqt2other, convertToSdf, performBatchThreading, getBaseName, runInParallel
 from pwchem.objects import SmallMolecule
 
 # Plugin imports
@@ -112,25 +112,34 @@ class ProtSchrodingerMMGBSA(EMProtocol):
         convStep = self._insertFunctionStep('convertStep', prerequisites=[])
         mmStep = self._insertFunctionStep('runMMGBSAStep', prerequisites=[convStep])
         self._insertFunctionStep('createOutputStep', prerequisites=[mmStep])
-        # todo: add parse and create output
 
     def convertStep(self):
         nt = self.numberOfThreads.get()
         outDir = self.getInputComplexDir()
         inMols = self.inputSmallMolecules.get()
-        fMol = inMols.getFirstItem()
+        recMaeFile = self.prepareReceptorFile(inMols)
 
+        fMol = inMols.getFirstItem()
         if '.mae' not in fMol.getPoseFile():
           print('Docking files are being converted to Maestro format')
           maeFiles = performBatchThreading(self.prepareLigandFile, inMols, nt)
-          recMaeFile = self.prepareReceptorFile(inMols)
 
           nSubMols, lastMol = self.getNMolsPerThread(len(maeFiles), nt), 0
           for i, nSubMol in enumerate(nSubMols):
-              complexFile = os.path.join(outDir, os.path.basename(recMaeFile).replace('.mae', f'_{i}.mae'))
-              self.runJob('zcat', '{} {} > {}'.format(recMaeFile, ' '.join(maeFiles[lastMol:lastMol+nSubMol]), complexFile),
+              complexFile = os.path.join(outDir, os.path.basename(recMaeFile).
+                                         replace('.mae', f'_{lastMol}-{lastMol+nSubMol-1}.mae'))
+              self.runJob('zcat', '{} {} > {}'.format(recMaeFile,
+                                                      ' '.join(maeFiles[lastMol:lastMol+nSubMol]), complexFile),
                           cwd=self._getTmpPath())
               lastMol = lastMol+nSubMol
+        else:
+          poseFiles = []
+          for mol in inMols:
+            molFn = mol.getPoseFile()
+            molFn = molFn.split('@')[1] if '@' in molFn else molFn
+            if not molFn in poseFiles:
+              self.divideInThreads(molFn, nt, outDir)
+              poseFiles.append(molFn)
 
     def runMMGBSAStep(self):
         """ This function runs the schrodinger binary file with the given params """
@@ -160,29 +169,32 @@ class ProtSchrodingerMMGBSA(EMProtocol):
             csvFile = maeFile.replace(MAEFILE_EXTENSION, '.csv')
             outComplexFiles[maeFile] = csvFile
 
-      outputSet = inMols.createCopy(self._getPath(), copyInfo=True)
+      oMols = []
       for maeFile, csvFile in outComplexFiles.items():
         csvBasesDic, csvIdxsDic = self.parseOutputCSVFile(csvFile)
-        for fnBase in csvBasesDic:
-          if fnBase in molDic:
-            newMol = SmallMolecule()
-            newMol.copy(molDic[fnBase], copyId=False)
+        oMols += self.buildOutputMols(maeFile, molDic, csvBasesDic)
+        oMols += self.buildOutputMols(maeFile, molIdxDic, csvIdxsDic)
 
-            newMol._mmGBSA_BindEnergy = pwobj.Float(csvBasesDic[fnBase])
-            outputSet.append(newMol)
-
-        for posId in csvIdxsDic:
-          if posId in molIdxDic:
-            newMol = SmallMolecule()
-            newMol.copy(molIdxDic[posId], copyId=False)
-
-            recFile, posFile = self.divideMaeComplex(maeFile)
-            newMol.setProteinFile(recFile)
-            newMol.setPoseFile(posFile)
-
-            newMol._mmGBSA_BindEnergy = pwobj.Float(csvIdxsDic[posId])
-            outputSet.append(newMol)
+      outputSet = inMols.createCopy(self._getPath(), copyInfo=True)
+      for mol in oMols:
+        outputSet.append(mol)
       self._defineOutputs(outputSmallMolecules=outputSet)
+
+
+    def buildOutputMols(self, maeFile, molDic, csvDic):
+      oMols = []
+      for fnBase in csvDic:
+        if fnBase in molDic:
+          newMol = SmallMolecule()
+          newMol.copy(molDic[fnBase], copyId=False)
+
+          recFile, posFile = self.divideMaeComplex(maeFile)
+          newMol.setProteinFile(recFile)
+          newMol.setPoseFile(posFile)
+
+          newMol._mmGBSA_BindEnergy = pwobj.Float(csvDic[fnBase])
+          oMols.append(newMol.clone())
+      return oMols
 
 
     def divideMaeComplex(self, maeFile, outDir=None):
@@ -247,7 +259,8 @@ class ProtSchrodingerMMGBSA(EMProtocol):
 
     def performMMGBSA(self, dockFiles, molLists, it):
       outDir = self._getExtraPath(f'batch_{it}')
-      os.mkdir(outDir)
+      if not os.path.exists(outDir):
+        os.mkdir(outDir)
       for dockFile in dockFiles:
         print('Performing prime mm-gbsa on : ', dockFile)
         args = f"-WAIT {os.path.abspath(dockFile)} -out_type COMPLEX "
@@ -257,6 +270,9 @@ class ProtSchrodingerMMGBSA(EMProtocol):
     # --------------------------- Utils functions --------------------
     def getNMolsPerThread(self, nMols, nt):
       '''Return a list with the number of element to process per thread'''
+      if nt > nMols:
+        nt = nMols
+
       nSubMols = [0 for _ in range(nt)]
       for i in range(nMols):
           nSubMols[i % nt] += 1
@@ -274,7 +290,7 @@ class ProtSchrodingerMMGBSA(EMProtocol):
         firstMol, maeFiles = 2, []
         for nSubMol in nSubMols:
           lastMol = firstMol + nSubMol
-          maeFile = os.path.basename(dockFile).replace('.mae', f'_{firstMol}_{lastMol-1}.mae')
+          maeFile = os.path.basename(dockFile).replace('.mae', f'_{firstMol}-{lastMol-1}.mae')
           args = f' -n "1, {firstMol}:{lastMol-1}" {os.path.abspath(dockFile)} -o {maeFile}'
           self.runJob(maeSubsetProg, args, cwd=outDir)
           firstMol = lastMol
@@ -358,11 +374,12 @@ class ProtSchrodingerMMGBSA(EMProtocol):
 
     def parseOutputCSVFile(self, csvFile):
       csvDic, csvIdxsDic = {}, {}
-      posFIdx = csvFile.split('_')[-2]
+      posFIdx = csvFile.split('_')[-1].split('-')[0]
       with open(csvFile) as f:
         f.readline()
         for i, line in enumerate(f):
           fnBase, mmgbsaBindEnergy = line.split(',')[:2]
+          fnBase = getBaseName(fnBase)
           csvDic[fnBase] = float(mmgbsaBindEnergy)
           csvIdxsDic[int(posFIdx) + i - 1] = float(mmgbsaBindEnergy)
       return csvDic, csvIdxsDic
