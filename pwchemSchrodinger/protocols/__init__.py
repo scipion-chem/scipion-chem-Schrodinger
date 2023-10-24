@@ -35,3 +35,5 @@ from .protocol_preparation_grid import ProtSchrodingerGrid
 from .protocol_desmond_systemPrep import ProtSchrodingerDesmondSysPrep
 from .protocol_desmond_simulation import ProtSchrodingerDesmondMD
 from .protocol_qikprop import ProtSchrodingerQikprop
+from .protocol_mm_gbsa import ProtSchrodingerMMGBSA
+from .protocol_induced_fit_docking import ProtSchrodingerIFD

@@ -33,49 +33,37 @@ information such as name and number of residues.
 """
 
 # Imports
-from ..protocols.protocol_desmond_simulation import *
-from ..constants import *
 import pyworkflow.wizard as pwizard
-from pwchem.wizards import AddElementSummaryWizard, DeleteElementWizard
+from pwchem.wizards import AddElementSummaryWizard, DeleteElementWizard, WatchElementWizard
+
+from ..protocols import ProtSchrodingerDesmondMD, ProtSchrodingerIFD
+from ..constants import DESMOND_NPT_MD
 
 AddElementSummaryWizard().addTarget(protocol=ProtSchrodingerDesmondMD,
-                             targets=['insertStep'],
-                             inputs=['insertStep'],
-                             outputs=['workFlowSteps', 'summarySteps'])
-
+                                    targets=['insertStep'],
+                                    inputs=['insertStep'],
+                                    outputs=['workFlowSteps', 'summarySteps'])
 DeleteElementWizard().addTarget(protocol=ProtSchrodingerDesmondMD,
                                 targets=['deleteStep'],
                                 inputs=['deleteStep'],
                                 outputs=['workFlowSteps', 'summarySteps'])
+WatchElementWizard().addTarget(protocol=ProtSchrodingerDesmondMD,
+                               targets=['watchStep'],
+                               inputs=['watchStep'],
+                               outputs=['workFlowSteps', 'summarySteps'])
 
-class WatchSimulationStepWizard(pwizard.Wizard):
-    """Watch the parameters of the step of the workflow defined by the index"""
-    _targets = [(ProtSchrodingerDesmondMD, ['watchStep'])]
-
-    def show(self, form, *params):
-        protocol = form.protocol
-        try:
-            index = int(protocol.watchStep.get().strip())
-            if protocol.countSteps() >= index > 0:
-                workSteps = protocol.workFlowSteps.get().split('\n')
-                msjDic = eval(workSteps[index - 1])
-                for pName in msjDic:
-                    if pName in protocol._paramNames:
-                        form.setVar(pName, msjDic[pName])
-                    elif pName in protocol._enumParamNames:
-                        if pName == 'ensemType':
-                            idx = protocol._ensemTypes.index(msjDic[pName])
-                        elif pName == 'thermostat':
-                            idx = protocol._thermostats.index(msjDic[pName])
-                        elif pName == 'barostat':
-                            idx = protocol._barostats.index(msjDic[pName])
-                        elif pName == 'coupleStyle':
-                            idx = protocol._coupleStyle.index(msjDic[pName])
-                        elif pName == 'restrains':
-                            idx = protocol._restrainTypes.index(msjDic[pName])
-                        form.setVar(pName, idx)
-        except:
-            print('Incorrect index')
+AddElementSummaryWizard().addTarget(protocol=ProtSchrodingerIFD,
+                                    targets=['insertStep'],
+                                    inputs=['insertStep'],
+                                    outputs=['workFlowSteps', 'summarySteps'])
+DeleteElementWizard().addTarget(protocol=ProtSchrodingerIFD,
+                                targets=['deleteStep'],
+                                inputs=['deleteStep'],
+                                outputs=['workFlowSteps', 'summarySteps'])
+WatchElementWizard().addTarget(protocol=ProtSchrodingerIFD,
+                               targets=['watchStep'],
+                               inputs=['watchStep'],
+                               outputs=['workFlowSteps', 'summarySteps'])
 
 class AddDefaultStepsWizard(pwizard.Wizard):
     """Delete the step of the workflow defined by the index"""

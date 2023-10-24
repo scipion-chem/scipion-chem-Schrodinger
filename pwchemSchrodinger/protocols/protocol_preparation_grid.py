@@ -23,18 +23,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+# General imports
 import os, shutil, glob
 from subprocess import CalledProcessError
 
+# Scipion em imports
+from pwem.protocols import EMProtocol
+from pwem.convert.atom_struct import AtomicStructHandler
 from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, \
     FloatParam, IntParam, EnumParam
 from pyworkflow.object import String, Float
+from pyworkflow.utils import Message
 from pyworkflow.utils.path import createLink, makePath
-from pwem.protocols import EMProtocol
-from pwem.convert.atom_struct import AtomicStructHandler
 
-from ..objects import SchrodingerGrid, SetOfSchrodingerGrids
+# Plugin imports
 from .. import Plugin as schrodinger_plugin
+from ..objects import SchrodingerGrid, SetOfSchrodingerGrids
 
 structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 
@@ -47,29 +51,14 @@ class ProtSchrodingerGrid(EMProtocol):
         EMProtocol.__init__(self, **kwargs)
         self.stepsExecutionMode = STEPS_PARALLEL
 
-    def _defineParams(self, form):
+    def _defineGridParams(self, form, notManualCondition):
         # Defining condition variables
-        notManualCondition = 'not manual'
-
-        form.addSection(label='Input')
-        form.addParam('manual', BooleanParam, default=False, label='Define grid manually: ',
-                      help='Define the grid manually using Maestro GUI')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
-                      label='Atomic Structure: ', condition='manual',
-                      help='Input structure to generate the schrodinger grids on.'
-                           'A tutorial for grid generation can be found at '
-                           'https://www.youtube.com/watch?v=_AUKLGtrBR8')
-
-        form.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                      label='Sets of Structural ROIs:', condition=notManualCondition,
-                      help='Sets of known or predicted protein structural ROIs to center the grid on')
-
         group = form.addGroup('Inner box', condition=notManualCondition)
         group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
-                      choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
-                      help='How to set the inner box.'
-                           'Manually: you will manually set the same x,y,z for every ROI'
-                           'PocketDiameter: the diameter * n of each ROI will be used. You can set n')
+                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
+                       help='How to set the inner box.'
+                            'Manually: you will manually set the same x,y,z for every ROI'
+                            'PocketDiameter: the diameter * n of each ROI will be used. You can set n')
 
         line = group.addLine('Inner box (Angstroms)', condition='innerAction==0',
                              help='The docked ligand mass center must be inside the inner box radius')
@@ -98,18 +87,38 @@ class ProtSchrodingerGrid(EMProtocol):
                        label='Size of outer box vs diameter: ',
                        help='The diameter * n of each structural ROI will be used as outer box side')
 
-        group = form.addGroup('Hydrogen bonds', condition=notManualCondition)
+        group = form.addGroup('Grid hydrogen bonds', condition=notManualCondition)
         group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
-                      help='Accept aromatic hydrogens as potential H-bond donors.')
+                       help='Accept aromatic hydrogens as potential H-bond donors.')
         group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
-                      condition='HbondDonorAromH',
-                      help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
-                           'The cutoff is applied to the actual (signed) charge, not the absolute value.')
+                       condition='HbondDonorAromH',
+                       help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
+                            'The cutoff is applied to the actual (signed) charge, not the absolute value.')
         group.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
-                      help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
+                       help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
         group.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
-                      help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
-                           '(noncovalent interaction) donors')
+                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
+                            '(noncovalent interaction) donors')
+        return form
+
+    def _defineParams(self, form):
+        # Defining condition variables
+        notManualCondition = 'not manual'
+
+        form.addSection(label=Message.LABEL_INPUT)
+        form.addParam('manual', BooleanParam, default=False, label='Define grid manually: ',
+                      help='Define the grid manually using Maestro GUI')
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
+                      label='Atomic Structure: ', condition='manual',
+                      help='Input structure to generate the schrodinger grids on.'
+                           'A tutorial for grid generation can be found at '
+                           'https://www.youtube.com/watch?v=_AUKLGtrBR8')
+
+        form.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
+                      label='Sets of Structural ROIs:', condition=notManualCondition,
+                      help='Sets of known or predicted protein structural ROIs to center the grid on')
+
+        form = self._defineGridParams(form, notManualCondition=notManualCondition)
 
         form.addParallelSection(threads=4, mpi=1)
 

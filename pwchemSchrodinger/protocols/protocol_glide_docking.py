@@ -32,10 +32,11 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import relabelAtomsMol2, calculate_centerMass, performBatchThreading
+from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading
 from pwchem import Plugin as pwchemPlugin
 
 from .. import Plugin as schrodinger_plugin
+from ..protocols.protocol_preparation_grid import ProtSchrodingerGrid
 from ..utils.utils import putMol2Title
 
 glideProg = schrodinger_plugin.getHome('glide')
@@ -45,7 +46,7 @@ structCatProg = schrodinger_plugin.getHome('utilities/structcat')
 propListerProg = schrodinger_plugin.getHome('utilities/proplister')
 maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
 
-class ProtSchrodingerGlideDocking(EMProtocol):
+class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     """Calls glide to perform a docking of a set of compounds in a structural region defined by a grid.
        It is assumed that the input library of ligands is already prepared.
 
@@ -57,9 +58,8 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         EMProtocol.__init__(self, **kwargs)
         self.stepsExecutionMode = STEPS_PARALLEL
 
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-        group = form.addGroup('Input')
+    def _defineGlideReceptorParams(self, form):
+        group = form.addGroup('Receptor')
         group.addParam('fromPockets', EnumParam, label='Dock on : ', default=1,
                        choices=['Whole protein', 'SetOfStructROIs', 'Schrodinger Grids'],
                        help='Whether to dock on a whole protein surface or on specific regions defines as StructROIs or'
@@ -79,7 +79,10 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         group.addParam('inputGridSet', PointerParam, pointerClass="SetOfSchrodingerGrids",
                        condition='fromPockets==2', label='Input grids:',
                        help='Input grids defining the space where the docking will be performed')
+        return form
 
+    def _defineGlideParams(self, form, condition='True'):
+        group = form.addGroup('Docking', condition=condition)
         group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Input small molecules:', help='Input small molecules to be docked with Glide')
         group.addParam('convertOutputParam', BooleanParam, default=False, label='Convert output to mol2:',
@@ -139,67 +142,64 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                        label='No. Poses to keep per ligand (em):',
                        help='Number of poses to keep per ligand for energy minimization. '
                             'If set to -1, the default value is 400, except for XP precision that is 800.')
-
-        form.addSection(label='Ligand sampling', expertLevel=LEVEL_ADVANCED,)
-        group = form.addGroup('Grid hydrogen bonds')
-        group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
-                       help='Accept aromatic hydrogens as potential H-bond donors.')
-        group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
-                       condition='HbondDonorAromH',
-                       help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
-                            'The cutoff is applied to the actual (signed) charge, not the absolute value.')
-        group.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
-                       help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
-        group.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
-                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
-                            '(noncovalent interaction) donors')
-        group.addParam('rewardIntraHBonds', BooleanParam, default=False, label='Reward intra H bonds:',
-                      help='Reward intramolecular ligand hydrogen bonds by adding a contribution for each '
-                           'intramolecular hydrogen bond to the GlideScore, and a contribution to Emodel')
-
-        group = form.addGroup('Docking parameters')
         group.addParam('sampleNinversions', BooleanParam, default=True, condition='dockingMethod==0',
                        label='Sample pyramid nitrogen inversions:')
         group.addParam('sampleRings', BooleanParam, default=True, condition='dockingMethod==0',
                        label='Sample rings:')
         group.addParam('epikPenalties', BooleanParam, default=False, label='Epik penalties:',
-                      help='Apply penalties for ionization or tautomeric states calculated by Epik')
+                       help='Apply penalties for ionization or tautomeric states calculated by Epik')
         group.addParam('skipMetalEpik', BooleanParam, default=True, label='Skip Epik metal only:',
-                      help='Skip Epik-generated states of ligands that are designed for binding to metals. '
-                           'This option is useful if the receptor has a metal but the ligand does not bind to it. '
-                           'These states are skipped by default if the receptor does not have a metal.')
+                       help='Skip Epik-generated states of ligands that are designed for binding to metals. '
+                            'This option is useful if the receptor has a metal but the ligand does not bind to it. '
+                            'These states are skipped by default if the receptor does not have a metal.')
         group.addParam('expandedSampling', BooleanParam, default=False, label='Expanded sampling:',
-                      help='Expand the sampling by bypassing the elimination of poses in the rough scoring stage. '
-                           'Useful for fragment docking.')
+                       help='Expand the sampling by bypassing the elimination of poses in the rough scoring stage. '
+                            'Useful for fragment docking.')
+        return form
+
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+        form = self._defineGlideReceptorParams(form)
+        form = self._defineGridParams(form, notManualCondition='fromPockets!=2')
+
+        group = form.addGroup('Ligands')
+        group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
+                       label='Input small molecules:', help='Input small molecules to be docked with Glide')
+
+        group.addParam('convertOutput2Mol2', BooleanParam, label='Convert output to mol2: ', default=False,
+                       help='Whether to convert to output molecules to mol2 files instead of keeping the mae files')
+
+        form.addSection(label='Docking')
+        form = self._defineGlideParams(form)
 
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         convStep = self._insertFunctionStep('convertStep', prerequisites=[])
-        cStep = self._insertFunctionStep('createLigandsFileStep', prerequisites=[convStep])
-        c2Step = self._insertFunctionStep('combineLigandsFilesStep', prerequisites=[cStep])
-        c2Steps = [c2Step]
+        cSteps = [convStep]
 
         inputGrids = self.inputGridSet.get()
         if self.fromPockets.get() == 0:
-            dStep = self._insertFunctionStep('gridStep', self.inputAtomStruct.get(), prerequisites=c2Steps)
-            c2Steps, inputGrids = [dStep], [self.inputAtomStruct.get()]
+            dStep = self._insertFunctionStep('gridStep', self.inputAtomStruct.get(), prerequisites=cSteps)
+            cSteps, inputGrids = [dStep], [self.inputAtomStruct.get()]
 
         elif self.fromPockets.get() == 1:
             gridSteps = []
             for pocket in self.inputStructROIs.get():
-                dStep = self._insertFunctionStep('gridStep', pocket.clone(), prerequisites=c2Steps)
+                dStep = self._insertFunctionStep('gridStep', pocket.clone(), prerequisites=cSteps)
                 gridSteps.append(dStep)
-            c2Steps, inputGrids = gridSteps, self.inputStructROIs.get()
+            cSteps, inputGrids = gridSteps, self.inputStructROIs.get()
 
         dockSteps = []
         for grid in inputGrids:
-            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=c2Steps)
+            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=cSteps)
             dockSteps.append(dStep)
         self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
     def convertStep(self):
+        nt = self.numberOfThreads.get()
+        # Convert receptor
         inFile = self.getOriginalReceptorFile()
 
         if '.mae' not in inFile:
@@ -212,39 +212,15 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             ext = os.path.splitext(inFile)[1]
             shutil.copy(inFile, self._getExtraPath('inputReceptor{}'.format(ext)))
 
-    def createLigandsFileStep(self):
-        nt = self.numberOfThreads.get()
+        # Create ligand files
         ligSet = self.inputLibrary.get()
-        nLigs = len(ligSet) // nt
-        it, curLigSet = 0, []
-        threads = []
-        for lig in ligSet:
-            curLigSet.append(lig.clone())
-            if len(curLigSet) == nLigs and it < nt -1:
-                t = threading.Thread(target=self.createLigandsFile, args=(curLigSet.copy(), it,),
-                                     daemon=False)
-                threads.append(t)
-                t.start()
-                curLigSet, it = [], it + 1
+        performBatchThreading(self.createLigandsFile, ligSet, nt)
 
-        if len(curLigSet) > 0:
-            t = threading.Thread(target=self.createLigandsFile, args=(curLigSet.copy(), it,),
-                                 daemon=False)
-            threads.append(t)
-            t.start()
-
-        for t in threads:
-            t.join()
-
-    def combineLigandsFilesStep(self):
-        nt = self.numberOfThreads.get()
         allLigandsFile = self.getAllLigandsFile()
         with open(allLigandsFile, 'w') as f:
             for it in range(nt):
                 with open(self.getAllLigandsFile(suffix=it)) as fLig:
                     f.write(fLig.read())
-                #os.remove(self.getAllLigandsFile(suffix=it))
-
 
     def gridStep(self, pocket):
         if self.fromPockets.get() == 0:
@@ -332,7 +308,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                 fhIn.write("EPIK_PENALTIES %s\n"%self.sampleNinversions.get())
                 fhIn.write("SKIP_EPIK_METAL_ONLY %s\n"%self.skipMetalEpik.get())
                 fhIn.write("EXPANDED_SAMPLING %s\n"%self.expandedSampling.get())
-                fhIn.write("REWARD_INTRA_HBONDS %s\n"%self.rewardIntraHBonds.get())
                 fhIn.write("HBOND_DONOR_AROMH %s\n"%self.HbondDonorAromH.get())
                 if self.HbondDonorAromH.get():
                     fhIn.write("HBOND_DONOR_AROMH_CHARGE %f\n" % self.HbondDonorAromHCharge.get())
@@ -376,9 +351,9 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             with open(self._getExtraPath(gridDir + 'job_{}_pv.csv'.format(gridId))) as fhCsv:
                 fhCsv.readline()
                 fhCsv.readline()
-                for i, line in enumerate(fhCsv.readlines(), start=2):
+                for i, line in enumerate(fhCsv.readlines()):
                     tokens = line.split(',')
-                    fnBase = os.path.splitext(os.path.split(tokens[0])[1])[0]
+                    fnBase = getBaseName(tokens[0])
 
                     small = SmallMolecule()
                     small.copy(smallDict[fnBase], copyId=False)
@@ -386,16 +361,26 @@ class ProtSchrodingerGlideDocking(EMProtocol):
                     small.ligandEfficiency = pwobj.Float(tokens[2])
                     small.ligandEfficiencySA = pwobj.Float(tokens[3])
                     small.ligandEfficiencyLn = pwobj.Float(tokens[4])
-                    small.poseFile = pwobj.String("%d@%s" % (i, fnPv))
-                    small.setPoseId(i)
-                    small.maeFile = pwobj.String(allMaeFile)
                     small.setMolClass('Schrodinger')
                     small.setDockId(self.getObjId())
                     small.setGridId(gridId)
+
+                    recFile, posFile = self.divideMaeComplex(fnPv, posIdx=i+1)
+                    small.setProteinFile(recFile)
+                    small.setPoseFile(posFile)
+                    small.setPoseId(i + 1)
+
                     smallList.append(small)
 
             allSmallList += smallList
 
+        if self.convertOutput2Mol2.get():
+            nt = self.numberOfThreads.get()
+            # print('Converting output to mol2: outputSmallMolecules')
+            outDir = self._getExtraPath('outputSmallMolecules')
+            os.mkdir(outDir)
+            allSmallList = performBatchThreading(self.convertOutputStep, allSmallList, nt, outDir=outDir,
+                                                 cloneItem=True)
         molLists[it] = allSmallList
 
     def createOutputStep(self):
@@ -431,6 +416,16 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         outputSet.structFile = pwobj.String(fnStruct)
         self._defineOutputs(outputSmallMolecules=outputSet)
 
+    def divideMaeComplex(self, maeFile, posIdx=1, outDir=None):
+      if not outDir:
+        outDir = os.path.dirname(maeFile)
+      molFile, recFile = os.path.join(outDir, getBaseName(maeFile) + f'_lig_{posIdx+1}.maegz'), \
+                         os.path.join(outDir, getBaseName(maeFile) + '_rec.maegz')
+      args = f' -n 1 {os.path.abspath(maeFile)} -o {os.path.abspath(recFile)}'
+      self.runJob(maeSubsetProg, args, cwd=outDir)
+      args = f' -n {posIdx+1} {os.path.abspath(maeFile)} -o {os.path.abspath(molFile)}'
+      self.runJob(maeSubsetProg, args, cwd=outDir)
+      return recFile, molFile
 
     def _validate(self):
         errors = []
@@ -439,47 +434,20 @@ class ProtSchrodingerGlideDocking(EMProtocol):
         return errors
 
     ###########################  Utils functions #####################
-    def convertOutput(self, molSet, nameDir):
-        outDir = self._getExtraPath(nameDir)
-        os.mkdir(outDir)
-        self.convertedDic[os.path.basename(outDir)] = {}
-
-        nt = self.numberOfThreads.get()
-        nMols = len(molSet) // nt
-        it, curMolSet = 0, []
-        threads=[]
-        for mol in molSet:
-            curMolSet.append(mol.clone())
-            if len(curMolSet) == nMols and it < nt - 1:
-                t = threading.Thread(target=self.convertOutputStep, args=(curMolSet.copy(), outDir, it,),
-                                     daemon=False)
-                t.start()
-                threads.append(t)
-                curMolSet, it = [], it+1
-
-        if len(curMolSet) > 0:
-            t = threading.Thread(target=self.convertOutputStep, args=(curMolSet.copy(), outDir, it,),
-                                 daemon=False)
-            t.start()
-            threads.append(t)
-        for t in threads:
-            t.join()
-
-    def convertOutputStep(self, curMolSet, outDir, it):
+    def convertOutputStep(self, curMolSet, molLists, it, outDir):
         for i, mol in enumerate(curMolSet):
-            fnAux = os.path.abspath(self._getExtraPath("tmp_%d_%d.mae" % (it, i)))
-            poseId, fnRaw = mol.poseFile.get().split('@')
-            mol.setPoseId(poseId)
-            fnOut = os.path.join(outDir, '{}.{}'.format(mol.getUniqueName(), 'mol2'))
+            molName = mol.getUniqueName()
+            fnOut = os.path.join(outDir, f'{molName}.mol2')
 
             if not os.path.exists(fnOut):
-                args = "-n %s %s -o %s" % (poseId, os.path.abspath(fnRaw), fnAux)
-                subprocess.call([maeSubsetProg, *args.split()])
-
-                args = fnAux + ' ' + os.path.abspath(fnOut)
+                posFile = os.path.abspath(mol.getPoseFile())
+                args = f'{posFile} {os.path.abspath(fnOut)}'
                 subprocess.call([structConvertProg, *args.split()])
-                os.remove(fnAux)
-                self.convertedDic[os.path.basename(outDir)][mol.getObjId()] = fnOut
+                fnOut = relabelAtomsMol2(fnOut)
+
+            mol.setPoseFile(fnOut)
+            molLists[it].append(mol)
+
 
     def convert2mol2(self, fnSmall, it):
         baseName = os.path.splitext(os.path.basename(fnSmall))[0]
@@ -505,20 +473,6 @@ class ProtSchrodingerGlideDocking(EMProtocol):
     def getAllLigandsFile(self, suffix=''):
         return self._getTmpPath('allMoleculesFile{}.mol2'.format(suffix))
 
-    def updatePosFiles(self, outSet, outName):
-        newMols = []
-        for mol in outSet:
-            posFile = self.convertedDic[outName][mol.getObjId()]
-            if os.path.splitext(posFile)[1] == '.mol2':
-                posFile = relabelAtomsMol2(posFile)
-            mol.setPoseFile(posFile)
-            mol.setPoseId(posFile.split('_')[-2])
-            newMols.append(mol.clone())
-
-        for mol in newMols:
-            outSet.update(mol)
-        return outSet
-
     def getGridDirs(self, complete=False):
         gridDirs = []
         for dir in os.listdir(self._getExtraPath()):
@@ -539,13 +493,21 @@ class ProtSchrodingerGlideDocking(EMProtocol):
             gridId = gridDir.split('_')[1]
             maeFiles.append(gridDir + '/job_{}_pv.maegz'.format(gridId))
 
+        noRecMaeFiles = [maeFiles[0]]
+        for mFile in maeFiles[1:]:
+            mFile = os.path.abspath(self._getExtraPath(mFile))
+            tFile = os.path.abspath(self._getTmpPath(getBaseName(mFile) + '.maegz'))
+            args = f' -n 2: {mFile} -o {tFile}'
+            self.runJob(maeSubsetProg, args, cwd=self._getTmpPath())
+            noRecMaeFiles.append(tFile)
+
         outName = 'allMolecules.maegz'
-        command = 'zcat {} | gzip -c > {}'.format(' '.join(maeFiles), outName)
+        command = 'zcat {} | gzip -c > {}'.format(' '.join(noRecMaeFiles), outName)
         self.runJob('', command, cwd=self._getExtraPath())
         return self._getExtraPath(outName)
 
 
-    def createLigandsFile(self, ligSet, it):
+    def createLigandsFile(self, ligSet, molLists, it):
         curAllLigandsFile = self.getAllLigandsFile(suffix=it)
         with open(curAllLigandsFile, 'w') as fh:
             for small in ligSet:

@@ -23,16 +23,23 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+# General imports
 import random as rd
 import glob, os, re
 from subprocess import check_call
-from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, StringParam, TextParam, LEVEL_ADVANCED
+
+# Scipion em imports
 from pwem.protocols import EMProtocol
+from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, StringParam, TextParam, LEVEL_ADVANCED, Group, Line
+
+# Scipion chem imports
 from pwchem.utils import natural_sort
+
+# Plugin imports
 from .. import Plugin as schrodinger_plugin
-from ..constants import TIMESTEP, PRESSURE, BAROSTAT, BROWNIAN, TENSION, RESTRAINS, MSJ_SYSMD_INIT, MSJ_SYSMD_SIM
+from ..constants import MSJ_SYSMD_INIT
 from ..objects import SchrodingerSystem
+from ..utils import createMSJDic, buildSimulateStr, getJobName
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
 jobControlProg = schrodinger_plugin.getHome('jobcontrol')
@@ -53,10 +60,10 @@ class ProtSchrodingerDesmondMD(EMProtocol):
     _barostats = ['Martyna-Tobias-Klein', 'Langevin', 'None']
     _coupleStyle = ['Isotropic', 'Semi-isotropic', 'Anisotropic', 'Constant area']
     _restrainTypes = ['None', 'Ligand', 'Protein', 'Solute_heavy_atom', 'Solute']
-    _paramNames = ['simTime', 'annealTemps', 'bondedT', 'nearT', 'farT', 'velResamp', 'glueSolute', 'trajInterval',
-                   'temperature', 'deltaMax', 'tempMDCons', 'annealing',
-                   'pressure', 'presMDCons', 'surfTension', 'restrainForce']
-    _enumParamNames = ['ensemType', 'thermostat', 'barostat', 'coupleStyle', 'restrains']
+
+    _omitParamNames = ['runName', 'runMode', 'insertStep', 'summarySteps', 'deleteStep', 'watchStep',
+                       'workFlowSteps', 'hostName', 'numberOfThreads', 'numberOfMpi',
+                       'inputStruct', 'defSteps']
 
     _defParams = {'simTime': 100, 'bondedT': 0.002, 'nearT': 0.002, 'farT': 0.006,
                   'annealTemps': '[300, 0]', 'annealing': False,
@@ -239,9 +246,9 @@ class ProtSchrodingerDesmondMD(EMProtocol):
             cmsStruct.changeTrajectoryDirName(outTrjDir, trjPath=self._getTmpPath())
             cmsStruct.changeCMSFileName(os.path.relpath(outFile))
 
-        os.rename(self._getTmpPath('{}_multisim.log'.format(self.getJobName())),
+        os.rename(self._getTmpPath('{}_multisim.log'.format(getJobName(self))),
                   self._getExtraPath(sysName+'_multisim.log'))
-        os.rename(self._getTmpPath('{}.msj'.format(self.getJobName())), self._getPath('simulation.msj'))
+        os.rename(self._getTmpPath('{}.msj'.format(getJobName(self))), self._getPath('simulation.msj'))
         self._defineOutputs(outputSystem=cmsStruct)
 
 #######################################
@@ -261,7 +268,7 @@ class ProtSchrodingerDesmondMD(EMProtocol):
     def _validate(self):
         errors = []
         if not self.workFlowSteps.get():
-            msjDic = self.createMSJDic()
+            msjDic = createMSJDic(self)
             errors += self.validateAnneal(msjDic)
         else:
             workSteps = self.workFlowSteps.get().split('\n')
@@ -285,60 +292,24 @@ class ProtSchrodingerDesmondMD(EMProtocol):
                                   format(eval(aSt)[1], msjDic['simTime']))
         return errors
 
+    def getStageParamsDic(self, type='All'):
+      '''Return a dictionary as {paramName: param} of the stage parameters of the formulary.
+      Type'''
+      paramsDic = {}
+      for paramName, param in self._definition.iterAllParams():
+        if paramName not in self._omitParamNames and not isinstance(param, Group) and not isinstance(param, Line):
+          if type == 'All' or (type == 'Enum' and isinstance(param, EnumParam)) or (type == 'Normal' and not isinstance(param, EnumParam)):
+            paramsDic[paramName] = param
+      return paramsDic
+
     ############# UTILS
-    def buildSimulateStr(self, msjDic):
-        '''Checks the values stored in the msjDic and trnaslates them into msjStr.
-        If a value is not found in the msjDic, the default is used'''
-        msjDic = self.addDefaultForMissing(msjDic)
-
-        glueArg = '[]'
-        if msjDic['glueSolute']:
-          glueArg = 'solute'
-
-        #NearT and farT must be at least the boundT
-        msjDic['nearT'] = max(msjDic['bondedT'], msjDic['nearT'])
-        msjDic['farT'] = max(msjDic['bondedT'], msjDic['farT'])
-        timeStepArg = TIMESTEP % (msjDic['bondedT'], msjDic['nearT'], msjDic['farT'])
-
-        pressureArg, barostatArg = '', ''
-        method = self._thermoDic[msjDic['thermostat']]
-        ensemType = msjDic['ensemType']
-        if ensemType not in ['NVE', 'NVT', 'Minimization (Brownian)']:
-          pressureArg = PRESSURE % (msjDic['pressure'], msjDic['coupleStyle'].lower())
-          barostatArg = BAROSTAT % (msjDic['presMDCons'])
-          method = self._baroDic[msjDic['barostat']]
-
-        tensionArg, brownianArg = '', ''
-        if ensemType == 'Minimization (Brownian)':
-          ensemType = 'NVT'
-          method = 'Brownie'
-          brownianArg = BROWNIAN % (msjDic['deltaMax'])
-        elif ensemType == 'NPgT':
-          tensionArg = TENSION % msjDic['surfTension']
-
-        restrainArg = ''
-        if msjDic['restrains'] != 'None':
-          restrainArg = RESTRAINS % (msjDic['restrains'].lower(), msjDic['restrainForce'])
-
-        if not msjDic['annealing']:
-            annealArg = 'off'
-            tempArg = msjDic['temperature']
-        else:
-            annealArg = 'on'
-            tempArg = self.parseAnnealing(msjDic['annealTemps'])
-
-        msjStr = MSJ_SYSMD_SIM % (annealArg, os.path.abspath(self._getTmpPath()),
-                                      glueArg, msjDic['simTime'], timeStepArg, tempArg, pressureArg,
-                                      tensionArg, ensemType, method, msjDic['tempMDCons'], barostatArg, brownianArg,
-                                      restrainArg, msjDic['velResamp'], msjDic['trajInterval'])
-        return msjStr
-
     def addDefaultForMissing(self, msjDic):
-        '''Add default values for missing parameters in the msjDic'''
-        for pName in [*self._paramNames, *self._enumParamNames]:
-            if pName not in msjDic:
-                msjDic[pName] = self._defParams[pName]
-        return msjDic
+      '''Add default values for missing parameters in the msjDic'''
+      paramDic = self.getStageParamsDic()
+      for pName in paramDic.keys():
+        if pName not in msjDic:
+          msjDic[pName] = paramDic[pName].default
+      return msjDic
 
     def buildMSJStr(self):
         '''Build the .msj (file used by multisim to specify the jobs performed by Schrodinger)
@@ -346,39 +317,24 @@ class ProtSchrodingerDesmondMD(EMProtocol):
         msjStr = MSJ_SYSMD_INIT
 
         if self.workFlowSteps.get() in ['', None]:
-            msjDic = self.createMSJDic()
-            msjStr += self.buildSimulateStr(msjDic)
+            msjDic = createMSJDic(self)
+            msjStr += buildSimulateStr(self, msjDic)
         else:
             workSteps = self.workFlowSteps.get().split('\n')
             if '' in workSteps:
                 workSteps.remove('')
             for wStep in workSteps:
                 msjDic = eval(wStep)
-                msjStr += self.buildSimulateStr(msjDic)
+                msjStr += buildSimulateStr(self, msjDic)
 
         return msjStr
-    
-    def createMSJDic(self):
-        msjDic = {}
-        for pName in self._paramNames:
-            if hasattr(self, pName):
-                msjDic[pName] = getattr(self, pName).get()
-            else:
-                print('Something is wrong with parameter ', pName)
-
-        for pName in self._enumParamNames:
-            if hasattr(self, pName):
-                msjDic[pName] = self.getEnumText(pName)
-            else:
-                print('Something is wrong with parameter ', pName)
-        return msjDic
 
     def createGUISummary(self):
         with open(self._getExtraPath("summary.txt"), 'w') as f:
             if self.workFlowSteps.get():
                 f.write(self.createSummary())
             else:
-                f.write(self.createSummary(self.createMSJDic()))
+                f.write(self.createSummary(createMSJDic(self)))
 
     def createSummary(self, msjDic=None):
         '''Creates the displayed summary from the internal state of the steps'''
@@ -461,28 +417,22 @@ class ProtSchrodingerDesmondMD(EMProtocol):
         for aSt in annealStages:
             tempArg += '    [{} {}]\n'.format(eval(aSt)[0], eval(aSt)[1])
         return tempArg + ']'
-
-    def getJobName(self):
-        files = os.listdir(self._getTmpPath())
-        for f in files:
-            if f.endswith('.msj'):
-                return f.replace('.msj', '')
-
+    
     def getSchJobId(self):
         jobId = None
         jobListFile = os.path.abspath(self._getTmpPath('jobList.txt'))
-        if self.getJobName():
+        if getJobName(self):
             check_call(jobControlProg + ' -list {} | grep {} > {}'.
-                       format(self.getJobName(), self.getJobName(), jobListFile), shell=True)
+                        format(getJobName(self), getJobName(self), jobListFile), shell=True)
             with open(jobListFile) as f:
                 jobId = f.read().split('\n')[0].split()[0]
         return jobId
-
+    
     def setAborted(self):
         super().setAborted()
         jobId = self.getSchJobId()
         if jobId:
-            print('Killing job: {} with jobName {}'.format(jobId, self.getJobName()))
+            print('Killing job: {} with jobName {}'.format(jobId, getJobName(self)))
             check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)
 
     def findLastCheckPoint(self):

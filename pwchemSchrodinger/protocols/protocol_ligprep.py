@@ -30,9 +30,11 @@ import os, time, glob
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, IntParam, STEPS_PARALLEL
 from pyworkflow.utils.path import copyFile, moveFile, cleanPath
+from pwem.protocols import EMProtocol
 
 # Scipion chem imports
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.utils import getBaseName
 
 # Plugin imports
 from .. import Plugin
@@ -181,3 +183,13 @@ class ProtSchrodingerLigPrep(EMProtocol):
         if len(self.outputSmallMoleculesDropped)>0:
             self._defineOutputs(**{OUTPUTATTRIBUTEDROPPED: self.outputSmallMoleculesDropped})
             self._defineSourceRelation(self.inputSmallMolecules, self.outputSmallMoleculesDropped)
+
+    def renameSDFTitle(self, sdfFile):
+        tmpFile = self._getTmpPath(os.path.basename(sdfFile))
+        with open(sdfFile) as fIn:
+            fIn.readline()
+            with open(tmpFile, 'w') as fOut:
+                fOut.write(f'{getBaseName(sdfFile)}\n')
+                for line in fIn:
+                    fOut.write(line)
+        os.rename(tmpFile, sdfFile)

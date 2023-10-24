@@ -67,7 +67,7 @@ class SchrodingerDataViewer(pwviewer.Viewer):
 class MaestroView(pwviewer.CommandView):
     """ View for calling an external command. """
     def __init__(self, inputFile, **kwargs):
-        pwviewer.CommandView.__init__(self, "%s %s &"%(Plugin.getHome('maestro'),inputFile),
+        pwviewer.CommandView.__init__(self, "%s %s &" % (Plugin.getHome('maestro'), inputFile),
                                       env=Plugin.getEnviron(), **kwargs)
 
 class MaestroFileHandler(FileHandler):
