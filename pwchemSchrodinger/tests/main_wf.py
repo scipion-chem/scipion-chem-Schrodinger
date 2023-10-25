@@ -26,9 +26,12 @@
 
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
+
 from pwchem.protocols import ProtChemImportSmallMolecules
+from pwchem.tests import TestExtractLigand
+
 from ..protocols import ProtSchrodingerSiteMap, ProtSchrodingerPrepWizard, \
-    ProtSchrodingerLigPrep, ProtSchrodingerGrid, ProtSchrodingerGlideDocking
+    ProtSchrodingerLigPrep, ProtSchrodingerGrid, ProtSchrodingerGlideDocking, ProtSchrodingerMMGBSA
 
 class TestSchroProtPrep(BaseTest):
     @classmethod
@@ -205,6 +208,35 @@ def getPrepTargetWizardArgs():
           'stage4':True, 'ms':True}
     return args
 
+class TestMMGBSA(TestExtractLigand):
+    @classmethod
+    def _runImportPDB(cls):
+        protImportPDB = cls.newProtocol(
+            ProtImportPdb,
+            inputPdbData=0, pdbId='4ERF')
+        cls.launchProtocol(protImportPDB)
+        cls.protImportPDB = protImportPDB
 
+    @classmethod
+    def _runMMGBSA(cls, inputProt):
+        protMMGBSA = cls.newProtocol(
+            ProtSchrodingerMMGBSA,
+            flexOption=1
+        )
+
+        protMMGBSA.inputSmallMolecules.set(inputProt)
+        protMMGBSA.inputSmallMolecules.setExtended('outputSmallMolecules')
+
+        cls.proj.launchProtocol(protMMGBSA)
+        return protMMGBSA
+
+    def test(self):
+        protExtract = self._runExtractLigand(self.protImportPDB)
+        self._waitOutput(protExtract, 'outputSmallMolecules')
+
+        protMMGBSA = self._runMMGBSA(protExtract)
+        self._waitOutput(protMMGBSA, 'outputSmallMolecules')
+        assertHandle(self.assertIsNotNone, getattr(protMMGBSA, 'outputSmallMolecules', None),
+                     cwd=protContacts.getWorkingDir())
 
 
