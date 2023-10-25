@@ -34,9 +34,15 @@ import pyworkflow.object as pwobj
 
 # Scipion chem imports
 from pwchem.objects import SmallMolecule
+from pwchem.utils import relabelAtomsMol2
 
 # Plugin imports
 from ..constants import TIMESTEP, PRESSURE, BAROSTAT, BROWNIAN, TENSION, RESTRAINS, MSJ_SYSMD_SIM, MSJ_SYSMD_INIT
+from .. import Plugin as schrodingerPlugin
+
+structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
+maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
+
 
 def putMol2Title(fn, title=""):
     with open(fn) as fhIn:
@@ -161,6 +167,44 @@ def maeLineSplit(maeLine):
                     stri = True
     elements.append(ele)
     return elements
+
+def convertMAE2Mol2(mol, outDir):
+    molName = mol.getUniqueName()
+    poseId, fnRaw = mol.poseFile.get().split('@')
+    mol.setPoseId(poseId)
+
+    fnAux = os.path.join(outDir, f"tmp_{molName}_{poseId}.mae")
+    fnOut = os.path.join(outDir, '{}.{}'.format(molName, 'mol2'))
+
+    try:
+        args = f"-n {poseId} {os.path.abspath(fnRaw)} -o {fnAux}"
+        subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
+
+        args = f'{fnAux} {os.path.abspath(fnOut)}'
+        subprocess.run(f'{structConvertProg} {args}', check=True, capture_output=True, text=True, shell=True)
+        os.remove(fnAux)
+
+        if os.path.splitext(fnOut)[1] == '.mol2':
+            fnOut = relabelAtomsMol2(fnOut)
+        mol.setPoseFile(fnOut)
+        mol.setPoseId(poseId)
+
+        return mol
+
+    except subprocess.CalledProcessError as e:
+        print(e)
+        print(f"Failed to convert molecule {molName}")
+
+
+def convertMAEMolSet(molSet, outDir, njobs, updateSet=True):
+    '''Convert in parallel a set of SetOfSmallMolecules from their MAE format to MOL2'''
+    convMols = runInParallel(convertMAE2Mol2, outDir, paramList=[item.clone() for item in molSet], jobs=njobs)
+    if updateSet:
+        for mol in convMols:
+            molSet.update(mol)
+        return molSet
+    else:
+        return convMols
 
 # ----------------------- Protocol utils -----------------------
 def saveMolecule(protocols, molFn, molSet, oriMol):
