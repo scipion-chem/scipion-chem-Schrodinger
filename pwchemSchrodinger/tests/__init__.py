@@ -24,7 +24,8 @@
 # *
 # **************************************************************************
 
-from ..tests.main_wf import TestGlideDocking, TestSchroLigPrep, TestGridSchro, TestSchroProtPrep, TestSitemap
+from ..tests.main_wf import TestGlideDocking, TestSchroLigPrep, TestGridSchro, TestSchroProtPrep, TestSitemap, \
+  TestMMGBSA
 from ..tests.md_wf import TestDesmondMD, TestDesmondSysPrep
 from ..tests.test_utils import TestPrimeSchro, TestSchroConvert, TestSchroProtPrep, TestSplitSchro
 from ..tests.test_quikprop import TestSchroQikprop
