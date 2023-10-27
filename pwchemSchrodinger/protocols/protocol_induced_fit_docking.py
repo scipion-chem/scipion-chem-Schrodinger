@@ -25,23 +25,27 @@
 # **************************************************************************
 # General imports
 import random as rd
-import glob, os
+import glob, os, json
 
 # Scipion em imports
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import Group, EnumParam, PointerParam, StringParam, FloatParam, LabelParam, TextParam, IntParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import Group, EnumParam, PointerParam, StringParam, FloatParam, \
+  LabelParam, TextParam, IntParam, LEVEL_ADVANCED, BooleanParam, Line
 from pyworkflow.utils import Message
+
+from pwchem.utils import createMSJDic, calculate_centerMass
 
 # Plugin imports
 from .. import Plugin as schrodingerPlugin
 from ..constants import MSJ_SYSMD_INIT
 from ..protocols.protocol_glide_docking import ProtSchrodingerGlideDocking
-from ..utils import createMSJDic, buildSimulateStr
 
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')
 structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
 maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
 mmgbsaProg = schrodingerPlugin.getHome('prime_mmgbsa')
+
+AS, POCKET, GRID = 0, 1, 2
 
 #  0       1     2       3      4      5      6       7     8     9      10     11    12    13    14
 COMPILE, GLIDE, IDOCK, PPREP, PFLEX, PENER, PHELIX, PLOOP, PMIN, PREF, PSIDE, SCORE, SORT, TRIM, VDW = list(range(15))
@@ -61,7 +65,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
   _omitParamNames = ['runName', 'runMode', 'insertStep', 'summarySteps', 'deleteStep', 'watchStep',
                      'workFlowSteps', 'hostName', 'numberOfThreads', 'numberOfMpi',
-                     'inputSmallMolecules', 'fromPockets', 'inputAtomStruct', 'radius', 'inputStructROIs',
+                     'inputLibrary', 'fromPockets', 'inputAtomStruct', 'radius', 'inputStructROIs',
                      'inputGridSet']
 
   def __init__(self, **kwargs):
@@ -73,21 +77,32 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     paramsDic = {}
     for paramName, param in self._definition.iterAllParams():
       if paramName not in self._omitParamNames and not isinstance(param, Group):
-        if type == 'All' or (type == 'Enum' and isinstance(param, EnumParam)) or (type == 'Normal' and not isinstance(param, EnumParam)):
+        if type == 'All' or (type == 'Enum' and isinstance(param, EnumParam)) or \
+                (type == 'Normal' and not isinstance(param, EnumParam)):
           paramsDic[paramName] = param
     return paramsDic
 
+  def getStageStr(self, sIdx):
+    return list(self.stageTypes.keys())[sIdx]
+
   def _defineParams(self, form):
     # Defining costant variables
-    residueListHelp = 'Comma-separated list of residues to add to the refinement list. These should be residues that lie outside the distance cutoff'
+    chainListHelp = 'Use the wizard to select the chain you want'
+    residueListHelp = 'Use the wizard to select the residues you want'
     wizardHelp = 'Click on the wizard to save the specified residues in the list below'
     cutoffDistanceLabel = 'Cutoff distance:'
 
     form.addSection(label=Message.LABEL_INPUT)
     form = self._defineGlideReceptorParams(form)
+    form = self._defineGridParams(form, notManualCondition='fromPockets!=2')
+
     group = form.addGroup('Ligands')
-    group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
+    group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules:', help='Input small molecules to be docked with IFD')
+    form.addParam('defSteps', EnumParam, label='Default MD workflows: ',
+                  choices=['None', 'Standard', 'Extended sampling'], default=0,
+                  help='Choose and add with the wizard some default IFD steps which will be reflected into '
+                       'the summary')
 
     form.addSection('IFD stages')
     group = form.addGroup('Add Stage')
@@ -97,31 +112,20 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                    format(schrodingerPlugin.getHome('docs/inducedfit_command_reference/ifd_command_infile.htm')))
 
     # COMPILE_RESIDUE_LIST stage parameters
-    group.addParam('residuesDefinition', EnumParam, label='Define residues by: ', default=1,
-                   choices=['Distance form center', 'Residue list'], condition=f'stageType == {COMPILE}',
-                   help='Whether to determine the list of residues to compile by using a center and a cutoff distance '
-                        'or directly a list of residues')
     group.addParam('residueCenter', StringParam, default='Z:999', label='Center to determine residues: ',
-                   condition=f'stageType == {COMPILE} and residuesDefinition == 0',
+                   condition=f'stageType == {COMPILE}',
                    help='List of residues from which to measure the cutoff distance. Default: Z:999, which is the '
                         'default for the ligand.')
     group.addParam('residuesCutoff', FloatParam, label=cutoffDistanceLabel,
-                   default=5.0, condition=f'stageType == {COMPILE} and residuesDefinition == 0',
+                   default=5.0, condition=f'stageType == {COMPILE}',
                    help='Cutoff distance (in angstroms) from the ligand pose, within which residues that have any '
                         'atoms are included in the refinement list')
-
-    group.addParam('addResAdd', LabelParam, label='Insert residues to add list: ',
-                   condition=f'stageType == {COMPILE} and residuesDefinition == 1',
-                   help=wizardHelp)
-    group.addParam('residuesAdd', TextParam, default='', width=120,
-                   label='Compile residues to add: ', condition=f'stageType == {COMPILE} and residuesDefinition == 1',
-                   help=residueListHelp)
-    group.addParam('addResOmit', LabelParam, label='Insert residues to omit list: ',
-                   condition=f'stageType == {COMPILE} and residuesDefinition == 1',
-                   help=wizardHelp)
-    group.addParam('residuesOmit', TextParam, default='', width=120,
-                   label='Compile residues to omit: ', condition=f'stageType == {COMPILE} and residuesDefinition == 1',
-                   help='Comma-separated list of residues to omit to the refinement list')
+    group.addParam('residuesAdd', TextParam, default='', width=120, label='Compile residues to add: ',
+                   condition=f'stageType == {COMPILE}', expertLevel=LEVEL_ADVANCED,
+                   help='Comma-separated list of residues to add outside of the cutoff to the refinement list')
+    group.addParam('residuesOmit', TextParam, default='', width=120, label='Compile residues to omit: ',
+                   condition=f'stageType == {COMPILE}', expertLevel=LEVEL_ADVANCED,
+                   help='Comma-separated list of residues to omit inside of the cutoff to the refinement list')
 
     # GLIDE_DOCKING2 and INITIAL_DOCKING stage parameters
     form = self._defineGlideParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
@@ -145,7 +149,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                    help='HELIX: Distance cutoff for prediction of side chains close to helix.\n'
                         'LOOP: Threshold for inclusion of residues for side-chain refinement. Any residues with atoms '
                         'within this distance are included')
-    group.addParam('maxEnergyGap', FloatParam, label=cutoffDistanceLabel,
+    group.addParam('maxEnergyGap', FloatParam, label='Max. energy gap: ',
                    default=10000.0, condition=f'stageType in [{PHELIX}, {PLOOP}]',
                    help='Maximum energy gap for saved structures.'
                         'Energy threshold for predicted loop structures (in kcal/mol). Structures are discarded if '
@@ -153,6 +157,9 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     group.addParam('maxStructures', IntParam, label='Max. number of structures: ',
                    default=1000, condition=f'stageType in [{PHELIX}, {PLOOP}]',
                    help='Maximum number of structures to store')
+    group.addParam('includeResList', BooleanParam, label='Include compiled residues: ',
+                   default=False, condition=f'stageType in [{PLOOP}]',
+                   help='Include the residues from COMPILE_RESIDUE_LIST for side-chain refinement.')
 
     # PRIME_REFINEMENT and PRIME_MINIMIZATION stage parameters
     group.addParam('nMinPasses', IntParam, label='Number of refinement passes: ',
@@ -175,21 +182,24 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                         '{schrodingerPlugin.getHome("docs/inducedfit_command_reference/ifd_command_infile_scoring.htm")}')
 
     # SORT_AND_FILTER stage parameters
-    group.addParam('poseFilter', StringParam, default='',
-                   label='Property to filter poses: ', condition=f'stageType in [{SORT}]',
-                   help='Name of Maestro property for filtering poses, for example, r_psp_Prime_Energy')
-    group.addParam('poseKeep', StringParam, default='',
-                   label='Threshold on property for filtering poses: ', condition=f'stageType in [{SORT}]',
-                   help='Threshold on property for filtering poses. The syntax is as follows: '
+    group.addParam('sortType', EnumParam, label='Sort by: ', default=1, display=EnumParam.DISPLAY_HLIST,
+                   choices=['Ligand', 'Pose'], condition=f'stageType == {SORT}',
+                   help='Whether to sort and filter by Ligands or Poses')
+    group.addParam('ligandFilter', StringParam, default='', label='Property to filter ligands: ',
+                   condition=f'stageType in [{SORT}] and sortType == 0',
+                   help='Name of Maestro property for filtering ligands, for example, r_psp_Prime_Energy')
+    group.addParam('ligandKeep', StringParam, default='', label='Threshold on property for filtering ligands: ',
+                   condition=f'stageType in [{SORT}] and sortType == 0',
+                   help='Threshold on property for filtering ligands. The syntax is as follows: '
                         'n% Keep the n% of poses with the lowest property values'
                         'n# Keep the n poses with the lowest property values'
                         'n Keep poses with property values within n of the lowest value.')
-    group.addParam('ligandFilter', StringParam, default='',
-                   label='Property to filter ligands: ', condition=f'stageType in [{SORT}]',
-                   help='Name of Maestro property for filtering ligands, for example, r_psp_Prime_Energy')
-    group.addParam('ligandKeep', StringParam, default='',
-                   label='Threshold on property for filtering ligands: ', condition=f'stageType in [{SORT}]',
-                   help='Threshold on property for filtering ligands. The syntax is as follows: '
+    group.addParam('poseFilter', StringParam, default='', label='Property to filter poses: ',
+                   condition=f'stageType in [{SORT}] and sortType == 1',
+                   help='Name of Maestro property for filtering poses, for example, r_psp_Prime_Energy')
+    group.addParam('poseKeep', StringParam, default='', label='Threshold on property for filtering poses: ',
+                   condition=f'stageType in [{SORT}] and sortType == 1',
+                   help='Threshold on property for filtering poses. The syntax is as follows: '
                         'n% Keep the n% of poses with the lowest property values'
                         'n# Keep the n poses with the lowest property values'
                         'n Keep poses with property values within n of the lowest value.')
@@ -221,26 +231,23 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                    default=30.0, condition=f'stageType == {TRIM} and trimResidues == 1 and trimMethod == 1',
                    help='Granularity of the rotamer search for steric clashes, in degrees.')
 
-    group.addParam('addResTrim', LabelParam, label='Insert residues to trim list: ',
+    group.addParam('residuesTrim', TextParam, default='', width=120, label='Residues to trim: ',
                    condition=f'stageType == {TRIM} and trimResidues == 0',
-                   help=wizardHelp)
-    group.addParam('residuesTrim', TextParam, default='', width=120,
-                   label='Residues to trim: ', condition=f'stageType == {TRIM} and trimResidues == 0',
-                   help='List of residues to trim')
+                   help='List of residues to trim. Use the wizard to paste the selected residues.')
 
     group.addParam('extraParams', TextParam, label='Extra parameters: ', default='', width=120,
                    expertLevel=LEVEL_ADVANCED,
                    help='Any extra parameters to add in the current stage. Add each parameter in a different line as:\n'
-                        'PARAMETER_NAME PARAMETER_VALUE')
+                        'PARAMETER-NAME PARAMETER-VALUE')
 
-    group = form.addGroup('Residue selection', condition=f'(stageType == {COMPILE} and residuesDefinition == 1) or (stageType in [{PHELIX}, {PLOOP}]) or (stageType == {TRIM} and trimResidues == 0)')
+    group = form.addGroup('Residue selection', condition=f'(stageType == {COMPILE}) or (stageType in [{PHELIX}, {PLOOP}]) or (stageType == {TRIM} and trimResidues == 0)')
     group.addParam('selChain', StringParam, default='',
-                   label='Chain of residues: ',
-                   condition=f'(stageType == {COMPILE} and residuesDefinition == 1) or (stageType in [{PHELIX}, {PLOOP}]) or (stageType == {TRIM} and trimResidues == 0)',
-                   help=residueListHelp)
+                   label='Select chain: ',
+                   condition=f'(stageType == {COMPILE}) or (stageType in [{PHELIX}, {PLOOP}]) or (stageType == {TRIM} and trimResidues == 0)',
+                   help=chainListHelp)
     group.addParam('selResidue', StringParam, default='',
-                   label='Chain of residues: ',
-                   condition=f'(stageType == {COMPILE} and residuesDefinition == 1) or (stageType in [{PHELIX}, {PLOOP}]) or (stageType == {TRIM} and trimResidues == 0)',
+                   label='Select residues: ',
+                   condition=f'(stageType == {COMPILE}) or (stageType in [{PHELIX}, {PLOOP}]) or (stageType == {TRIM} and trimResidues == 0)',
                    help=residueListHelp)
 
     group = form.addGroup('Summary')
@@ -266,37 +273,269 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
-    # self._insertFunctionStep('simulationStep')
-    # self._insertFunctionStep('createOutputStep')
-    pass
+    # todo
+    convStep = self._insertFunctionStep('convertStep', prerequisites=[])
+    cSteps = [convStep]
 
+    # todo: reconfigure to write idf file
+    inputGrids = self.inputGridSet.get()
+    if self.fromPockets.get() == 0:
+      dStep = self._insertFunctionStep('gridStep', self.inputAtomStruct.get(), prerequisites=cSteps)
+      cSteps, inputGrids = [dStep], [self.inputAtomStruct.get()]
+
+    elif self.fromPockets.get() == 1:
+      gridSteps = []
+      for pocket in self.inputStructROIs.get():
+        dStep = self._insertFunctionStep('gridStep', pocket.clone(), prerequisites=cSteps)
+        gridSteps.append(dStep)
+      cSteps, inputGrids = gridSteps, self.inputStructROIs.get()
+
+    dockSteps = []
+    for grid in inputGrids:
+      dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=cSteps)
+      dockSteps.append(dStep)
+    self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
   #######################################
 
   def addDefaultForMissing(self, msjDic):
     '''Add default values for missing parameters in the msjDic'''
     paramDic = self.getStageParamsDic()
-    for pName in paramDic.keys():
-      if pName not in msjDic:
-        msjDic[pName] = paramDic[pName].default
+    for pName, pVal in paramDic.items():
+      print(pName, pVal)
+      if pName not in msjDic and not isinstance(pVal, Line):
+        msjDic[pName] = pVal.default
     return msjDic
 
   ############# UTILS
-  def buildMSJ_str(self):
+  def buildMSJ_str(self, pocket=None):
     # todo: write the file neccessary for IFD
     '''Build the .msj (file used by IFD to specify the jobs performed by Schrodinger)
         defining the input parameters'''
-    msjStr = MSJ_SYSMD_INIT
 
     if self.workFlowSteps.get() in ['', None]:
       msjDic = createMSJDic(self)
-      msjStr += buildSimulateStr(self, msjDic)
+      msjStr = self.buildIFDStr(msjDic, pocket)
     else:
       workSteps = self.workFlowSteps.get().split('\n')
       if '' in workSteps:
         workSteps.remove('')
       for wStep in workSteps:
         msjDic = eval(wStep)
-        msjStr += buildSimulateStr(self, msjDic)
+        msjStr = self.buildIFDStr(msjDic, pocket)
 
     return msjStr
+
+  def countSteps(self):
+    stepsStr = self.summarySteps.get() if self.summarySteps.get() is not None else ''
+    steps = stepsStr.split('\n')
+    return len(steps) - 1
+
+  def createGUISummary(self):
+    with open(self._getExtraPath("summary.txt"), 'w') as f:
+      if self.workFlowSteps.get():
+        f.write(self.createSummary())
+      else:
+        f.write(self.createSummary(createMSJDic(self)))
+
+  def createSummary(self, msjDic=None):
+    '''Creates the displayed summary from the internal state of the steps'''
+    sumStr = ''
+    if not msjDic:
+      for i, dicLine in enumerate(self.workFlowSteps.get().split('\n')):
+        if dicLine != '':
+          msjDic = eval(dicLine)
+          msjDic = self.addDefaultForMissing(msjDic)
+
+          sumStr += f'{i+1}) {self.buildSummaryLine(msjDic)}'
+    #       todo: build summary strs for each stagetype
+
+    else:
+      msjDic = self.addDefaultForMissing(msjDic)
+      sumStr += self.buildSummaryLine(msjDic)
+    return sumStr
+
+  def buildSummaryLine(self, msjDic):
+    sumStr = ''
+    sType = msjDic["stageType"]
+    sumStr += sType
+    if sType == self.getStageStr(COMPILE):
+      sumStr += f': {msjDic["residuesCutoff"]} Å from {msjDic["residueCenter"]}'
+
+    elif sType in [self.getStageStr(IDOCK), self.getStageStr(GLIDE)]:
+      sumStr += f': {msjDic["dockingMethod"]} with {msjDic["dockingPrecision"]} precision ' \
+                f'up to {msjDic["posesPerLig"]} poses per ligand'
+
+    elif sType == self.getStageStr(PPREP):
+      sumStr += f': {msjDic["convergenceRMSD"]} convergence RMSD'
+
+    elif sType in [self.getStageStr(PHELIX), self.getStageStr(PLOOP)]:
+      sumStr += f': up to {msjDic["helixLoopCutoff"]} Å from {msjDic["residuesRegion"]}'
+
+    elif sType in [self.getStageStr(PREF)]:
+      sumStr += f': {msjDic["nMinPasses"]} min. passes'
+
+    elif sType in [self.getStageStr(SORT)]:
+      if msjDic["sortType"] == 0:
+        sumStr += f': keep {msjDic["ligandKeep"]} for {msjDic["ligandFilter"]} by ligand'
+      else:
+        sumStr += f': keep {msjDic["poseKeep"]} for {msjDic["poseFilter"]} by pose'
+
+    elif sType in [self.getStageStr(TRIM)]:
+      if msjDic["trimResidues"] == 'Manual specification':
+        sumStr += f': selected residues'
+      else:
+        sumStr += f': by {msjDic["trimMethod"]}'
+
+    elif sType in [self.getStageStr(SCORE)]:
+        sumStr += f': {msjDic["scoreName"]}'
+
+    return sumStr + '\n'
+
+  def getResidueIds(self, resSelectionJson):
+    resDic = json.loads(resSelectionJson)
+    chain, idxs = resDic['chain'], resDic['index'].split('-')
+    return [f'{chain}:{idx}' for idx in range(int(idxs[0]), int(idxs[1])+1)]
+
+  def buildIFDStr(self, msjDic, pocket=None):
+    sType = msjDic["stageType"]
+    idfStr = f'STAGE {stageTypes[sType]}\n'
+    if sType == self.getStageStr(COMPILE):
+      idfStr += f'  CENTER {msjDic["residueCenter"]}\n  DISTANCE_CUTOFF	{msjDic["residuesCutoff"]}\n'
+      addStr, omitStr = msjDic['residuesAdd'], msjDic['residuesOmit']
+      if addStr.strip():
+        resIds = self.getResidueIdxs(addStr)
+        idfStr += f'  RESIDUES_TO_ADD {", ".join(resIds)}\n'
+      if omitStr.strip():
+        resIds = self.getResidueIdxs(omitStr)
+        idfStr += f'  RESIDUES_TO_OMIT {", ".join(resIds)}\n'
+
+    elif sType in [self.getStageStr(GLIDE), self.getStageStr(IDOCK)]:
+      idfStr += self.getBindingSiteStr(msjDic, pocket)
+      idfStr += self.getBoxDimensionsStr(msjDic, pocket)
+      idfStr += self.getGridArgsStr(msjDic)
+      idfStr += self.getDockArgsStr(msjDic)
+
+    elif sType == self.getStageStr(PPREP):
+      idfStr += f'  RMSD {msjDic["convergenceRMSD"]}\n'
+
+    elif sType in [self.getStageStr(PFLEX)]:
+      idfStr += self.getBindingSiteStr(msjDic, pocket)
+
+    elif sType in [self.getStageStr(PHELIX), self.getStageStr(PLOOP)]:
+      resIds = self.getResidueIdxs(msjDic["residuesRegion"])
+      idfStr += f'  START_RESIDUE {resIds[0]}\n  END_RESIDUE {resIds[-1]}\n' \
+                f'  DISTANCE_CUTOFF {msjDic["helixLoopCutoff"]}\n' \
+                f'  MAX_ENERGY_GAP {msjDic["maxEnergyGap"]}\n' \
+                f'  MAX_STRUCTURES {msjDic["maxStructures"]}\n'
+
+      if sType in [self.getStageStr(PHELIX)]:
+        resIds = self.getResidueIdxs(msjDic["residuesHelix"])
+        idfStr += f'  START_HELIX_RESIDUE {resIds[0]}\n  END_HELIX_RESIDUE {resIds[-1]}\n'
+      else:
+        idfStr += f'  INCLUDE_RESIDUE_LIST {str(msjDic["includeResList"]).upper()}\n'
+
+    elif sType in [self.getStageStr(PREF)]:
+      idfStr += f'  NUMBER_OF_PASSES {msjDic["nMinPasses"]}\n'
+
+    elif sType in [self.getStageStr(SCORE)]:
+      termLines = msjDic["scoreTerms"].split("\n")
+      termStr = '\n'.join([f'  TERM {tLine}' for tLine in termLines])
+      idfStr += f'  SCORE_NAME {msjDic["scoreName"]}\n{termStr}\n'
+
+    elif sType in [self.getStageStr(SORT)]:
+      if msjDic["sortType"] == 0:
+        idfStr += f'  LIGAND_FILTER {msjDic["ligandFilter"]}\n  LIGAND_KEEP {msjDic["ligandKeep"]}\n'
+      else:
+        idfStr += f'  POSE_FILTER {msjDic["poseFilter"]}\n  POSE_KEEP {msjDic["poseKeep"]}\n'
+
+    elif sType in [self.getStageStr(TRIM)]:
+      if msjDic["trimResidues"] == 'Manual specification':
+        resIds = self.getResidueIdxs(msjDic["residuesTrim"])
+        idfStr += f'  RESIDUES {", ".join(resIds)}\n'
+      else:
+        idfStr += f'  RESIDUES AUTO\n  METHOD {msjDic["trimMethod"]}\n'
+        if msjDic["trimMethod"] == 'BFACTOR':
+          idfStr += f'  BFACTOR_CUTOFF {msjDic["cutOffBFactor"]}\n  MAX_RESIDUES {msjDic["maxBFactor"]}\n'
+        else:
+          idfStr += f'  MAX_FLEXIBILITY {msjDic["maxFlexibility"]}\n  RESOLUTION {msjDic["resolFlexibility"]}\n'
+
+    elif sType in [self.getStageStr(VDW)]:
+      idfStr += self.getBindingSiteStr(msjDic, pocket)
+
+
+    extraParams = msjDic['extraParams']
+    if extraParams.strip():
+      idfStr += extraParams
+    return idfStr + '\n'
+
+  def getGridArgsStr(self, msjDic):
+    gridDic = {}
+    return self.dic2StrArgs(gridDic, toAdd='GRIDGEN_')
+
+  def getDockArgsStr(self, msjDic):
+    dockDic = {}
+    dMethod = msjDic['dockingMethod'].split('(')[1].replace(')', '')
+    dockDic['DOCKING_METHOD'] = dMethod if dMethod in ['confgen', 'rigid'] else 'confgen'
+
+    dPrecision = msjDic['dockingPrecision'].split('(')[1].replace(')', '')
+    dockDic['PRECISION'] = dPrecision
+
+    dockDic['POSES_PER_LIG'] = msjDic['posesPerLig']
+    return self.dic2StrArgs(dockDic, toAdd='DOCKING_')
+
+  def getBoxDimensionsStr(self, msjDic, pocket):
+    gridDic = {}
+    if self.fromPockets.get() == GRID:
+      gridDic['INNERBOX'] = list(map(str, grid.getInnerBox()))
+      gridDic['OUTERBOX'] = list(map(str, grid.getOuterBox()))
+    else:
+      if msjDic["innerAction"] == 0:
+        gridDic['INNERBOX'] = f'{msjDic["innerX"], msjDic["innerY"], msjDic["innerZ"]}'
+      else:
+        diam = self.getDiameter(msjDic, pocket)
+        gridDic['INNERBOX'] = f'{diam * msjDic["diameterNin"]}'
+
+      if msjDic["outerAction"] == 0:
+        gridDic['OUTERBOX'] = f'{msjDic["outerX"], msjDic["outerY"], msjDic["outerZ"]}'
+      else:
+        diam = self.getDiameter(msjDic, pocket)
+        gridDic['OUTERBOX'] = f'{diam * msjDic["diameterNout"]}'
+    return self.dic2StrArgs(gridDic)
+
+  def getBindingSiteStr(self, msjDic, pocket=None):
+    gridDic = {}
+    gridDic['BINDING_SITE'] = self.getBindingSiteCenter(pocket)
+    return self.dic2StrArgs(gridDic)
+
+  def getBindingSiteCenter(self, pocket=None):
+    if self.fromPockets.get() == AS:
+      inAS = self.inputAtomStruct.get()
+      pdbFile = inAS.getFileName()
+      if not pdbFile.endswith('.pdb'):
+        pdbFile = inAS.convert2PDB(self._getExtraPath('inputStructure.pdb'))
+
+      _, x, y, z = calculate_centerMass(pdbFile)
+    elif self.fromPockets.get() == POCKET:
+      x, y, z = pocket.calculateMassCenter()
+    elif self.fromPockets.get() == GRID:
+      x, y, z = grid.getCenter()
+    return list(map(str, [x, y, z]))
+
+  def getDiameter(self, msjDic, pocket=None):
+    if self.fromPockets.get() == AS:
+      d = 2 * msjDic['radius']
+    elif self.fromPockets.get() == POCKET:
+      d = pocket.getDiameter()
+    return d
+
+  def dic2StrArgs(self, argsDic, toAdd=''):
+    iStr = ''
+    for aKey, aVal in argsDic.items():
+      iStr += f'  {toAdd}{aKey} {aVal}\n'
+    return iStr
+
+
+
+
+

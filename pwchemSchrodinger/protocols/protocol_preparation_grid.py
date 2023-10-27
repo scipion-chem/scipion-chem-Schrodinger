@@ -31,7 +31,7 @@ from subprocess import CalledProcessError
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import AtomicStructHandler
 from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, \
-    FloatParam, IntParam, EnumParam
+    FloatParam, IntParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.object import String, Float
 from pyworkflow.utils import Message
 from pyworkflow.utils.path import createLink, makePath
@@ -89,14 +89,17 @@ class ProtSchrodingerGrid(EMProtocol):
 
         group = form.addGroup('Grid hydrogen bonds', condition=notManualCondition)
         group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
+                       expertLevel=LEVEL_ADVANCED,
                        help='Accept aromatic hydrogens as potential H-bond donors.')
         group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
-                       condition='HbondDonorAromH',
+                       condition='HbondDonorAromH', expertLevel=LEVEL_ADVANCED,
                        help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
                             'The cutoff is applied to the actual (signed) charge, not the absolute value.')
         group.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
+                       expertLevel=LEVEL_ADVANCED,
                        help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
         group.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
+                       expertLevel=LEVEL_ADVANCED,
                        help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
                             '(noncovalent interaction) donors')
         return form
