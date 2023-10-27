@@ -170,8 +170,13 @@ def maeLineSplit(maeLine):
 
 def convertMAE2Mol2(mol, outDir):
     molName = mol.getUniqueName()
-    poseId, fnRaw = mol.poseFile.get().split('@')
-    mol.setPoseId(poseId)
+    poseFile = mol.poseFile.get()
+    if '@' in poseFile:
+        poseId, fnRaw = poseFile.split('@')
+        mol.setPoseId(poseId)
+    else:
+        poseId = mol.getPoseId()
+        fnRaw = poseFile
 
     fnAux = os.path.join(outDir, f"tmp_{molName}_{poseId}.mae")
     fnOut = os.path.join(outDir, '{}.{}'.format(molName, 'mol2'))
@@ -226,21 +231,6 @@ def getConfId(molFn, molName):
         return molFn.split(molName)[1].split('-')[1].split('.')[0]
     except Exception:
         return None
-
-def createMSJDic(protocol):
-    msjDic = {}
-    for pName in protocol.getStageParamsDic(type='Normal').keys():
-      if hasattr(protocol, pName):
-        msjDic[pName] = getattr(protocol, pName).get()
-      else:
-        print('Something is wrong with parameter ', pName)
-
-    for pName in protocol.getStageParamsDic(type='Enum').keys():
-      if hasattr(protocol, pName):
-        msjDic[pName] = protocol.getEnumText(pName)
-      else:
-        print('Something is wrong with parameter ', pName)
-    return msjDic
 
 def buildSimulateStr(protocol, msjDic):
     '''Checks the values stored in the msjDic and trnaslates them into msjStr.
