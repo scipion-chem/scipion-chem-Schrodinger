@@ -35,6 +35,7 @@ from .. import Plugin
 from pwchem import Plugin as pwchemPlugin
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import writePDBLine, splitPDBLine
+from pwchem.constants import OPENBABEL_DIC
 
 class ProtSchrodingerSiteMap(EMProtocol):
     """Calls sitemap to predict possible binding sites"""
@@ -63,7 +64,7 @@ class ProtSchrodingerSiteMap(EMProtocol):
               outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
               args = ' -i "{}" -of pdb --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
                                                                              os.path.abspath(outDir), outName)
-              pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+              pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
               pdbFile = os.path.abspath(os.path.join(outDir, '{}.pdb'.format(outName)))
           else:
               pdbFile = inFile

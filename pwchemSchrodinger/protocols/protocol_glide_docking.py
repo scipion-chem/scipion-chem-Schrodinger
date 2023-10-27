@@ -34,6 +34,7 @@ from pyworkflow.utils.path import makePath
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading
 from pwchem import Plugin as pwchemPlugin
+from pwchem.constants import OPENBABEL_DIC
 
 from .. import Plugin as schrodinger_plugin
 from ..protocols.protocol_preparation_grid import ProtSchrodingerGrid
@@ -408,7 +409,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             outDir = os.path.abspath(self._getTmpPath())
             args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
                                                                                os.path.abspath(outDir), baseName)
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
             auxFile = os.path.abspath(os.path.join(outDir, '{}_AD4.sdf'.format(baseName)))
             fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
             args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, fnSmall)
