@@ -168,7 +168,7 @@ def maeLineSplit(maeLine):
     elements.append(ele)
     return elements
 
-def convertMAE2Mol2(mol, outDir):
+def convertMAE2Mol2(mol, outDir, subset=True):
     molName = mol.getUniqueName()
     poseFile = mol.poseFile.get()
     if '@' in poseFile:
@@ -178,12 +178,15 @@ def convertMAE2Mol2(mol, outDir):
         poseId = mol.getPoseId()
         fnRaw = poseFile
 
-    fnAux = os.path.join(outDir, f"tmp_{molName}_{poseId}.mae")
     fnOut = os.path.join(outDir, '{}.{}'.format(molName, 'mol2'))
 
     try:
-        args = f"-n {poseId} {os.path.abspath(fnRaw)} -o {fnAux}"
-        subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
+        if subset:
+            fnAux = os.path.join(outDir, f"tmp_{molName}_{poseId}.mae")
+            args = f"-n {poseId} {os.path.abspath(fnRaw)} -o {fnAux}"
+            subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
+        else:
+            fnAux = os.path.abspath(fnRaw)
 
         args = f'{fnAux} {os.path.abspath(fnOut)}'
         subprocess.run(f'{structConvertProg} {args}', check=True, capture_output=True, text=True, shell=True)
@@ -201,9 +204,9 @@ def convertMAE2Mol2(mol, outDir):
         print(f"Failed to convert molecule {molName}")
 
 
-def convertMAEMolSet(molSet, outDir, njobs, updateSet=True):
+def convertMAEMolSet(molSet, outDir, njobs, updateSet=True, subset=True):
     '''Convert in parallel a set of SetOfSmallMolecules from their MAE format to MOL2'''
-    convMols = runInParallel(convertMAE2Mol2, outDir, paramList=[item.clone() for item in molSet], jobs=njobs)
+    convMols = runInParallel(convertMAE2Mol2, outDir, subset, paramList=[item.clone() for item in molSet], jobs=njobs)
     if updateSet:
         for mol in convMols:
             molSet.update(mol)

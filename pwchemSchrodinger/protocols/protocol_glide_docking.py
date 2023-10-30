@@ -353,14 +353,14 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         allSmallList = performBatchThreading(self.performOutputParsing, gridDirs, nt, cloneItem=False,
                                              smallDict=smallDict, allMaeFile=allMaeFile)
 
-        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
-        for small in allSmallList:
-            outputSet.append(small)
-
         if self.convertOutput2Mol2:
             outDir = os.path.abspath(self._getExtraPath('outputSmallMolecules'))
             os.mkdir(outDir)
-            convertMAEMolSet(outputSet, outDir, nt)
+            allSmallList = convertMAEMolSet(allSmallList, outDir, nt, updateSet=False, subset=False)
+
+        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
+        for small in allSmallList:
+            outputSet.append(small)
 
         outputSet.setDocked(True)
         outputSet.proteinFile.set(self.getOriginalReceptorFile())
@@ -403,20 +403,8 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     def convert2mol2(self, fnSmall, it):
         baseName = os.path.splitext(os.path.basename(fnSmall))[0]
         outFile = os.path.abspath(self._getTmpPath('{}.mol2'.format(baseName)))
-        if fnSmall.endswith('.pdbqt'):
-            #Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
-            # 3) Switch to mol2 to manage atom labels
-            outDir = os.path.abspath(self._getTmpPath())
-            args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
-                                                                               os.path.abspath(outDir), baseName)
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
-            auxFile = os.path.abspath(os.path.join(outDir, '{}_AD4.sdf'.format(baseName)))
-            fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
-            args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, fnSmall)
-            subprocess.check_call([progLigPrep, *args.split()])
-        
-        args = "{} {}".format(fnSmall, outFile)
-        subprocess.check_call([structConvertProg, *args.split()])
+        args = f' -i "{os.path.abspath(fnSmall)}" -o {outFile} --outputDir {self._getTmpPath()}'
+        pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=self._getTmpPath(), popen=True)
         while not os.path.exists(outFile):
             time.sleep(0.2)
         return outFile
