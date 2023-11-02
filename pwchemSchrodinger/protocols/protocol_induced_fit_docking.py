@@ -133,6 +133,9 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                    help='Comma-separated list of residues to omit inside of the cutoff to the refinement list')
 
     # GLIDE_DOCKING2 and INITIAL_DOCKING stage parameters
+    group.addParam('selfDock', BooleanParam, label='Dock from previous dock: ',
+                   default=False, condition=f'stageType in [{GLIDE}, {IDOCK}]',
+                   help='Whether to dock from previously docked ligands or not (needed for second round docking)')
     form = self._defineGlideParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
 
     # PPREP stage parameters
@@ -601,7 +604,8 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     elif sType in [self.getStageStr(GLIDE), self.getStageStr(IDOCK)]:
       idfStr += self.getBindingSiteStr(msjDic, pocket)
       idfStr += self.getBoxDimensionsStr(msjDic, pocket)
-      idfStr += f'  LIGAND_FILE {self.getAllLigandsFile()}\n  LIGANDS_TO_DOCK all\n'
+      l2dock = 'self' if msjDic['selfDock'] in ['True', True] else 'all'
+      idfStr += f'  LIGAND_FILE {self.getAllLigandsFile()}\n  LIGANDS_TO_DOCK {l2dock}\n'
       idfStr += self.getGridArgsStr(msjDic)
       idfStr += self.getDockArgsStr(msjDic)
 
@@ -658,6 +662,9 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       idfStr += extraParams
     return idfStr + '\n'
 
+  def _validate(self):
+    return []
+
   def getGridArgsStr(self, msjDic):
     gridDic = {}
     return self.dic2StrArgs(gridDic, toAdd='GRIDGEN_')
@@ -694,7 +701,11 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
   def getBindingSiteStr(self, msjDic, pocket=None):
     gridDic = {}
-    gridDic['BINDING_SITE'] = 'coords ' + ','.join(self.getBindingSiteCenter(pocket))
+    if msjDic['selfDock'] in [True, 'True']:
+      gridDic['BINDING_SITE'] = 'ligand Z:999'
+    else:
+      gridDic['BINDING_SITE'] = 'coords ' + ','.join(self.getBindingSiteCenter(pocket))
+
     return self.dic2StrArgs(gridDic)
 
   def getBindingSiteCenter(self, pocket=None):

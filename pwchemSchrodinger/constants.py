@@ -154,12 +154,12 @@ DESMOND_NPT_MD = '''\
 '''
 
 IFD_STAN = '''\
-{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "posesPerLig": 20}
+{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "posesPerLig": 20, "selfDock": "False"}
 {"stageType": "Compile residues", "residuesCutoff": 5.0}
 {"stageType": "Residues refinement", "nMinPasses": 1}
 {"stageType": "Sort and filter", "sortType": "Pose", "poseFilter": "r_psp_Prime_Energy", "poseKeep": "30.0"}
 {"stageType": "Sort and filter", "sortType": "Pose", "poseFilter": "r_psp_Prime_Energy", "poseKeep": "20#"}
-{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "posesPerLig": 1}
+{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "posesPerLig": 1, "selfDock": "True"}
 {"stageType": "Score poses", "scoreName": "r_psp_IFDScore", \
 "scoreTerms": "  TERM 1.0,r_i_glide_gscore,0\\n  TERM 0.05,r_psp_Prime_Energy,1"}
 
