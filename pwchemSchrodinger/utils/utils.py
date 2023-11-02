@@ -185,12 +185,15 @@ def convertMAE2Mol2(mol, outDir, subset=True):
             fnAux = os.path.join(outDir, f"tmp_{molName}_{poseId}.mae")
             args = f"-n {poseId} {os.path.abspath(fnRaw)} -o {fnAux}"
             subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
+            isAux = True
         else:
             fnAux = os.path.abspath(fnRaw)
+            isAux = False
 
         args = f'{fnAux} {os.path.abspath(fnOut)}'
         subprocess.run(f'{structConvertProg} {args}', check=True, capture_output=True, text=True, shell=True)
-        os.remove(fnAux)
+        if isAux:
+            os.remove(fnAux)
 
         if os.path.splitext(fnOut)[1] == '.mol2':
             fnOut = relabelAtomsMol2(fnOut)
