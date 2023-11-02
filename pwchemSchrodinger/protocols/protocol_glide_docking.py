@@ -302,7 +302,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         else:
             print('Failed to find ligands for grid {}'.format(gridId))
 
-    def performOutputParsing(self, gridDirs, molLists, it, smallDict, allMaeFile):
+    def performOutputParsing(self, gridDirs, molLists, it, smallDict):
         allSmallList = []
         for gridDir in gridDirs:
             gridId = gridDir.split('_')[1]
@@ -327,8 +327,8 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
                     small.setDockId(self.getObjId())
                     small.setGridId(gridId)
 
-                    recFile, posFile = self.divideMaeComplex(fnPv, posIdx=i+1)
-                    small.setProteinFile(recFile)
+                    _, posFile = self.divideMaeComplex(fnPv, posIdx=i+1)
+                    small.setProteinFile(self.getInputMaeFile())
                     small.setPoseFile(posFile)
                     small.setPoseId(i + 1)
 
@@ -346,12 +346,12 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             if fnBase not in smallDict:
                 smallDict[fnBase] = small.clone()
 
-        allMaeFile = self.mergeMAEfiles()
+        # allMaeFile = self.mergeMAEfiles()
         fnStruct = self.getInputMaeFile()
 
         gridDirs = self.getGridDirs(complete=True)
         allSmallList = performBatchThreading(self.performOutputParsing, gridDirs, nt, cloneItem=False,
-                                             smallDict=smallDict, allMaeFile=allMaeFile)
+                                             smallDict=smallDict)
 
         if self.convertOutput2Mol2:
             outDir = os.path.abspath(self._getExtraPath('outputSmallMolecules'))
