@@ -33,11 +33,13 @@ information such as name and number of residues.
 """
 
 # Imports
+import json
+
 import pyworkflow.wizard as pwizard
 from pwchem.wizards import AddElementSummaryWizard, DeleteElementWizard, WatchElementWizard
 
 from ..protocols import ProtSchrodingerDesmondMD, ProtSchrodingerIFD
-from ..constants import DESMOND_NPT_MD
+from ..constants import DESMOND_NPT_MD, IFD_STAN, IFD_EXTE
 
 AddElementSummaryWizard().addTarget(protocol=ProtSchrodingerDesmondMD,
                                     targets=['insertStep'],
@@ -79,4 +81,31 @@ class AddDefaultStepsWizard(pwizard.Wizard):
             form.setVar('workFlowSteps', '')
             newSum = protocol.createSummary()
             form.setVar('summarySteps', newSum)
+
+
+class AddIFDDefaultStepsWizard(pwizard.Wizard):
+  """Delete the step of the workflow defined by the index"""
+  _targets = [(ProtSchrodingerIFD, ['defSteps'])]
+
+  def parseMSJStrs(self, protocol, msjStrs):
+    msjDics = []
+    for msjLine in msjStrs.split('\n'):
+      if msjLine.strip():
+        msjDic = json.loads(msjLine.strip())
+        msjDics.append(protocol.addDefaultForMissing(msjDic))
+    return msjDics
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    if protocol.defSteps.get() == protocol.STAN:
+      msjDics = self.parseMSJStrs(protocol, IFD_STAN)
+      form.setVar('workFlowSteps', '\n'.join(map(str, msjDics)) + '\n')
+    elif protocol.defSteps.get() == protocol.EXTE:
+      msjDics = self.parseMSJStrs(protocol, IFD_EXTE)
+      form.setVar('workFlowSteps', '\n'.join(map(str, msjDics)) + '\n')
+    elif protocol.defSteps.get() == protocol.NONE:
+      form.setVar('workFlowSteps', '')
+
+    newSum = protocol.createSummary()
+    form.setVar('summarySteps', newSum)
 
