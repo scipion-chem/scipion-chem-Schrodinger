@@ -98,9 +98,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     cutoffDistanceLabel = 'Cutoff distance:'
 
     form.addSection(label=Message.LABEL_INPUT)
-    form = self._defineGlideReceptorParams(form)
-    form = self._defineGridParams(form, notManualCondition='fromPockets!=2')
-
+    self._defineGlideReceptorParams(form)
     group = form.addGroup('Ligands')
     group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules:', help='Input small molecules to be docked with IFD')
@@ -108,6 +106,8 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                   choices=['None', 'Standard', 'Extended sampling'], default=self.NONE,
                   help='Choose and add with the wizard some default IFD steps which will be reflected into '
                        'the summary')
+
+    form = self._defineGridSection(form, condition='fromPockets!=2')
 
     form.addSection('IFD stages')
     group = form.addGroup('Add Stage')
@@ -136,7 +136,9 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     group.addParam('selfDock', BooleanParam, label='Dock from previous dock: ',
                    default=False, condition=f'stageType in [{GLIDE}, {IDOCK}]',
                    help='Whether to dock from previously docked ligands or not (needed for second round docking)')
-    form = self._defineGlideParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
+    self._defineGeneralGlideParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
+    self._defineLigandParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
+    self._defineOutputGlideParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
 
     # PPREP stage parameters
     group.addParam('convergenceRMSD', FloatParam, label='Convergence RMSD: ',
