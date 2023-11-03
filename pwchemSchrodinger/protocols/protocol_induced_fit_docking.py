@@ -385,26 +385,27 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
   def recoverScoreFile(self, gridDir):
     '''Recovers the last scoring file from the IFD run if any scoring stage performed'''
     ds = []
-    for d in os.listdir(os.path.join(gridDir, 'ifd_workdir')):
+    for d in os.listdir(os.path.join(self._getExtraPath(gridDir), 'ifd_workdir')):
       if 'scoring_dir' in d:
         ds.append(d)
 
     if ds:
       fd = natural_sort(ds)[-1]
-      return os.path.join(gridDir, 'ifd_workdir', fd, 'scores.csv')
+      return os.path.join(self._getExtraPath(gridDir), 'ifd_workdir', fd, 'scores.csv')
 
   def getMAETitle(self, maeFile):
     if maeFile.endswith('gz'):
-      f = gzip.open(maeFile)
+      f = gzip.open(maeFile, 'r')
     else:
-      f = open(maeFile)
+      f = open(maeFile, 'r')
 
     ready = False
     for line in f:
-      if line.startswith(' s_m_title'):
+      line = line.decode()
+      if line.strip().startswith('s_m_title'):
         ready = True
-      elif ready and line.startswith(' :::'):
-        title = f.readline().strip()
+      elif ready and line.strip().startswith(':::'):
+        title = f.readline().decode().strip()
         break
     f.close()
     return title
@@ -414,21 +415,15 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     allSmallList = []
     for gridDir in gridDirs:
       gridId = gridDir.split('_')[1]
-      outFile = os.path.join(gridDir, 'ifd-out.maegz')
       scFile = self.recoverScoreFile(gridDir)
 
       smallList = []
-
-      args = f' -n 1 {os.path.abspath(outFile)} -o {os.path.abspath(recFile)}'
-      subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True, cwd=outDir)
-
       with open(scFile) as sf:
         sf.readline()
         for i, line in enumerate(sf.readlines()):
           tokens = line.split(',')
-          score, complexFile = tokens[2], tokens[5]
-          complexFile = os.path.join(os.path.dirname(scFile), os.path.split(complexFile)[-1])
-
+          score, complexFile = tokens[2], tokens[5].strip()
+          complexFile = os.path.abspath(os.path.join(os.path.dirname(scFile), os.path.split(complexFile)[-1]))
           fnBase = self.getMAETitle(complexFile)
 
           small = SmallMolecule()
@@ -452,13 +447,11 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       nt = self.numberOfThreads.get()
       smallDict = {}
       for mol in self.inputLibrary.get():
-          fnBase = getBaseName(mol.getFileName())
+          fnBase = mol.getMolName()
           if fnBase not in smallDict:
               smallDict[fnBase] = mol.clone()
 
-      recFile = self.getInputMaeFile()
       gridDirs = self.getGridDirs(complete=True)
-
       allSmallList = performBatchThreading(self.performOutputParsing, gridDirs, nt, cloneItem=False,
                                            smallDict=smallDict)
 
@@ -468,7 +461,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
       outputSet.setDocked(True)
       outputSet.proteinFile.set(self.getOriginalReceptorFile())
-      outputSet.structFile = pwobj.String(recFile)
+      outputSet.structFile = pwobj.String(self.getInputMaeFile())
       self._defineOutputs(outputSmallMolecules=outputSet)
 
   def getGridDirs(self, complete=False):
