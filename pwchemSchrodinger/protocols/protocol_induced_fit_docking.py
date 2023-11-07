@@ -323,7 +323,6 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
         nThreads[i % nP] += 1
 
     nThreads = list(map(lambda x: x if x != 0 else 1, nThreads))
-    nThreads = 1 if nThreads == 0 else nThreads
     return nThreads
 
   # --------------------------- INSERT steps functions --------------------
