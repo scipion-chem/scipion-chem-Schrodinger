@@ -99,8 +99,8 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     # Defining costant variables
     chainListHelp = 'Use the wizard to select the chain you want'
     residueListHelp = 'Use the wizard to select the residues you want'
-    wizardHelp = 'Click on the wizard to save the specified residues in the list below'
     cutoffDistanceLabel = 'Cutoff distance:'
+    isGridStr = 'fromPockets!=2'
 
     form.addSection(label=Message.LABEL_INPUT)
     self._defineGlideReceptorParams(form)
@@ -112,9 +112,9 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                   help='Choose and add with the wizard some default IFD steps which will be reflected into '
                        'the summary')
 
-    form = self._defineGridSection(form, condition='fromPockets!=2')
-    self._defineInnerGridParams(form, condition=f'fromPockets!=2')
-    self._defineOuterGridParams(form, condition=f'fromPockets!=2')
+    form = self._defineGridSection(form, condition=isGridStr)
+    self._defineInnerGridParams(form, condition=isGridStr)
+    self._defineOuterGridParams(form, condition=isGridStr)
 
     form.addSection('IFD stages')
     group = form.addGroup('Add Stage')
@@ -591,7 +591,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
     elif sType in [self.getStageStr(TRIM)]:
       if msjDic["trimResidues"] == 'Manual specification':
-        sumStr += f': selected residues'
+        sumStr += ': selected residues'
       else:
         sumStr += f': by {msjDic["trimMethod"]}'
 

@@ -56,7 +56,6 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     _label = 'docking (glide)'
     _program = ""
 
-    # todo: inherit params and add new
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
         self.stepsExecutionMode = STEPS_PARALLEL
@@ -382,7 +381,6 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             if fnBase not in smallDict:
                 smallDict[fnBase] = small.clone()
 
-        # allMaeFile = self.mergeMAEfiles()
         fnStruct = self.getInputMaeFile()
 
         gridDirs = self.getGridDirs(complete=True)
