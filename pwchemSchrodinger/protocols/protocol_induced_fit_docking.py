@@ -51,6 +51,8 @@ ifdProg = schrodingerPlugin.getHome('ifd')
 runPath = schrodingerPlugin.getHome('run')
 
 splitProg = schrodingerPlugin.getMMshareDir('python/common/split_structure.py')
+closeScript = schrodingerPlugin.getPluginHome('scripts/getCloseResidues.py')
+
 
 AS, POCKET, GRID = 0, 1, 2
 
@@ -425,7 +427,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
           small.setGridId(gridId)
 
           small._energy = pwobj.Float(glideEnergy)
-          for j, sName in scoreNames:
+          for j, sName in enumerate(scoreNames):
             setattr(small, sName, pwobj.Float(tokens[j+2]))
           small.setProteinFile(recFile)
           small.setPoseFile(posFile)
@@ -619,12 +621,13 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
         idfStr += f'  RESIDUES_TO_OMIT {", ".join(resIds)}\n'
 
     elif sType in [self.getStageStr(GLIDE), self.getStageStr(IDOCK)]:
+      usePrecision = sType == self.getStageStr(GLIDE)
       idfStr += self.getBindingSiteStr(msjDic, pocket)
       idfStr += self.getBoxDimensionsStr(msjDic, pocket)
       l2dock = 'self' if msjDic['selfDock'] in ['True', True] else 'all'
       idfStr += f'  LIGAND_FILE {self.getAllLigandsFile()}\n  LIGANDS_TO_DOCK {l2dock}\n'
       idfStr += self.getGridArgsStr(msjDic)
-      idfStr += self.getDockArgsStr(msjDic)
+      idfStr += self.getDockArgsStr(msjDic, usePrecision)
 
     elif sType == self.getStageStr(PPREP):
       idfStr += f'  RMSD {msjDic["convergenceRMSD"]}\n'
@@ -683,13 +686,14 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     gridDic = {}
     return self.dic2StrArgs(gridDic, toAdd='GRIDGEN_')
 
-  def getDockArgsStr(self, msjDic):
+  def getDockArgsStr(self, msjDic, usePrecision):
     dockDic = {}
     dMethod = msjDic['dockingMethod'].split('(')[1].replace(')', '')
     dockDic['DOCKING_METHOD'] = dMethod if dMethod in ['confgen', 'rigid'] else 'confgen'
 
     dPrecision = msjDic['dockingPrecision'].split('(')[1].replace(')', '')
-    dockDic['PRECISION'] = dPrecision
+    if usePrecision:
+      dockDic['PRECISION'] = dPrecision
 
     dockDic['POSES_PER_LIG'] = msjDic['posesPerLig']
     return self.dic2StrArgs(dockDic, toAdd='DOCKING_')
@@ -718,12 +722,24 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     if msjDic['selfDock'] in [True, 'True']:
       gridDic['BINDING_SITE'] = 'ligand Z:999'
     else:
-      gridDic['BINDING_SITE'] = 'coords ' + ','.join(self.getBindingSiteCenter(pocket))
+      gridDic['BINDING_SITE'] = 'residues ' + self.getBindingSiteCenter(pocket)
 
     return self.dic2StrArgs(gridDic)
 
+  def getCloseResidues(self, maeFile, center, pocketId, radius=5):
+    closeFile = f"closeResidues_{pocketId}.txt"
+    args = f' {maeFile} {radius} "{center}" {closeFile}'
+    subprocess.run(f'{runPath} {closeScript} {args}', check=True, capture_output=True, text=True, shell=True,
+                   cwd=self._getTmpPath())
+
+    with open(self._getTmpPath(closeFile)) as f:
+      f.readline()
+      res = f.readline()
+    return res
+
   def getBindingSiteCenter(self, pocket=None):
     if self.fromPockets.get() == AS:
+      pocketId = None
       inAS = self.inputAtomStruct.get()
       pdbFile = inAS.getFileName()
       if not pdbFile.endswith('.pdb'):
@@ -731,15 +747,14 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
       _, x, y, z = calculate_centerMass(pdbFile)
     elif self.fromPockets.get() == POCKET:
+      pocketId = pocket.getObjId()
       x, y, z = pocket.calculateMassCenter()
     elif self.fromPockets.get() == GRID:
+      pocketId = pocket.getObjId()
       x, y, z = pocket.getCenter()
 
-    coords = []
-    for c in [x, y, z]:
-      coords.append(f'{c:.2f}')
-
-    return coords
+    closeResStr = self.getCloseResidues(self.getInputReceptorFile(), [x, y, z], pocketId)
+    return closeResStr
 
   def getDiameter(self, msjDic, pocket=None):
     if self.fromPockets.get() == AS:
