@@ -51,7 +51,7 @@ ifdProg = schrodingerPlugin.getHome('ifd')
 runPath = schrodingerPlugin.getHome('run')
 
 splitProg = schrodingerPlugin.getMMshareDir('python/common/split_structure.py')
-# closeScript = schrodingerPlugin.getPluginHome('scripts/getCloseResidues.py')
+closeScript = schrodingerPlugin.getPluginHome('scripts/getCloseResidues.py')
 
 
 AS, POCKET, GRID = 0, 1, 2
@@ -722,20 +722,20 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     if msjDic['selfDock'] in [True, 'True']:
       gridDic['BINDING_SITE'] = 'ligand Z:999'
     else:
-      gridDic['BINDING_SITE'] = 'coords ' + ','.join(self.getBindingSiteCenter(pocket))
+      gridDic['BINDING_SITE'] = 'residues ' + self.getBindingSiteCenter(pocket)
 
     return self.dic2StrArgs(gridDic)
-  #
-  # def getCloseResidues(self, maeFile, center, pocketId, radius=5):
-  #   closeFile = f"closeResidues_{pocketId}.txt"
-  #   args = f' {maeFile} {radius} "{center}" {closeFile}'
-  #   subprocess.run(f'{runPath} {closeScript} {args}', check=True, capture_output=True, text=True, shell=True,
-  #                  cwd=self._getTmpPath())
-  #
-  #   with open(self._getTmpPath(closeFile)) as f:
-  #     f.readline()
-  #     res = f.readline()
-  #   return res
+
+  def getCloseResidues(self, maeFile, center, pocketId, radius=5):
+    closeFile = f"closeResidues_{pocketId}.txt"
+    args = f' {maeFile} {radius} "{center}" {closeFile}'
+    subprocess.run(f'{runPath} {closeScript} {args}', check=True, capture_output=True, text=True, shell=True,
+                   cwd=self._getTmpPath())
+
+    with open(self._getTmpPath(closeFile)) as f:
+      f.readline()
+      res = f.readline()
+    return res
 
   def getBindingSiteCenter(self, pocket=None):
     if self.fromPockets.get() == AS:
@@ -753,9 +753,8 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       pocketId = pocket.getObjId()
       x, y, z = pocket.getCenter()
 
-    coords = list(map(str, [x, y, z]))
-    # closeResStr = self.getCloseResidues(self.getInputReceptorFile(), [x, y, z], pocketId)
-    return coords
+    closeResStr = self.getCloseResidues(self.getInputReceptorFile(), [x, y, z], pocketId)
+    return closeResStr
 
   def getDiameter(self, msjDic, pocket=None):
     if self.fromPockets.get() == AS:
