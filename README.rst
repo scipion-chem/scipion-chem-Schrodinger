@@ -10,6 +10,8 @@ These tools will make it possible to carry out different functions for Virtual D
 Therefore, this plugin allows to use programs from the Schrodinger software suite
 within the Scipion framework.
 
+Full documentation to this plugin can be found in the `official documentation page <https://scipion-chem.github.io/docs/plugins/schrodinger/index.html>`_.
+
 ===================
 Install this plugin
 ===================
