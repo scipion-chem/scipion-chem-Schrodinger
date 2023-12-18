@@ -419,9 +419,9 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
       molFile, recFile = os.path.join(outDir, getBaseName(maeFile) + f'_lig_{posIdx+1}.maegz'), \
                          os.path.join(outDir, getBaseName(maeFile) + '_rec.maegz')
       args = f' -n 1 {os.path.abspath(maeFile)} -o {os.path.abspath(recFile)}'
-      self.runJob(maeSubsetProg, args, cwd=outDir)
+      subprocess.check_call(maeSubsetProg + args, cwd=outDir, shell=True)
       args = f' -n {posIdx+1} {os.path.abspath(maeFile)} -o {os.path.abspath(molFile)}'
-      self.runJob(maeSubsetProg, args, cwd=outDir)
+      subprocess.check_call(maeSubsetProg + args, cwd=outDir, shell=True)
       return recFile, molFile
 
     def _validate(self):
