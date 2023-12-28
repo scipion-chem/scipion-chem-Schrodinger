@@ -456,12 +456,12 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
                                                                                os.path.abspath(outDir), baseName)
             pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
-            auxFile = os.path.abspath(os.path.join(outDir, '{}_AD4.sdf'.format(baseName)))
+            auxFile = os.path.join(outDir, '{}_AD4.sdf'.format(baseName))
             fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
             args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, fnSmall)
             subprocess.check_call([progLigPrep, *args.split()])
         
-        args = "{} {}".format(fnSmall, outFile)
+        args = "{} {}".format(os.path.abspath(fnSmall), outFile)
         subprocess.check_call([structConvertProg, *args.split()])
         while not os.path.exists(outFile):
             time.sleep(0.2)
