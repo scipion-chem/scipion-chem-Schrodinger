@@ -37,7 +37,7 @@ from pwchem import Plugin as pwchemPlugin
 
 from .. import Plugin as schrodinger_plugin
 from ..protocols.protocol_preparation_grid import ProtSchrodingerGrid
-from ..utils.utils import putMol2Title, convertMAEMolSet
+from ..utils.utils import putMolFileTitle, convertMAEMolSet
 
 glideProg = schrodinger_plugin.getHome('glide')
 progLigPrep = schrodinger_plugin.getHome('ligprep')
@@ -511,7 +511,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
                 fnSmall = small.getFileName()
                 if not fnSmall.endswith('.mol2'):
                     fnSmall = self.convert2mol2(fnSmall, it)
-                putMol2Title(fnSmall)
+                putMolFileTitle(fnSmall, ext='mol2')
                 with open(fnSmall) as fhLigand:
                     fh.write(fhLigand.read())
 
