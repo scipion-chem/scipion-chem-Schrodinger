@@ -508,7 +508,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         curAllLigandsFile = self.getAllLigandsFile(suffix=it)
         with open(curAllLigandsFile, 'w') as fh:
             for small in ligSet:
-                fnSmall = small.getFileName()
+                fnSmall = small.getFileName() if not small.getPoseFile() else small.getPoseFile()
                 if not fnSmall.endswith('.mol2'):
                     fnSmall = self.convert2mol2(fnSmall, it)
                 putMolFileTitle(fnSmall, ext='mol2')
