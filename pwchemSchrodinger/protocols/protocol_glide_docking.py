@@ -449,23 +449,24 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     def convert2mol2(self, fnSmall, it):
         baseName = getBaseName(fnSmall)
         outFile = os.path.abspath(self._getTmpPath('{}.mol2'.format(baseName)))
-        if not os.path.exists(outFile):
-            if fnSmall.endswith('.pdbqt'):
-                #Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
-                # 3) Switch to mol2 to manage atom labels
-                outDir = os.path.abspath(self._getTmpPath())
-                args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
-                                                                                   os.path.abspath(outDir), baseName)
-                pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
-                auxFile = os.path.join(outDir, '{}_AD4.sdf'.format(baseName))
-                fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
-                args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, fnSmall)
-                subprocess.check_call([progLigPrep, *args.split()])
+        if fnSmall.endswith('.pdbqt'):
+            #Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+            # 3) Switch to mol2 to manage atom labels
+            outDir = os.path.abspath(self._getTmpPath())
+            args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
+                                                                               os.path.abspath(outDir), baseName)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
+            auxFile = os.path.join(outDir, '{}_AD4.sdf'.format(baseName))
+            fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
+            args = " -i 0 -nt -s 1 -isd {} -osd {}".format(auxFile, fnSmall)
+            if not os.path.exists(fnSmall):
+                subprocess.check_call(progLigPrep + args, shell=True)
 
-            args = " {} {}".format(os.path.abspath(fnSmall), outFile)
+        args = " {} {}".format(os.path.abspath(fnSmall), outFile)
+        if not os.path.exists(outFile):
             subprocess.check_call(structConvertProg + args, shell=True)
-            while not os.path.exists(outFile):
-                time.sleep(0.2)
+        while not os.path.exists(outFile):
+            time.sleep(0.2)
         return outFile
 
     def getAllLigandsFile(self, suffix=''):
