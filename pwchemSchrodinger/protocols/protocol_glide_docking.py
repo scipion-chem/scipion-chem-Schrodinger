@@ -411,7 +411,10 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         outputSet.setDocked(True)
         outputSet.proteinFile.set(self.getOriginalReceptorFile())
         outputSet.structFile = pwobj.String(fnStruct)
-        self._defineOutputs(outputSmallMolecules=outputSet)
+        if len(outputSet) > 0:
+            self._defineOutputs(outputSmallMolecules=outputSet)
+        else:
+            print('No output docking files were generated or no poses were found')
 
     def divideMaeComplex(self, maeFile, posIdx=1, outDir=None):
       if not outDir:
