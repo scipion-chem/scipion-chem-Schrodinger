@@ -32,7 +32,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading
+from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading, organizeThreads
 from pwchem import Plugin as pwchemPlugin
 
 from .. import Plugin as schrodinger_plugin
@@ -176,6 +176,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
+        nt = self.numberOfThreads.get()
         convStep = self._insertFunctionStep('convertStep', prerequisites=[])
         cSteps = [convStep]
 
@@ -192,8 +193,9 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             cSteps, inputGrids = gridSteps, self.inputStructROIs.get()
 
         dockSteps = []
-        for grid in inputGrids:
-            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=cSteps)
+        for i, grid in enumerate(inputGrids):
+            nThreads = organizeThreads(len(inputGrids), nt)
+            dStep = self._insertFunctionStep('dockingStep', grid.clone(), nThreads[i], prerequisites=cSteps)
             dockSteps.append(dStep)
         self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
@@ -277,10 +279,10 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         fh.write("GRID_CENTER %s,%s,%s\n" % (x, y, z))
         fh.close()
 
-        args = "-WAIT -LOCAL %s.inp" % (gridName)
+        args = f"-WAIT -LOCAL {gridName}.inp"
         self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=fnGridDir)
 
-    def dockingStep(self, grid):
+    def dockingStep(self, grid, nt):
         gridId = grid.getObjId()
         if self.fromPockets.get() == 0:
             gridId = 1
@@ -345,7 +347,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
                 fhIn.write("LIGANDFILE {}\n".format(os.path.abspath(self.getAllLigandsFile())))
 
-        args = "-WAIT -RESTART -LOCAL job_{}.inp".format(gridId)
+        args = f"-WAIT -RESTART -LOCAL -NJOBS {nt} job_{gridId}.inp"
         self.runJob(glideProg, args, cwd=gridDir)
 
         if os.path.exists(os.path.join(gridDir, "job_{}_pv.maegz".format(gridId))):
