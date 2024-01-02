@@ -197,6 +197,14 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             dockSteps.append(dStep)
         self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
+    def getLigSetFormats(self, ligSet):
+        formats = []
+        for lig in ligSet:
+            ext = os.path.splitext(lig.getFileName())[1]
+            formats.append(ext)
+        formats = list(set(formats))
+        return formats
+
     def convertStep(self):
         nt = self.numberOfThreads.get()
         # Convert receptor
@@ -214,13 +222,22 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
         # Create ligand files
         ligSet = self.inputLibrary.get()
-        performBatchThreading(self.createLigandsFile, ligSet, nt)
 
-        allLigandsFile = self.getAllLigandsFile()
-        with open(allLigandsFile, 'w') as f:
-            for it in range(nt):
-                with open(self.getAllLigandsFile(suffix=it)) as fLig:
-                    f.write(fLig.read())
+
+        ligFormats = self.getLigSetFormats(ligSet)
+        if len(ligFormats) > 1 or ligFormats[0] not in ['.mae', '.sdf', '.mol2']:
+            allLigandsFile = self.getAllLigandsFile(format='.mol2')
+            performBatchThreading(self.createLigandsFile, ligSet, nt)
+            with open(allLigandsFile, 'w') as f:
+                for it in range(nt):
+                    with open(self.getAllLigandsFile(suffix=it, format='.mol2')) as fLig:
+                        f.write(fLig.read())
+        else:
+            allLigandsFile = self.getAllLigandsFile(format=ligFormats[0])
+            with open(allLigandsFile, 'w') as f:
+                for lig in ligSet:
+                    with open(lig.getFileName()) as fLig:
+                        f.write(fLig.read())
 
     def gridStep(self, pocket):
         if self.fromPockets.get() == 0:
@@ -388,9 +405,12 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         smallDict = {}
         for small in self.inputLibrary.get():
             fnSmall = small.getFileName()
-            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
+            fnBase = getBaseName(fnSmall)
             if fnBase not in smallDict:
                 smallDict[fnBase] = small.clone()
+            molName = small.getMolName()
+            if molName not in smallDict:
+                smallDict[molName] = small.clone()
 
         allMaeFile = self.mergeMAEfiles()
         fnStruct = self.getInputMaeFile()
@@ -419,7 +439,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     def divideMaeComplex(self, maeFile, posIdx=1, outDir=None):
       if not outDir:
         outDir = os.path.dirname(maeFile)
-      molFile, recFile = os.path.join(outDir, getBaseName(maeFile) + f'_lig_{posIdx+1}.maegz'), \
+      molFile, recFile = os.path.join(outDir, getBaseName(maeFile) + f'_lig_{posIdx}.maegz'), \
                          os.path.join(outDir, getBaseName(maeFile) + '_rec.maegz')
       args = f' -n 1 {os.path.abspath(maeFile)} -o {os.path.abspath(recFile)}'
       subprocess.check_call(maeSubsetProg + args, cwd=outDir, shell=True)
@@ -472,8 +492,15 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             time.sleep(0.2)
         return outFile
 
-    def getAllLigandsFile(self, suffix=''):
-        return self._getTmpPath('allMoleculesFile{}.mol2'.format(suffix))
+    def getAllLigandsFile(self, suffix='', format=''):
+        if format:
+            ligFile = self._getTmpPath(f'allMoleculesFile{suffix}{format}')
+        else:
+            for file in os.listdir(self._getTmpPath()):
+                if f'allMoleculesFile{suffix}' in file:
+                    ligFile = self._getTmpPath(file)
+                    break
+        return ligFile
 
     def getGridDirs(self, complete=False):
         gridDirs = []
@@ -510,7 +537,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
 
     def createLigandsFile(self, ligSet, molLists, it):
-        curAllLigandsFile = self.getAllLigandsFile(suffix=it)
+        curAllLigandsFile = self.getAllLigandsFile(suffix=it, format='.mol2')
         with open(curAllLigandsFile, 'w') as fh:
             for small in ligSet:
                 fnSmall = small.getFileName()
