@@ -347,7 +347,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
                 fhIn.write("LIGANDFILE {}\n".format(os.path.abspath(self.getAllLigandsFile())))
 
-        args = f"-WAIT -RESTART -LOCAL -NJOBS {nt} job_{gridId}.inp"
+        args = f"-WAIT -RESTART -HOST localhost:{nt} -NJOBS {nt} job_{gridId}.inp"
         self.runJob(glideProg, args, cwd=gridDir)
 
         if os.path.exists(os.path.join(gridDir, "job_{}_pv.maegz".format(gridId))):
