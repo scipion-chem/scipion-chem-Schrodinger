@@ -32,7 +32,8 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading, organizeThreads
+from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading, \
+    organizeThreads, insistentRun
 from pwchem import Plugin as pwchemPlugin
 
 from .. import Plugin as schrodinger_plugin
@@ -122,6 +123,10 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
                        help='The diameter * n of each structural ROI will be used as outer box side')
 
         group = form.addGroup('Docking')
+        group.addParam('dockingThreads', IntParam, default=2, label='No. of docking subjobs: ',
+                       help='Maximum number of docking subjobs. Each subjobs will be run in a processor. \n'
+                            'This number should generally be lower than the numbe rof threads, since each subjob will '
+                            'require a license token.')
         group.addParam('posesPerLig', IntParam, default=5, label='No. Poses to report per ligand: ',
                        help='Maximum number of final poses to report per ligand')
         group.addParam('dockingMethod', EnumParam, default=0, label='Docking method',
@@ -176,7 +181,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        nt = self.numberOfThreads.get()
+        nt = self.dockingThreads.get()
         convStep = self._insertFunctionStep('convertStep', prerequisites=[])
         cSteps = [convStep]
 
@@ -225,11 +230,11 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         # Create ligand files
         ligSet = self.inputLibrary.get()
 
-
         ligFormats = self.getLigSetFormats(ligSet)
-        if len(ligFormats) > 1 or ligFormats[0] not in ['.mae', '.sdf', '.mol2']:
+        ligFiles = list(set([lig.getFileName() for lig in ligSet]))
+        if len(ligFormats) > 1 or ligFormats[0] not in ['.mae', '.maegz', '.sdf', '.mol2']:
             allLigandsFile = self.getAllLigandsFile(format='.mol2')
-            performBatchThreading(self.createLigandsFile, ligSet, nt)
+            performBatchThreading(self.createLigandsFile, ligFiles, nt)
             with open(allLigandsFile, 'w') as f:
                 for it in range(nt):
                     with open(self.getAllLigandsFile(suffix=it, format='.mol2')) as fLig:
@@ -237,8 +242,8 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         else:
             allLigandsFile = self.getAllLigandsFile(format=ligFormats[0])
             with open(allLigandsFile, 'w') as f:
-                for lig in ligSet:
-                    with open(lig.getFileName()) as fLig:
+                for ligFile in ligFiles:
+                    with open(ligFile) as fLig:
                         f.write(fLig.read())
 
     def gridStep(self, pocket):
@@ -348,7 +353,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
                 fhIn.write("LIGANDFILE {}\n".format(os.path.abspath(self.getAllLigandsFile())))
 
         args = f"-WAIT -RESTART -LOCAL -HOST localhost:{nt} -NJOBS {nt} job_{gridId}.inp"
-        self.runJob(glideProg, args, cwd=gridDir)
+        insistentRun(self, glideProg, args, cwd=gridDir)
 
         if os.path.exists(os.path.join(gridDir, "job_{}_pv.maegz".format(gridId))):
             self.runJob(propListerProg,
@@ -533,16 +538,18 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             noRecMaeFiles.append(tFile)
 
         outName = 'allMolecules.maegz'
-        command = 'zcat {} | gzip -c > {}'.format(' '.join(noRecMaeFiles), outName)
-        self.runJob('', command, cwd=self._getExtraPath())
+        if len(noRecMaeFiles) > 1:
+            command = 'zcat {} | gzip -c > {}'.format(' '.join(noRecMaeFiles), outName)
+            self.runJob('', command, cwd=self._getExtraPath())
+        else:
+            os.symlink(noRecMaeFiles[0], self._getExtraPath(outName))
         return self._getExtraPath(outName)
 
 
-    def createLigandsFile(self, ligSet, molLists, it):
+    def createLigandsFile(self, ligFiles, molLists, it):
         curAllLigandsFile = self.getAllLigandsFile(suffix=it, format='.mol2')
         with open(curAllLigandsFile, 'w') as fh:
-            for small in ligSet:
-                fnSmall = small.getFileName()
+            for fnSmall in ligFiles:
                 if not fnSmall.endswith('.mol2'):
                     fnSmall = self.convert2mol2(fnSmall, it)
                 putMolFileTitle(fnSmall, ext='mol2')
