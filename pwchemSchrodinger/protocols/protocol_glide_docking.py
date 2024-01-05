@@ -47,6 +47,9 @@ structCatProg = schrodinger_plugin.getHome('utilities/structcat')
 propListerProg = schrodinger_plugin.getHome('utilities/proplister')
 maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
 
+dockMethodDic = {0: 'confgen', 1: 'rigid', 2: 'mininplace', 3: 'inplace'}
+dockPrecisionDic = {0: 'HTVS', 1: 'SP', 2: 'XP'}
+
 class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     """Calls glide to perform a docking of a set of compounds in a structural region defined by a grid.
        It is assumed that the input library of ligands is already prepared.
@@ -307,48 +310,35 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         if not os.path.exists(fnIn): # Prepared to resume
             with open(fnIn, 'w') as fhIn:
                 fhIn.write("GRIDFILE %s\n" % ("grid_{}.zip".format(gridId)))
-
-                if self.dockingMethod.get()==0:
-                    fhIn.write("DOCKING_METHOD confgen\n")
-                    fhIn.write("FLEXTORS True\n")
-                elif self.dockingMethod.get()==1:
-                    fhIn.write("DOCKING_METHOD rigid\n")
-                elif self.dockingMethod.get()==2:
-                    fhIn.write("DOCKING_METHOD mininplace\n")
-                elif self.dockingMethod.get()==3:
-                    fhIn.write("DOCKING_METHOD inplace\n")
-
-                if self.dockingPrecision.get()==0:
-                    fhIn.write("PRECISION HTVS\n")
-                elif self.dockingPrecision.get()==1:
-                    fhIn.write("PRECISION SP\n")
-                elif self.dockingPrecision.get()==2:
+                fhIn.write(f"DOCKING_METHOD {dockMethodDic[self.dockingMethod.get()]}\n")
+                fhIn.write(f"PRECISION {dockPrecisionDic[self.dockingPrecision.get()]}\n")
+                if self.dockingPrecision.get() == 2:
                     fhIn.write("PRECISION XP\n")
                     fhIn.write("WRITE_XP_DESC True\n")
                     fhIn.write("POSTDOCK_NPOSE 10\n")
 
-                fhIn.write("SAMPLE_N_INVERSIONS %s\n"%self.sampleNinversions.get())
-                fhIn.write("SAMPLE_RINGS %s\n"%self.sampleRings.get())
-                fhIn.write("EPIK_PENALTIES %s\n"%self.sampleNinversions.get())
-                fhIn.write("SKIP_EPIK_METAL_ONLY %s\n"%self.skipMetalEpik.get())
-                fhIn.write("EXPANDED_SAMPLING %s\n"%self.expandedSampling.get())
-                fhIn.write("HBOND_DONOR_AROMH %s\n"%self.HbondDonorAromH.get())
+                fhIn.write("SAMPLE_N_INVERSIONS %s\n" % self.sampleNinversions.get())
+                fhIn.write("SAMPLE_RINGS %s\n" % self.sampleRings.get())
+                fhIn.write("EPIK_PENALTIES %s\n" % self.sampleNinversions.get())
+                fhIn.write("SKIP_EPIK_METAL_ONLY %s\n" % self.skipMetalEpik.get())
+                fhIn.write("EXPANDED_SAMPLING %s\n" % self.expandedSampling.get())
+                fhIn.write("HBOND_DONOR_AROMH %s\n" % self.HbondDonorAromH.get())
                 if self.HbondDonorAromH.get():
                     fhIn.write("HBOND_DONOR_AROMH_CHARGE %f\n" % self.HbondDonorAromHCharge.get())
-                fhIn.write("HBOND_ACCEP_HALO %s\n"%self.HbondAcceptHalo.get())
-                fhIn.write("HBOND_DONOR_HALO %s\n"%self.HbondDonorHalo.get())
+                fhIn.write("HBOND_ACCEP_HALO %s\n" % self.HbondAcceptHalo.get())
+                fhIn.write("HBOND_DONOR_HALO %s\n" % self.HbondDonorHalo.get())
 
-                fhIn.write("MAXKEEP %d\n"%self.maxkeep.get())
-                fhIn.write("SCORING_CUTOFF %f\n"%self.scoreCutoff.get())
-                if self.maxref.get()>0:
+                fhIn.write("MAXKEEP %d\n" % self.maxkeep.get())
+                fhIn.write("SCORING_CUTOFF %f\n" % self.scoreCutoff.get())
+                if self.maxref.get() > 0:
                     maxRefValue = self.maxref.get()
                 else:
-                    if self.dockingPrecision.get()==2:
+                    if self.dockingPrecision.get() == 2:
                         maxRefValue = 800
                     else:
                         maxRefValue = 400
                 fhIn.write("MAXREF %d\n" % maxRefValue)
-                fhIn.write("POSES_PER_LIG %d\n"%self.posesPerLig.get())
+                fhIn.write("POSES_PER_LIG %d\n" % self.posesPerLig.get())
 
                 fhIn.write("LIGANDFILE {}\n".format(os.path.abspath(self.getAllLigandsFile())))
 
