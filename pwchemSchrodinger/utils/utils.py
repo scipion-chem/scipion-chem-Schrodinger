@@ -25,7 +25,7 @@
 # **************************************************************************
 # General imports
 import numpy as np
-import os, subprocess, time
+import os, subprocess, time, random
 from subprocess import check_call
 
 # Scipion em imports
@@ -44,7 +44,7 @@ structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
 maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
 
 def putMolFileTitle(fn, title='', ext='mol2'):
-    auxFile = f"{fn}.aux"
+    auxFile = f"{fn}{random.randint(0, 100000)}.aux"
     titleLine = 1 if ext == 'mol2' else 0
     with open(fn) as fhIn:
         with open(auxFile, 'w') as fhOut:
