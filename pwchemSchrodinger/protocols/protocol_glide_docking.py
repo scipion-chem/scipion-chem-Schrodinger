@@ -285,7 +285,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         fh.close()
 
         args = f"-WAIT -LOCAL {gridName}.inp"
-        self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=fnGridDir)
+        insistentRun(self, glideProg, args, cwd=fnGridDir)
 
     def dockingStep(self, grid, nt):
         gridId = grid.getObjId()
@@ -537,11 +537,12 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             self.runJob(maeSubsetProg, args, cwd=self._getTmpPath())
             noRecMaeFiles.append(tFile)
 
-        outName = 'allMolecules.maegz'
+        outName = 'dockedMolecules.maegz'
         if len(noRecMaeFiles) > 1:
             command = 'zcat {} | gzip -c > {}'.format(' '.join(noRecMaeFiles), outName)
             self.runJob('', command, cwd=self._getExtraPath())
         else:
+            print('linkando')
             os.symlink(noRecMaeFiles[0], self._getExtraPath(outName))
         return self._getExtraPath(outName)
 
