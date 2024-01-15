@@ -86,44 +86,9 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         return form
 
     def _defineGlideParams(self, form, condition='True'):
-        group = form.addGroup('Docking', condition=condition)
+        group = form.addGroup('Ligands', condition=condition)
         group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Input small molecules:', help='Input small molecules to be docked with Glide')
-        group.addParam('convertOutputParam', BooleanParam, default=False, label='Convert output to mol2:',
-                       help='Whether to convert the output poses from the mae to mol2 format')
-
-        group = form.addGroup('Define grids', condition='fromPockets!=2')
-        group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
-                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
-                       help='How to set the inner box.'
-                            'Manually: you will manually set the same x,y,z for every ROI'
-                            'PocketDiameter: the diameter * n of each ROI will be used. You can set n')
-
-        line = group.addLine('Inner box (Angstroms)', condition='innerAction==0',
-                             help='The docked ligand mass center must be inside the inner box radius')
-        line.addParam('innerX', IntParam, default=10, label='X')
-        line.addParam('innerY', IntParam, default=10, label='Y')
-        line.addParam('innerZ', IntParam, default=10, label='Z')
-
-        group.addParam('diameterNin', FloatParam, default=0.8, condition='innerAction==1',
-                       label='Size of inner box vs diameter: ',
-                       help='The diameter * n of each ROI will be used as inner box side')
-
-        group.addParam('outerAction', EnumParam, default=1, label='Determine outer box: ',
-                       choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
-                       help='How to set the outer box.'
-                            'Manually: you will manually set the same x,y,z for every structural ROI'
-                            'PocketDiameter: the diameter * n of each pocket will be used. You can set n')
-
-        line = group.addLine('Outer box (Angstroms)', condition='outerAction==0',
-                             help='The docked ligand atoms must be inside the outer box radius.')
-        line.addParam('outerX', IntParam, default=30, label='X')
-        line.addParam('outerY', IntParam, default=30, label='Y')
-        line.addParam('outerZ', IntParam, default=30, label='Z')
-
-        group.addParam('diameterNout', FloatParam, default=1.2, condition='outerAction==1',
-                       label='Size of outer box vs diameter: ',
-                       help='The diameter * n of each structural ROI will be used as outer box side')
 
         group = form.addGroup('Docking')
         group.addParam('dockingThreads', IntParam, default=2, label='No. of docking subjobs: ',
@@ -170,15 +135,11 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         form = self._defineGlideReceptorParams(form)
         form = self._defineGridParams(form, notManualCondition='fromPockets!=2')
 
-        group = form.addGroup('Ligands')
-        group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
-                       label='Input small molecules:', help='Input small molecules to be docked with Glide')
-
-        group.addParam('convertOutput2Mol2', BooleanParam, label='Convert output to mol2: ', default=False,
-                       help='Whether to convert to output molecules to mol2 files instead of keeping the mae files')
-
         form.addSection(label='Docking')
         form = self._defineGlideParams(form)
+        form.addParam('convertOutputParam', BooleanParam, default=False, label='Convert output to mol2:',
+                       expertLevel=LEVEL_ADVANCED,
+                       help='Whether to convert the output poses from the mae to mol2 format')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -388,13 +349,6 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
             allSmallList += smallList
 
-        if self.convertOutput2Mol2.get():
-            nt = self.numberOfThreads.get()
-            # print('Converting output to mol2: outputSmallMolecules')
-            outDir = self._getExtraPath('outputSmallMolecules')
-            os.mkdir(outDir)
-            allSmallList = performBatchThreading(self.convertOutputStep, allSmallList, nt, outDir=outDir,
-                                                 cloneItem=True)
         molLists[it] = allSmallList
 
     def createOutputStep(self):
@@ -532,7 +486,6 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             command = 'zcat {} | gzip -c > {}'.format(' '.join(noRecMaeFiles), outName)
             self.runJob('', command, cwd=self._getExtraPath())
         else:
-            print('linkando')
             os.symlink(noRecMaeFiles[0], self._getExtraPath(outName))
         return self._getExtraPath(outName)
 
