@@ -308,7 +308,7 @@ class ProtSchrodingerDesmondMD(EMProtocol):
       paramDic = self.getStageParamsDic()
       for pName in paramDic.keys():
         if pName not in msjDic:
-          msjDic[pName] = paramDic[pName].default
+          msjDic[pName] = self._defParams[pName]
       return msjDic
 
     def buildMSJStr(self):
