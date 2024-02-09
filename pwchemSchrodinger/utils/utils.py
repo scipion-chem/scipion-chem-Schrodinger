@@ -159,15 +159,20 @@ def maeLineSplit(maeLine):
 
 def convertMAE2Mol2(mol, outDir):
     molName = mol.getUniqueName()
-    poseId, fnRaw = mol.poseFile.get().split('@')
-    mol.setPoseId(poseId)
-
-    fnAux = os.path.join(outDir, f"tmp_{molName}_{poseId}.mae")
-    fnOut = os.path.join(outDir, '{}.{}'.format(molName, 'mol2'))
-
+    poseFile = mol.poseFile.get()
     try:
-        args = f"-n {poseId} {os.path.abspath(fnRaw)} -o {fnAux}"
-        subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
+        if '@' in poseFile:
+            poseId, fnRaw = mol.poseFile.get().split('@')
+            mol.setPoseId(poseId)
+
+            fnAux = os.path.join(outDir, f"tmp_{molName}_{poseId}.mae")
+            args = f"-n {poseId} {os.path.abspath(fnRaw)} -o {fnAux}"
+            subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
+        else:
+            poseId = mol.getPoseId()
+            fnAux = poseFile
+
+        fnOut = os.path.join(outDir, '{}.{}'.format(molName, 'mol2'))
 
         args = f'{fnAux} {os.path.abspath(fnOut)}'
         subprocess.run(f'{structConvertProg} {args}', check=True, capture_output=True, text=True, shell=True)
