@@ -34,7 +34,7 @@ import pyworkflow.object as pwobj
 
 # Scipion chem imports
 from pwchem.objects import SmallMolecule
-from pwchem.utils import relabelAtomsMol2, getBaseName
+from pwchem.utils import relabelAtomsMol2, getBaseName, runInParallel
 
 # Plugin imports
 from ..constants import TIMESTEP, PRESSURE, BAROSTAT, BROWNIAN, TENSION, RESTRAINS, MSJ_SYSMD_SIM, MSJ_SYSMD_INIT
