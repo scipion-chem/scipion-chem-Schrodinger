@@ -25,7 +25,7 @@
 # **************************************************************************
 # General imports
 import numpy as np
-import os, subprocess, time
+import os, subprocess, time, random
 from subprocess import check_call
 
 # Scipion em imports
@@ -36,6 +36,7 @@ import pyworkflow.object as pwobj
 from pwchem.objects import SmallMolecule
 from pwchem.utils import relabelAtomsMol2, runInParallel
 
+
 # Plugin imports
 from ..constants import TIMESTEP, PRESSURE, BAROSTAT, BROWNIAN, TENSION, RESTRAINS, MSJ_SYSMD_SIM, MSJ_SYSMD_INIT
 from .. import Plugin as schrodingerPlugin
@@ -43,32 +44,21 @@ from .. import Plugin as schrodingerPlugin
 structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
 maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
 
-
-def putMol2Title(fn, title=""):
+def putMolFileTitle(fn, title='', ext='mol2'):
+    auxFile = f"{fn}{random.randint(0, 100000)}.aux"
+    titleLine = 1 if ext == 'mol2' else 0
     with open(fn) as fhIn:
-        with open(fn + ".aux", 'w') as fhOut:
+        with open(auxFile, 'w') as fhOut:
             for i, line in enumerate(fhIn.readlines()):
-                if i!=1:
-                    fhOut.write(line)
-                else:
-                    if title!="":
-                        fhOut.write(title+"\n")
-                    else:
-                        fhOut.write(os.path.splitext(os.path.split(fn)[1])[0]+"\n")
-    moveFile(fn+".aux", fn)
-
-def putSDFTitle(fn, title=''):
-    with open(fn) as fhIn:
-        with open(fn + ".aux", 'w') as fhOut:
-            for i, line in enumerate(fhIn.readlines()):
-                if i != 0:
+                if i != titleLine:
                     fhOut.write(line)
                 else:
                     if title != "":
-                        fhOut.write(title + "\n")
+                        fhOut.write(f"{title}\n")
                     else:
-                        fhOut.write(os.path.splitext(os.path.split(fn)[1])[0] + "\n")
-    moveFile(fn + ".aux", fn)
+                        fhOut.write(f"{getBaseName(fn)}\n")
+    if os.path.exists(auxFile):
+        moveFile(auxFile, fn)
 
 def sortDockingResults(smallList):
     ds = []

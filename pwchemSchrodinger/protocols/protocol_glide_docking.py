@@ -33,13 +33,14 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading
+from pwchem.utils import relabelAtomsMol2, calculate_centerMass, getBaseName, performBatchThreading, \
+    organizeThreads, insistentRun
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import OPENBABEL_DIC
 
 from .. import Plugin as schrodinger_plugin
 from ..protocols.protocol_preparation_grid import ProtSchrodingerGrid
-from ..utils.utils import putMol2Title, convertMAEMolSet
+from ..utils.utils import putMolFileTitle, convertMAEMolSet
 
 glideProg = schrodinger_plugin.getHome('glide')
 progLigPrep = schrodinger_plugin.getHome('ligprep')
@@ -47,6 +48,9 @@ structConvertProg = schrodinger_plugin.getHome('utilities/structconvert')
 structCatProg = schrodinger_plugin.getHome('utilities/structcat')
 propListerProg = schrodinger_plugin.getHome('utilities/proplister')
 maeSubsetProg = schrodinger_plugin.getHome('utilities/maesubset')
+
+dockMethodDic = {0: 'confgen', 1: 'rigid', 2: 'mininplace', 3: 'inplace'}
+dockPrecisionDic = {0: 'HTVS', 1: 'SP', 2: 'XP'}
 
 class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     """Calls glide to perform a docking of a set of compounds in a structural region defined by a grid.
@@ -104,6 +108,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
     def _defineGeneralGlideParams(self, form, condition='True'):
         group = form.addGroup('General params', condition=condition)
         group.addParam('dockingMethod', EnumParam, default=0, label='Docking method: ',
+
                        choices=['Flexible dock (confgen)', 'Rigid dock (rigid)', 'Refine (do not dock, mininplace)',
                                 'Score in place (do not dock, inplace)'],
                        help='Glide method to use for docking')
@@ -215,6 +220,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
+        nt = self.dockingThreads.get()
         convStep = self._insertFunctionStep('convertStep', prerequisites=[])
         cSteps = [convStep]
 
@@ -231,10 +237,19 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             cSteps, inputGrids = gridSteps, self.inputStructROIs.get()
 
         dockSteps = []
-        for grid in inputGrids:
-            dStep = self._insertFunctionStep('dockingStep', grid.clone(), prerequisites=cSteps)
+        for i, grid in enumerate(inputGrids):
+            nThreads = organizeThreads(len(inputGrids), nt)
+            dStep = self._insertFunctionStep('dockingStep', grid.clone(), nThreads[i], prerequisites=cSteps)
             dockSteps.append(dStep)
         self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
+
+    def getLigSetFormats(self, ligSet):
+        formats = []
+        for lig in ligSet:
+            ext = os.path.splitext(lig.getFileName())[1]
+            formats.append(ext)
+        formats = list(set(formats))
+        return formats
 
     def convertStep(self):
         nt = self.numberOfThreads.get()
@@ -253,13 +268,22 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
         # Create ligand files
         ligSet = self.inputLibrary.get()
-        performBatchThreading(self.createLigandsFile, ligSet, nt)
 
-        allLigandsFile = self.getAllLigandsFile()
-        with open(allLigandsFile, 'w') as f:
-            for it in range(nt):
-                with open(self.getAllLigandsFile(suffix=it)) as fLig:
-                    f.write(fLig.read())
+        ligFormats = self.getLigSetFormats(ligSet)
+        ligFiles = list(set([lig.getFileName() for lig in ligSet]))
+        if len(ligFormats) > 1 or ligFormats[0] not in ['.mae', '.maegz', '.sdf', '.mol2']:
+            allLigandsFile = self.getAllLigandsFile(format='.mol2')
+            performBatchThreading(self.createLigandsFile, ligFiles, nt)
+            with open(allLigandsFile, 'w') as f:
+                for it in range(nt):
+                    with open(self.getAllLigandsFile(suffix=it, format='.mol2')) as fLig:
+                        f.write(fLig.read())
+        else:
+            allLigandsFile = self.getAllLigandsFile(format=ligFormats[0])
+            with open(allLigandsFile, 'w') as f:
+                for ligFile in ligFiles:
+                    with open(ligFile) as fLig:
+                        f.write(fLig.read())
 
     def gridStep(self, pocket):
         if self.fromPockets.get() == 0:
@@ -296,10 +320,10 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             for glideArg, value in argDic.items():
                 fh.write(f"{glideArg} {value}\n")
 
-        args = "-WAIT -LOCAL %s.inp" % (gridName)
-        self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=fnGridDir)
+        args = f"-WAIT -LOCAL {gridName}.inp"
+        insistentRun(self, glideProg, args, cwd=fnGridDir)
 
-    def dockingStep(self, grid):
+    def dockingStep(self, grid, nt):
         gridId = grid.getObjId()
         if self.fromPockets.get() == 0:
             gridId = 1
@@ -370,6 +394,7 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
                     smallList.append(small)
 
             allSmallList += smallList
+
         molLists[it] = allSmallList
 
     def createOutputStep(self):
@@ -377,9 +402,12 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         smallDict = {}
         for small in self.inputLibrary.get():
             fnSmall = small.getFileName()
-            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
+            fnBase = getBaseName(fnSmall)
             if fnBase not in smallDict:
                 smallDict[fnBase] = small.clone()
+            molName = small.getMolName()
+            if molName not in smallDict:
+                smallDict[molName] = small.clone()
 
         fnStruct = self.getInputMaeFile()
 
@@ -399,17 +427,21 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
         outputSet.setDocked(True)
         outputSet.proteinFile.set(self.getOriginalReceptorFile())
         outputSet.structFile = pwobj.String(fnStruct)
-        self._defineOutputs(outputSmallMolecules=outputSet)
+        if len(outputSet) > 0:
+            self._defineOutputs(outputSmallMolecules=outputSet)
+        else:
+            print('No output docking files were generated or no poses were found')
 
     def divideMaeComplex(self, maeFile, posIdx=1, outDir=None):
       if not outDir:
         outDir = os.path.dirname(maeFile)
-      molFile, recFile = os.path.join(outDir, getBaseName(maeFile) + f'_lig_{posIdx+1}.maegz'), \
+      molFile, recFile = os.path.join(outDir, getBaseName(maeFile) + f'_lig_{posIdx}.maegz'), \
                          os.path.join(outDir, getBaseName(maeFile) + '_rec.maegz')
       args = f' -n 1 {os.path.abspath(maeFile)} -o {os.path.abspath(recFile)}'
       subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True, cwd=outDir)
       args = f' -n {posIdx+1} {os.path.abspath(maeFile)} -o {os.path.abspath(molFile)}'
       subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True, cwd=outDir)
+
       return recFile, molFile
 
     def _validate(self):
@@ -435,16 +467,24 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
 
 
     def convert2mol2(self, fnSmall, it):
-        baseName = os.path.splitext(os.path.basename(fnSmall))[0]
+        baseName = getBaseName(fnSmall)
         outFile = os.path.abspath(self._getTmpPath('{}.mol2'.format(baseName)))
         args = f' -i "{os.path.abspath(fnSmall)}" -o {outFile} --outputDir {self._getTmpPath()}'
         pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=self._getTmpPath(), popen=True)
+
         while not os.path.exists(outFile):
             time.sleep(0.2)
         return outFile
 
-    def getAllLigandsFile(self, suffix=''):
-        return self._getTmpPath('allMoleculesFile{}.mol2'.format(suffix))
+    def getAllLigandsFile(self, suffix='', format=''):
+        if format:
+            ligFile = self._getTmpPath(f'allMoleculesFile{suffix}{format}')
+        else:
+            for file in os.listdir(self._getTmpPath()):
+                if f'allMoleculesFile{suffix}' in file:
+                    ligFile = self._getTmpPath(file)
+                    break
+        return ligFile
 
     def getGridDirs(self, complete=False):
         gridDirs = []
@@ -474,20 +514,22 @@ class ProtSchrodingerGlideDocking(ProtSchrodingerGrid):
             self.runJob(maeSubsetProg, args, cwd=self._getTmpPath())
             noRecMaeFiles.append(tFile)
 
-        outName = 'allMolecules.maegz'
-        command = 'zcat {} | gzip -c > {}'.format(' '.join(noRecMaeFiles), outName)
-        self.runJob('', command, cwd=self._getExtraPath())
+        outName = 'dockedMolecules.maegz'
+        if len(noRecMaeFiles) > 1:
+            command = 'zcat {} | gzip -c > {}'.format(' '.join(noRecMaeFiles), outName)
+            self.runJob('', command, cwd=self._getExtraPath())
+        else:
+            os.symlink(noRecMaeFiles[0], self._getExtraPath(outName))
         return self._getExtraPath(outName)
 
 
-    def createLigandsFile(self, ligSet, molLists, it):
-        curAllLigandsFile = self.getAllLigandsFile(suffix=it)
+    def createLigandsFile(self, ligFiles, molLists, it):
+        curAllLigandsFile = self.getAllLigandsFile(suffix=it, format='.mol2')
         with open(curAllLigandsFile, 'w') as fh:
-            for small in ligSet:
-                fnSmall = small.getFileName()
+            for fnSmall in ligFiles:
                 if not fnSmall.endswith('.mol2'):
                     fnSmall = self.convert2mol2(fnSmall, it)
-                putMol2Title(fnSmall)
+                putMolFileTitle(fnSmall, ext='mol2')
                 with open(fnSmall) as fhLigand:
                     fh.write(fhLigand.read())
 
