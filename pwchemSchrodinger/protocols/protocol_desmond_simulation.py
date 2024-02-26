@@ -33,13 +33,13 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, EnumParam, FloatParam, BooleanParam, StringParam, TextParam, LEVEL_ADVANCED, Group, Line
 
 # Scipion chem imports
-from pwchem.utils import natural_sort
+from pwchem.utils import natural_sort, createMSJDic
 
 # Plugin imports
 from .. import Plugin as schrodinger_plugin
 from ..constants import MSJ_SYSMD_INIT
 from ..objects import SchrodingerSystem
-from ..utils import createMSJDic, buildSimulateStr, getJobName
+from ..utils import buildSimulateStr, getJobName
 
 multisimProg = schrodinger_plugin.getHome('utilities/multisim')
 jobControlProg = schrodinger_plugin.getHome('jobcontrol')

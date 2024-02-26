@@ -67,17 +67,17 @@ SelectResidueWizardQT().addTarget(protocol=ProtSchrodingerIFD,
                                   outputs=['selResidue'])
 
 AddResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
-                             targets=['addResAdd'],
+                             targets=['residuesAdd'],
                              inputs=['selChain', 'selResidue'],
                              outputs=['residuesAdd'])
 
 AddResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
-                             targets=['addResOmit'],
+                             targets=['residuesOmit'],
                              inputs=['selChain', 'selResidue'],
                              outputs=['residuesOmit'])
 
 AddResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
-                             targets=['addResTrim'],
+                             targets=['residuesTrim'],
                              inputs=['selChain', 'selResidue'],
                              outputs=['residuesTrim'])
 

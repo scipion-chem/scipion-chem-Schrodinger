@@ -31,7 +31,7 @@ from subprocess import CalledProcessError
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import AtomicStructHandler
 from pyworkflow.protocol.params import STEPS_PARALLEL, PointerParam, BooleanParam, \
-    FloatParam, IntParam, EnumParam
+    FloatParam, IntParam, EnumParam, LEVEL_ADVANCED, LabelParam
 from pyworkflow.object import String, Float
 from pyworkflow.utils import Message
 from pyworkflow.utils.path import createLink, makePath
@@ -47,13 +47,59 @@ class ProtSchrodingerGrid(EMProtocol):
     _label = 'grid definition (glide)'
     _program = ""
 
+    tDic = {}
+
+    paramsDic = {'cvCutOff': 'CV_CUTOFF',
+               'recVScale': 'RECEP_VSCALE', 'recCCut': 'RECEP_CCUT', 'recMaecharges': 'REC_MAECHARGES',
+               'HbondDonorAromH': 'HBOND_DONOR_AROMH', 'HbondDonorAromHCharge': 'HBOND_DONOR_AROMH_CHARGE',
+               'HbondAcceptHalo': 'HBOND_ACCEP_HALO', 'HbondDonorHalo': 'HBOND_DONOR_HALO'}
+
+    enumParamsDic = {'forceField': 'FORCEFIELD'}
+
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
         self.stepsExecutionMode = STEPS_PARALLEL
 
-    def _defineGridParams(self, form, notManualCondition):
+    def _defineGeneralGridParams(self, form, condition):
+        group = form.addGroup('Grid keywords', condition=condition)
+        group.addParam('cvCutOff', FloatParam, default=0.0, label='Coulomb-van der Waals cutoff: ',
+                       help='Coulomb-van der Waals cutoff')
+        group.addParam('forceField', EnumParam, default=1, label='Specify the force field to use: ',
+                       choices=['OPLS4', 'OPLS2005'], display=EnumParam.DISPLAY_HLIST,
+                       help='Specify the force field to use')
+        return group
+
+    def _defineReceptorParams(self, form, condition):
+        group = form.addGroup('Receptor keywords', condition=condition)
+        group.addParam('recVScale', FloatParam, default=1.0,
+                       label='General van der Waals radius scaling factor: ',
+                       help='General van der Waals radius scaling factor')
+        group.addParam('recCCut', FloatParam, default=0.25,
+                       label='General van der Waals radius scaling partial charge cutoff: ',
+                       help='General van der Waals radius scaling partial charge cutoff.')
+
+        group.addParam('recMaecharges', BooleanParam, default=False, expertLevel=LEVEL_ADVANCED,
+                       label='Use partial charges from the input structure:',
+                       help='Use partial charges from the input structure.')
+        group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
+                       expertLevel=LEVEL_ADVANCED,
+                       help='Accept aromatic hydrogens as potential H-bond donors.')
+        group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
+                       condition='HbondDonorAromH', expertLevel=LEVEL_ADVANCED,
+                       help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
+                            'The cutoff is applied to the actual (signed) charge, not the absolute value.')
+        group.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
+                       expertLevel=LEVEL_ADVANCED,
+                       help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
+        group.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
+                       expertLevel=LEVEL_ADVANCED,
+                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
+                            '(noncovalent interaction) donors')
+        return group
+
+    def _defineInnerGridParams(self, form, condition):
         # Defining condition variables
-        group = form.addGroup('Inner box', condition=notManualCondition)
+        group = form.addGroup('Inner box', condition=condition)
         group.addParam('innerAction', EnumParam, default=1, label='Determine inner box: ',
                        choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
                        help='How to set the inner box.'
@@ -69,8 +115,10 @@ class ProtSchrodingerGrid(EMProtocol):
         group.addParam('diameterNin', FloatParam, default=0.8, condition='innerAction==1',
                        label='Size of inner box vs diameter: ',
                        help='The diameter * n of each ROI will be used as inner box side')
+        return group
 
-        group = form.addGroup('Outer box', condition=notManualCondition)
+    def _defineOuterGridParams(self, form, condition):
+        group = form.addGroup('Outer box', condition=condition)
         group.addParam('outerAction', EnumParam, default=1, label='Determine outer box: ',
                        choices=['Manually', 'PocketDiameter'], display=EnumParam.DISPLAY_HLIST,
                        help='How to set the outer box.'
@@ -86,25 +134,19 @@ class ProtSchrodingerGrid(EMProtocol):
         group.addParam('diameterNout', FloatParam, default=1.2, condition='outerAction==1',
                        label='Size of outer box vs diameter: ',
                        help='The diameter * n of each structural ROI will be used as outer box side')
+        return group
 
-        group = form.addGroup('Grid hydrogen bonds', condition=notManualCondition)
-        group.addParam('HbondDonorAromH', BooleanParam, default=False, label='Aromatic H as H-bond donors:',
-                       help='Accept aromatic hydrogens as potential H-bond donors.')
-        group.addParam('HbondDonorAromHCharge', FloatParam, default=0.0, label='Aromatic H as H-bond donors Charge:',
-                       condition='HbondDonorAromH',
-                       help='Partial charge cutoff for accepting aromatic hydrogens as potential H-bond donors. '
-                            'The cutoff is applied to the actual (signed) charge, not the absolute value.')
-        group.addParam('HbondAcceptHalo', BooleanParam, default=False, label='Halogens as H-bond acceptors:',
-                       help='Accept halogens (neutral or charged, F, Cl, Br, or I) as H-bond acceptors.')
-        group.addParam('HbondDonorHalo', BooleanParam, default=False, label='Halogens as H-bond donors:',
-                       help='Accept the halogens (Cl, Br, I, but not F) as potential H-bond '
-                            '(noncovalent interaction) donors')
+    def _defineGridSection(self, form, condition):
+        form.addSection(label='Grid parameters')
+        self._defineGeneralGridParams(form, condition=condition)
+        self._defineReceptorParams(form, condition=condition)
+        form.addParam('notGridLabel', LabelParam, default=False, condition=f'not {condition}',
+                      label='Grid parameters are not used in this configuration')
         return form
 
     def _defineParams(self, form):
         # Defining condition variables
         notManualCondition = 'not manual'
-
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam('manual', BooleanParam, default=False, label='Define grid manually: ',
                       help='Define the grid manually using Maestro GUI')
@@ -118,7 +160,11 @@ class ProtSchrodingerGrid(EMProtocol):
                       label='Sets of Structural ROIs:', condition=notManualCondition,
                       help='Sets of known or predicted protein structural ROIs to center the grid on')
 
-        form = self._defineGridParams(form, notManualCondition=notManualCondition)
+        self._defineInnerGridParams(form, condition=notManualCondition)
+        self._defineOuterGridParams(form, condition=notManualCondition)
+
+        form = self._defineGridSection(form, condition=notManualCondition)
+
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -164,6 +210,22 @@ class ProtSchrodingerGrid(EMProtocol):
             ext = os.path.splitext(maeFile)[1]
             shutil.copy(maeFile, self._getExtraPath('inputReceptor{}'.format(ext)))
 
+    def getArgsDic(self, paramsDic=None, enumParamsDic=None):
+        paramsDic = self.paramsDic if not paramsDic else paramsDic
+        enumParamsDic = self.enumParamsDic if not enumParamsDic else enumParamsDic
+
+        aDic = {}
+        for sciArg, glideArg in paramsDic.items():
+            aDic[glideArg] = getattr(self, sciArg).get()
+
+        for sciArg, glideArg in enumParamsDic.items():
+            eText = self.getEnumText(sciArg)
+            if eText in self.tDic:
+                aDic[glideArg] = self.tDic[eText]
+            else:
+                aDic[glideArg] = eText
+        return aDic
+
     def preparationStep(self, pocket):
         x, y, z = pocket.calculateMassCenter()
 
@@ -172,23 +234,20 @@ class ProtSchrodingerGrid(EMProtocol):
         makePath(fnGridDir)
 
         fnJob = os.path.abspath(os.path.join(fnGridDir, gridName)) + '.inp'
-        fh = open(fnJob, 'w')
-        fh.write("GRIDFILE %s.zip\n" % gridName)
-        fh.write("OUTPUTDIR %s\n" % fnGridDir)
-        fh.write("RECEP_FILE %s\n" % os.path.abspath(self.getInputMaeFile()))
-        fh.write("REC_MAECHARGES True\n")
-        fh.write("HBOND_DONOR_AROMH %s\n" % self.HbondDonorAromH.get())
-        if self.HbondDonorAromH.get():
-            fh.write("HBOND_DONOR_AROMH_CHARGE %f\n" % self.HbondDonorAromHCharge.get())
-        fh.write("HBOND_ACCEP_HALO %s\n" % self.HbondAcceptHalo.get())
-        fh.write("HBOND_DONOR_HALO %s\n" % self.HbondDonorHalo.get())
-        fh.write("INNERBOX %d,%d,%d\n" % (self.getInnerBox(pocket)))
-        fh.write("ACTXRANGE %d\n" % self.getOuterBox(pocket)[0])
-        fh.write("ACTYRANGE %d\n" % self.getOuterBox(pocket)[1])
-        fh.write("ACTZRANGE %d\n" % self.getOuterBox(pocket)[2])
-        fh.write("OUTERBOX %d,%d,%d\n" % (self.getOuterBox(pocket)))
-        fh.write("GRID_CENTER %s,%s,%s\n" % (x, y, z))
-        fh.close()
+        with open(fnJob, 'w') as fh:
+            fh.write("GRIDFILE %s.zip\n" % gridName)
+            fh.write("OUTPUTDIR %s\n" % fnGridDir)
+            fh.write("RECEP_FILE %s\n" % os.path.abspath(self.getInputMaeFile()))
+            fh.write("INNERBOX %d,%d,%d\n" % (self.getInnerBox(pocket)))
+            fh.write("ACTXRANGE %d\n" % self.getOuterBox(pocket)[0])
+            fh.write("ACTYRANGE %d\n" % self.getOuterBox(pocket)[1])
+            fh.write("ACTZRANGE %d\n" % self.getOuterBox(pocket)[2])
+            fh.write("OUTERBOX %d,%d,%d\n" % (self.getOuterBox(pocket)))
+            fh.write("GRID_CENTER %s,%s,%s\n" % (x, y, z))
+
+            argDic = self.getArgsDic()
+            for glideArg, value in argDic.items():
+                fh.write(f"{glideArg} {value}\n")
 
         args = "-WAIT -LOCAL %s.inp" % (gridName)
         self.runJob(schrodinger_plugin.getHome('glide'), args, cwd=fnGridDir)

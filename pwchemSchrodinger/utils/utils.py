@@ -34,7 +34,8 @@ import pyworkflow.object as pwobj
 
 # Scipion chem imports
 from pwchem.objects import SmallMolecule
-from pwchem.utils import relabelAtomsMol2, getBaseName, runInParallel
+from pwchem.utils import relabelAtomsMol2, runInParallel
+
 
 # Plugin imports
 from ..constants import TIMESTEP, PRESSURE, BAROSTAT, BROWNIAN, TENSION, RESTRAINS, MSJ_SYSMD_SIM, MSJ_SYSMD_INIT
@@ -157,26 +158,32 @@ def maeLineSplit(maeLine):
     elements.append(ele)
     return elements
 
-def convertMAE2Mol2(mol, outDir):
+def convertMAE2Mol2(mol, outDir, subset=True):
     molName = mol.getUniqueName()
     poseFile = mol.poseFile.get()
-    try:
-        if '@' in poseFile:
-            poseId, fnRaw = mol.poseFile.get().split('@')
-            mol.setPoseId(poseId)
+    if '@' in poseFile:
+        poseId, fnRaw = poseFile.split('@')
+        mol.setPoseId(poseId)
+    else:
+        poseId = mol.getPoseId()
+        fnRaw = poseFile
 
+    fnOut = os.path.join(outDir, '{}.{}'.format(molName, 'mol2'))
+
+    try:
+        if subset:
             fnAux = os.path.join(outDir, f"tmp_{molName}_{poseId}.mae")
             args = f"-n {poseId} {os.path.abspath(fnRaw)} -o {fnAux}"
             subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True)
+            isAux = True
         else:
-            poseId = mol.getPoseId()
-            fnAux = poseFile
-
-        fnOut = os.path.join(outDir, '{}.{}'.format(molName, 'mol2'))
+            fnAux = os.path.abspath(fnRaw)
+            isAux = False
 
         args = f'{fnAux} {os.path.abspath(fnOut)}'
         subprocess.run(f'{structConvertProg} {args}', check=True, capture_output=True, text=True, shell=True)
-        os.remove(fnAux)
+        if isAux:
+            os.remove(fnAux)
 
         if os.path.splitext(fnOut)[1] == '.mol2':
             fnOut = relabelAtomsMol2(fnOut)
@@ -190,9 +197,9 @@ def convertMAE2Mol2(mol, outDir):
         print(f"Failed to convert molecule {molName}")
 
 
-def convertMAEMolSet(molSet, outDir, njobs, updateSet=True):
+def convertMAEMolSet(molSet, outDir, njobs, updateSet=True, subset=True):
     '''Convert in parallel a set of SetOfSmallMolecules from their MAE format to MOL2'''
-    convMols = runInParallel(convertMAE2Mol2, outDir, paramList=[item.clone() for item in molSet], jobs=njobs)
+    convMols = runInParallel(convertMAE2Mol2, outDir, subset, paramList=[item.clone() for item in molSet], jobs=njobs)
     if updateSet:
         for mol in convMols:
             molSet.update(mol)
@@ -220,21 +227,6 @@ def getConfId(molFn, molName):
         return molFn.split(molName)[1].split('-')[1].split('.')[0]
     except Exception:
         return None
-
-def createMSJDic(protocol):
-    msjDic = {}
-    for pName in protocol.getStageParamsDic(type='Normal').keys():
-      if hasattr(protocol, pName):
-        msjDic[pName] = getattr(protocol, pName).get()
-      else:
-        print('Something is wrong with parameter ', pName)
-
-    for pName in protocol.getStageParamsDic(type='Enum').keys():
-      if hasattr(protocol, pName):
-        msjDic[pName] = protocol.getEnumText(pName)
-      else:
-        print('Something is wrong with parameter ', pName)
-    return msjDic
 
 def buildSimulateStr(protocol, msjDic):
     '''Checks the values stored in the msjDic and trnaslates them into msjStr.

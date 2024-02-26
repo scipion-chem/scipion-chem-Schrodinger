@@ -153,4 +153,26 @@ DESMOND_NPT_MD = '''\
 'presMDCons': 2.0}
 '''
 
+IFD_STAN = '''\
+{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "posesPerLig": 20, "selfDock": "False"}
+{"stageType": "Compile residues", "residuesCutoff": 5.0}
+{"stageType": "Residues refinement", "nMinPasses": 1}
+{"stageType": "Sort and filter", "sortType": "Pose", "poseFilter": "r_psp_Prime_Energy", "poseKeep": "30.0"}
+{"stageType": "Sort and filter", "sortType": "Pose", "poseFilter": "r_psp_Prime_Energy", "poseKeep": "20#"}
+{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "posesPerLig": 1, "selfDock": "True"}
+{"stageType": "Score poses", "scoreName": "r_psp_IFDScore", \
+"scoreTerms": "  TERM 1.0,r_i_glide_gscore,0\\n  TERM 0.05,r_psp_Prime_Energy,1"}
 
+'''
+
+IFD_EXTE = '''\
+{"stageType": "VDW Scaling"}
+{"stageType": "Predict flexibility"}
+{"stageType": "Initial docking", "dockingMethod": "Rigid dock (rigid)", "selfDock": "False"}
+{"stageType": "Compile residues", "residuesCutoff": 5.0}
+{"stageType": "Residues refinement", "nMinPasses": 1}
+{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "dockingMethod": "Rigid dock (rigid)", "selfDock": "True"}
+{"stageType": "Score poses", "scoreName": "r_psp_IFDScore", \
+"scoreTerms": "  TERM 1.000,r_psp_Prime_Energy,1\\n  TERM 9.057,r_i_glide_gscore,0\\n  TERM 1.428,r_i_glide_ecoul,0"}
+
+'''
