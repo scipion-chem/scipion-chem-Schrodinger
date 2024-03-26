@@ -29,7 +29,7 @@ import os, json, subprocess, shutil, time, gzip
 # Scipion em imports
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import Group, EnumParam, PointerParam, StringParam, FloatParam, \
-  LabelParam, TextParam, IntParam, LEVEL_ADVANCED, BooleanParam, Line
+  TextParam, IntParam, LEVEL_ADVANCED, BooleanParam, Line, STEPS_PARALLEL
 from pyworkflow.utils import Message
 import pyworkflow.object as pwobj
 
@@ -45,8 +45,14 @@ from ..protocols.protocol_glide_docking import ProtSchrodingerGlideDocking
 prepWizardProg = schrodingerPlugin.getHome('utilities/prepwizard')
 structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
 maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
-progLigPrep = schrodingerPlugin.getHome('ligprep')
+propListerProg = schrodingerPlugin.getHome('utilities/proplister')
+
 ifdProg = schrodingerPlugin.getHome('ifd')
+runPath = schrodingerPlugin.getHome('run')
+
+splitProg = schrodingerPlugin.getMMshareDir('python/common/split_structure.py')
+closeScript = schrodingerPlugin.getPluginHome('scripts/getCloseResidues.py')
+
 
 AS, POCKET, GRID = 0, 1, 2
 
@@ -75,6 +81,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
   def __init__(self, **kwargs):
     EMProtocol.__init__(self, **kwargs)
+    self.stepsExecutionMode = STEPS_PARALLEL
 
   def getStageParamsDic(self, type='All'):
     '''Return a dictionary as {paramName: param} of the stage parameters of the formulary.
@@ -94,13 +101,11 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     # Defining costant variables
     chainListHelp = 'Use the wizard to select the chain you want'
     residueListHelp = 'Use the wizard to select the residues you want'
-    wizardHelp = 'Click on the wizard to save the specified residues in the list below'
     cutoffDistanceLabel = 'Cutoff distance:'
+    isGridStr = 'fromPockets!=2'
 
     form.addSection(label=Message.LABEL_INPUT)
-    form = self._defineGlideReceptorParams(form)
-    form = self._defineGridParams(form, notManualCondition='fromPockets!=2')
-
+    self._defineGlideReceptorParams(form)
     group = form.addGroup('Ligands')
     group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules:', help='Input small molecules to be docked with IFD')
@@ -108,6 +113,10 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                   choices=['None', 'Standard', 'Extended sampling'], default=self.NONE,
                   help='Choose and add with the wizard some default IFD steps which will be reflected into '
                        'the summary')
+
+    form = self._defineGridSection(form, condition=isGridStr)
+    self._defineInnerGridParams(form, condition=isGridStr)
+    self._defineOuterGridParams(form, condition=isGridStr)
 
     form.addSection('IFD stages')
     group = form.addGroup('Add Stage')
@@ -136,7 +145,9 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     group.addParam('selfDock', BooleanParam, label='Dock from previous dock: ',
                    default=False, condition=f'stageType in [{GLIDE}, {IDOCK}]',
                    help='Whether to dock from previously docked ligands or not (needed for second round docking)')
-    form = self._defineGlideParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
+    self._defineGeneralGlideParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
+    self._defineLigandParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
+    self._defineOutputGlideParams(form, condition=f'stageType in [{GLIDE}, {IDOCK}]')
 
     # PPREP stage parameters
     group.addParam('convergenceRMSD', FloatParam, label='Convergence RMSD: ',
@@ -187,7 +198,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                         'coefficient, property is the property from the Maestro output file, and stage is the index '
                         'of the property-generating stage, counting backwards in the input file with 0 for the '
                         'previous stage. \nSee for details: '
-                        '{schrodingerPlugin.getHome("docs/inducedfit_command_reference/ifd_command_infile_scoring.htm")}')
+                        f'{schrodingerPlugin.getHome("docs/inducedfit_command_reference/ifd_command_infile_scoring.htm")}')
 
     # SORT_AND_FILTER stage parameters
     group.addParam('sortType', EnumParam, label='Sort by: ', default=1, display=EnumParam.DISPLAY_HLIST,
@@ -279,34 +290,74 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
     form.addParallelSection(threads=4, mpi=1)
 
+  ###################### SETTINGS #########################
+
+  def _validate(self):
+    return []
+
+  def _summary(self):
+    fnSummary = self._getExtraPath("summary.txt")
+    if not os.path.exists(fnSummary):
+        summary = ["No summary information yet."]
+    else:
+        fhSummary = open(fnSummary, "r")
+        summary = []
+        for line in fhSummary.readlines():
+            summary.append(line.rstrip())
+        fhSummary.close()
+    return summary
+
+  def getnThreads(self):
+    '''Get the number of threads available for each pocket execution'''
+    if self.fromPockets.get() == AS:
+      nThreads = [self.numberOfThreads.get()]
+
+    elif self.fromPockets.get() == POCKET:
+      nP = len(self.inputStructROIs.get())
+      nThreads = [0] * nP
+      for i in range(self.numberOfThreads.get()):
+        nThreads[i % nP] += 1
+
+    elif self.fromPockets.get() == GRID:
+      nP = len(self.inputGridSet.get())
+      nThreads = [0] * nP
+      for i in range(self.numberOfThreads.get()):
+        nThreads[i % nP] += 1
+
+    nThreads = list(map(lambda x: x if x != 0 else 1, nThreads))
+    return nThreads
+
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
     convStep = self._insertFunctionStep('convertStep', prerequisites=[])
     cSteps = [convStep]
 
-    idfSteps = []
+    idfSteps, nt = [], self.getnThreads()
     if self.fromPockets.get() == AS:
-      dStep = self._insertFunctionStep('ifdStep', self.inputAtomStruct.get(), prerequisites=cSteps)
+      dStep = self._insertFunctionStep('ifdStep', self.inputAtomStruct.get(), nt[0], prerequisites=cSteps)
       idfSteps.append(dStep)
 
     elif self.fromPockets.get() == POCKET:
-      for pocket in self.inputStructROIs.get():
-        dStep = self._insertFunctionStep('ifdStep', pocket.clone(), prerequisites=cSteps)
+      for i, pocket in enumerate(self.inputStructROIs.get()):
+        dStep = self._insertFunctionStep('ifdStep', pocket.clone(), nt[i], prerequisites=cSteps)
         idfSteps.append(dStep)
 
     elif self.fromPockets.get() == GRID:
-      for pocket in self.inputGridSet.get():
-        dStep = self._insertFunctionStep('ifdStep', pocket.clone(), prerequisites=cSteps)
+      for i, pocket in enumerate(self.inputGridSet.get()):
+        dStep = self._insertFunctionStep('ifdStep', pocket.clone(), nt[i], prerequisites=cSteps)
         idfSteps.append(dStep)
 
     self._insertFunctionStep('createOutputStep', prerequisites=idfSteps)
 
-  #######################################
-  def getInputReceptorFile(self):
-    for f in os.listdir(self._getExtraPath()):
-      if 'inputReceptor.mae' in f:
-        break
-    return os.path.abspath(self._getExtraPath(f))
+  def createLigandsFile(self, ligSet, molLists, it):
+    curAllLigandsFile = self.getAllLigandsFile(suffix=it)
+    with open(curAllLigandsFile, 'w') as fh:
+      for small in ligSet:
+        fnSmall = small.getFileName()
+        if '.mae' not in fnSmall:
+          fnSmall = self.convert2mae(fnSmall, it)
+        with open(fnSmall) as fhLigand:
+          fh.write(fhLigand.read())
 
   def convertStep(self):
     nt = self.numberOfThreads.get()
@@ -334,40 +385,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
           with open(lFile) as fLig:
             f.write(fLig.read())
 
-  def getAllLigandsFile(self, suffix=''):
-      return os.path.abspath(self._getTmpPath('allMoleculesFile{}.mae'.format(suffix)))
-
-  def createLigandsFile(self, ligSet, molLists, it):
-    curAllLigandsFile = self.getAllLigandsFile(suffix=it)
-    with open(curAllLigandsFile, 'w') as fh:
-      for small in ligSet:
-        fnSmall = small.getFileName()
-        if '.mae' not in fnSmall:
-          fnSmall = self.convert2mae(fnSmall, it)
-        with open(fnSmall) as fhLigand:
-          fh.write(fhLigand.read())
-
-  def convert2mae(self, fnSmall, it):
-    baseName = os.path.splitext(os.path.basename(fnSmall))[0]
-    outFile = os.path.abspath(self._getTmpPath('{}.mae'.format(baseName)))
-    if fnSmall.endswith('.pdbqt'):
-      # Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
-      # 3) Switch to mol2 to manage atom labels
-      outDir = os.path.abspath(self._getTmpPath())
-      args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
-                                                                            os.path.abspath(outDir), baseName)
-      pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
-      auxFile = os.path.abspath(os.path.join(outDir, '{}_AD4.sdf'.format(baseName)))
-      fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
-
-    args = "{} {}".format(fnSmall, outFile)
-    subprocess.check_call([structConvertProg, *args.split()])
-
-    while not os.path.exists(outFile):
-      time.sleep(0.2)
-    return outFile
-
-  def ifdStep(self, pocket):
+  def ifdStep(self, pocket, nt):
     pId = pocket.getObjId()
     fnGridDir = self.getGridDir(pId)
     os.mkdir(fnGridDir)
@@ -378,65 +396,42 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       f.write(f'INPUT_FILE	{self.getInputReceptorFile()}\n\n{msjStr}')
     self.createGUISummary()
 
-    nt = self.numberOfThreads.get()
     args = f"-WAIT -SUBHOST localhost -NGLIDECPU {nt} -NPRIMECPU {nt} ifd.inp"
     self.runJob(ifdProg, args, cwd=fnGridDir)
 
-  def recoverScoreFile(self, gridDir):
-    '''Recovers the last scoring file from the IFD run if any scoring stage performed'''
-    ds = []
-    for d in os.listdir(os.path.join(self._getExtraPath(gridDir), 'ifd_workdir')):
-      if 'scoring_dir' in d:
-        ds.append(d)
-
-    if ds:
-      fd = natural_sort(ds)[-1]
-      return os.path.join(self._getExtraPath(gridDir), 'ifd_workdir', fd, 'scores.csv')
-
-  def getMAETitle(self, maeFile):
-    if maeFile.endswith('gz'):
-      f = gzip.open(maeFile, 'r')
-    else:
-      f = open(maeFile, 'r')
-
-    ready = False
-    for line in f:
-      line = line.decode()
-      if line.strip().startswith('s_m_title'):
-        ready = True
-      elif ready and line.strip().startswith(':::'):
-        title = f.readline().decode().strip()
-        break
-    f.close()
-    return title
-
-
   def performOutputParsing(self, gridDirs, molLists, it, smallDict):
     allSmallList = []
+    scoreNames = self.getAllScoreNames()
+    scoreNamesStr = '' if not scoreNames else f"-p {' -p '.join(scoreNames)} "
     for gridDir in gridDirs:
-      gridId = gridDir.split('_')[1]
-      scFile = self.recoverScoreFile(gridDir)
+      gridId = gridDir.split('_')[-1]
+      outFile, propFile = os.path.join(gridDir, 'ifd-out.maegz'), os.path.join(gridDir, 'report_properties.csv')
 
-      smallList = []
-      with open(scFile) as sf:
-        sf.readline()
-        for i, line in enumerate(sf.readlines()):
-          tokens = line.split(',')
-          score, complexFile = tokens[2], tokens[5].strip()
-          complexFile = os.path.abspath(os.path.join(os.path.dirname(scFile), os.path.split(complexFile)[-1]))
-          fnBase = self.getMAETitle(complexFile)
+      subprocess.run(f'{propListerProg} -p "s_m_title" -p "r_i_docking_score" {scoreNamesStr}'
+                     f'-c -o {propFile} {outFile}', cwd=gridDir, check=True, capture_output=True, text=True, shell=True)
+
+      smallList, posDic = [], {}
+      with open(propFile) as f:
+        f.readline()
+        for i, line in enumerate(f.readlines()):
+          tokens = line.strip().split(',')
+          title, glideEnergy = tokens[:2]
+          posDic[title] = 1 if title not in posDic else posDic[title] + 1
+
+          recFile, posFile = self.splitComplexFiles(outFile, gridDir, title, posDic[title])
 
           small = SmallMolecule()
-          small.copy(smallDict[fnBase], copyId=False)
-          small._energy = pwobj.Float(score)
+          small.copy(smallDict[title], copyId=False)
           small.setMolClass('Schrodinger')
           small.setDockId(self.getObjId())
           small.setGridId(gridId)
 
-          recFile, posFile = self.divideMaeComplex(complexFile, posIdx=2)
+          small._energy = pwobj.Float(glideEnergy)
+          for j, sName in enumerate(scoreNames):
+            setattr(small, sName, pwobj.Float(tokens[j+2]))
           small.setProteinFile(recFile)
           small.setPoseFile(posFile)
-          small.setPoseId(1)
+          small.setPoseId(posDic[title])
 
           smallList.append(small)
 
@@ -464,16 +459,48 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       outputSet.structFile = pwobj.String(self.getInputMaeFile())
       self._defineOutputs(outputSmallMolecules=outputSet)
 
+
+  ##################### UTILS ###########################
+
+  def getInputReceptorFile(self):
+    for f in os.listdir(self._getExtraPath()):
+      if 'inputReceptor.mae' in f:
+        break
+    return os.path.abspath(self._getExtraPath(f))
+
+  def getAllLigandsFile(self, suffix=''):
+      return os.path.abspath(self._getTmpPath('allMoleculesFile{}.mae'.format(suffix)))
+
+  def convert2mae(self, fnSmall, it):
+    baseName = os.path.splitext(os.path.basename(fnSmall))[0]
+    outFile = os.path.abspath(self._getTmpPath('{}.mae'.format(baseName)))
+    if fnSmall.endswith('.pdbqt'):
+      # Manage files from autodock: 1) Convert to readable by schro (SDF). 2) correct preparation.
+      # 3) Switch to mol2 to manage atom labels
+      outDir = os.path.abspath(self._getTmpPath())
+      args = ' -i "{}" -of sdf --outputDir "{}" --outputName {}_AD4'.format(os.path.abspath(fnSmall),
+                                                                            os.path.abspath(outDir), baseName)
+      pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
+      auxFile = os.path.abspath(os.path.join(outDir, '{}_AD4.sdf'.format(baseName)))
+      fnSmall = auxFile.replace('_AD4.sdf', '_aux.sdf')
+
+    args = "{} {}".format(fnSmall, outFile)
+    subprocess.check_call([structConvertProg, *args.split()])
+
+    while not os.path.exists(outFile):
+      time.sleep(0.2)
+    return outFile
+
   def getGridDirs(self, complete=False):
     gridDirs = []
     for dir in os.listdir(self._getExtraPath()):
       if dir.startswith('grid_'):
         if not complete:
-          gridDirs.append(dir)
+          gridDirs.append(os.path.abspath(self._getExtraPath(dir)))
         else:
           gridId = dir.split('_')[1]
           if os.path.exists(self._getExtraPath(dir, "ifd-out.maegz")):
-            gridDirs.append(dir)
+            gridDirs.append(os.path.abspath(self._getExtraPath(dir)))
           else:
             print('No output found in grid ' + gridId)
     return gridDirs
@@ -492,7 +519,6 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
           msjDic[pName] = pVal.default.get()
     return msjDic
 
-  ############# UTILS
   def buildIFDStr(self, pocket=None):
     '''Build the .msj (file used by IFD to specify the jobs performed by Schrodinger)
         defining the input parameters'''
@@ -567,7 +593,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
     elif sType in [self.getStageStr(TRIM)]:
       if msjDic["trimResidues"] == 'Manual specification':
-        sumStr += f': selected residues'
+        sumStr += ': selected residues'
       else:
         sumStr += f': by {msjDic["trimMethod"]}'
 
@@ -576,7 +602,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
     return sumStr + '\n'
 
-  def getResidueIds(self, resSelectionJson):
+  def getResidueIdxs(self, resSelectionJson):
     resDic = json.loads(resSelectionJson)
     chain, idxs = resDic['chain'], resDic['index'].split('-')
     return [f'{chain}:{idx}' for idx in range(int(idxs[0]), int(idxs[1])+1)]
@@ -595,12 +621,13 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
         idfStr += f'  RESIDUES_TO_OMIT {", ".join(resIds)}\n'
 
     elif sType in [self.getStageStr(GLIDE), self.getStageStr(IDOCK)]:
+      usePrecision = sType == self.getStageStr(GLIDE)
       idfStr += self.getBindingSiteStr(msjDic, pocket)
       idfStr += self.getBoxDimensionsStr(msjDic, pocket)
       l2dock = 'self' if msjDic['selfDock'] in ['True', True] else 'all'
       idfStr += f'  LIGAND_FILE {self.getAllLigandsFile()}\n  LIGANDS_TO_DOCK {l2dock}\n'
       idfStr += self.getGridArgsStr(msjDic)
-      idfStr += self.getDockArgsStr(msjDic)
+      idfStr += self.getDockArgsStr(msjDic, usePrecision)
 
     elif sType == self.getStageStr(PPREP):
       idfStr += f'  RMSD {msjDic["convergenceRMSD"]}\n'
@@ -655,20 +682,18 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       idfStr += extraParams
     return idfStr + '\n'
 
-  def _validate(self):
-    return []
-
   def getGridArgsStr(self, msjDic):
     gridDic = {}
     return self.dic2StrArgs(gridDic, toAdd='GRIDGEN_')
 
-  def getDockArgsStr(self, msjDic):
+  def getDockArgsStr(self, msjDic, usePrecision):
     dockDic = {}
     dMethod = msjDic['dockingMethod'].split('(')[1].replace(')', '')
     dockDic['DOCKING_METHOD'] = dMethod if dMethod in ['confgen', 'rigid'] else 'confgen'
 
     dPrecision = msjDic['dockingPrecision'].split('(')[1].replace(')', '')
-    dockDic['PRECISION'] = dPrecision
+    if usePrecision:
+      dockDic['PRECISION'] = dPrecision
 
     dockDic['POSES_PER_LIG'] = msjDic['posesPerLig']
     return self.dic2StrArgs(dockDic, toAdd='DOCKING_')
@@ -697,12 +722,24 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
     if msjDic['selfDock'] in [True, 'True']:
       gridDic['BINDING_SITE'] = 'ligand Z:999'
     else:
-      gridDic['BINDING_SITE'] = 'coords ' + ','.join(self.getBindingSiteCenter(pocket))
+      gridDic['BINDING_SITE'] = 'residues ' + self.getBindingSiteCenter(pocket)
 
     return self.dic2StrArgs(gridDic)
 
+  def getCloseResidues(self, maeFile, center, pocketId, radius=5):
+    closeFile = f"closeResidues_{pocketId}.txt"
+    args = f' {maeFile} {radius} "{center}" {closeFile}'
+    subprocess.run(f'{runPath} {closeScript} {args}', check=True, capture_output=True, text=True, shell=True,
+                   cwd=self._getTmpPath())
+
+    with open(self._getTmpPath(closeFile)) as f:
+      f.readline()
+      res = f.readline()
+    return res
+
   def getBindingSiteCenter(self, pocket=None):
     if self.fromPockets.get() == AS:
+      pocketId = None
       inAS = self.inputAtomStruct.get()
       pdbFile = inAS.getFileName()
       if not pdbFile.endswith('.pdb'):
@@ -710,15 +747,14 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
 
       _, x, y, z = calculate_centerMass(pdbFile)
     elif self.fromPockets.get() == POCKET:
+      pocketId = pocket.getObjId()
       x, y, z = pocket.calculateMassCenter()
     elif self.fromPockets.get() == GRID:
+      pocketId = pocket.getObjId()
       x, y, z = pocket.getCenter()
 
-    coords = []
-    for c in [x, y, z]:
-      coords.append(f'{c:.2f}')
-
-    return coords
+    closeResStr = self.getCloseResidues(self.getInputReceptorFile(), [x, y, z], pocketId)
+    return closeResStr
 
   def getDiameter(self, msjDic, pocket=None):
     if self.fromPockets.get() == AS:
@@ -733,7 +769,42 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       iStr += f'  {toAdd}{aKey} {aVal}\n'
     return iStr
 
+  def getScoreName(self, msjDic):
+    if msjDic['stageType'] == 'Score poses':
+      return msjDic['scoreName']
 
+  def getAllScoreNames(self):
+    scoreNames = []
+    if self.workFlowSteps.get() in ['', None]:
+      msjDic = createMSJDic(self)
+      scoreName = self.getScoreName(msjDic)
+      if scoreName:
+        scoreNames.append(scoreName)
+
+    else:
+      workSteps = self.workFlowSteps.get().split('\n')
+      if '' in workSteps:
+        workSteps.remove('')
+      for wStep in workSteps:
+        msjDic = eval(wStep)
+        scoreName = self.getScoreName(msjDic)
+        if scoreName:
+          scoreNames.append(scoreName)
+    return scoreNames
+
+  def splitComplexFiles(self, oFile, oDir, title, idx):
+    complexFile = os.path.join(oDir, f'ifd_{title}_{idx}.maegz')
+    args = f' -n {idx} {oFile} -o {complexFile}'
+    subprocess.run(f'{maeSubsetProg} {args}', check=True, capture_output=True, text=True, shell=True, cwd=oDir)
+
+    args = f' -m pdb -many_files {complexFile} {complexFile}'
+    subprocess.run(f'{runPath} {splitProg} {args}', check=True, capture_output=True, text=True, shell=True,
+                   cwd=oDir)
+
+    os.remove(complexFile)
+    recFile, molFile = complexFile.replace('.maegz', '_receptor1.maegz'), \
+                       complexFile.replace('.maegz', '_ligand1.maegz')
+    return recFile, molFile
 
 
 

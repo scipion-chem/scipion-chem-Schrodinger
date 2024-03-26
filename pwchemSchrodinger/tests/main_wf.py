@@ -29,6 +29,7 @@ from pwem.protocols import ProtImportPdb
 
 from pwchem.protocols import ProtChemImportSmallMolecules
 from pwchem.tests import TestExtractLigand
+from pwchem.utils import assertHandle
 
 from ..protocols import ProtSchrodingerSiteMap, ProtSchrodingerPrepWizard, \
     ProtSchrodingerLigPrep, ProtSchrodingerGrid, ProtSchrodingerGlideDocking, ProtSchrodingerMMGBSA
@@ -237,6 +238,6 @@ class TestMMGBSA(TestExtractLigand):
         protMMGBSA = self._runMMGBSA(protExtract)
         self._waitOutput(protMMGBSA, 'outputSmallMolecules')
         assertHandle(self.assertIsNotNone, getattr(protMMGBSA, 'outputSmallMolecules', None),
-                     cwd=protContacts.getWorkingDir())
+                     cwd=protMMGBSA.getWorkingDir())
 
 

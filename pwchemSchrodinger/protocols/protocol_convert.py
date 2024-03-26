@@ -37,7 +37,7 @@ from pwchem.objects import SetOfSmallMolecules
 # Plugin imports
 from .. import Plugin
 from ..objects import SchrodingerAtomStruct
-from ..utils.utils import putMol2Title, saveMolecule
+from ..utils.utils import putMolFileTitle, saveMolecule
 
 SMALLMOL, TARGET = 0, 1
 molChoices = {"Maestro": 'maegz', 'PDB': 'pdb', "Sybyl Mol2": 'mol2', "Smiles": 'smi', 'V2000 SD': 'sdf'}
@@ -103,7 +103,7 @@ class ProtSchrodingerConvert(EMProtocol):
 
         self.runJob(progStructConvert, args)
         if outFormat == 'mol2':
-            putMol2Title(fnOut)
+            putMolFileTitle(fnOut, ext=outFormat)
 
         saveMolecule(self, fnOut, self.outputSmallMolecules, mol)
 

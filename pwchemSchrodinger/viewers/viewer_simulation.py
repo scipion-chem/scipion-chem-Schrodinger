@@ -87,15 +87,16 @@ class DesmondSimulationViewer(pwviewer.ProtocolViewer):
         inEAF = self.protocol._getExtraPath('{}-in.eaf'.format(baseName))
         outEAF = '{}_pl_complete.eaf'.format(baseName)
 
-        args = 'analyze {} -o extra/{}'.format(system.getFileName(), baseName)
+        inSys = os.path.abspath(system.getFileName())
+        args = 'analyze {} -o extra/{}'.format(inSys, baseName)
         if not os.path.exists(inEAF):
             schPlugin.runSchrodingerScript(program=eventScript, args=args, cwd=system.getDirName())
             if not os.path.exists(inEAF):
-                args = 'analyze {} -lig none -o extra/{}'.format(system.getFileName(), baseName)
+                args = 'analyze {} -lig none -o extra/{}'.format(inSys, baseName)
                 schPlugin.runSchrodingerScript(program=eventScript, args=args, cwd=system.getDirName())
 
         #Analyze the simulations with the instructions provided
-        args = '{} {} extra/{} extra/{}-in.eaf'.format(system.getFileName(), system.getTrajectoryDirName(),
+        args = '{} {} extra/{} extra/{}-in.eaf'.format(inSys, system.getTrajectoryDirName(),
                                            outEAF, baseName)
         analysisScript = schPlugin.getHome('internal/bin/analyze_simulation.py')
         if not os.path.exists(self.protocol._getExtraPath(outEAF)):
@@ -109,8 +110,9 @@ class DesmondSimulationViewer(pwviewer.ProtocolViewer):
     def _showCustomAnalysis(self, paramName=None):
         #Run the analysis GUI
         system = self.protocol.outputSystem
+        inSys = os.path.abspath(system.getFileName())
         eventScript = schPlugin.getHome('mmshare-v5.5/python/scripts/event_analysis.py')
-        args = 'gui ' + os.path.abspath(system.getFileName())
+        args = 'gui ' + os.path.abspath(inSys)
         schPlugin.runSchrodingerScript(program=eventScript, args=args, cwd=self.protocol._getExtraPath(),
                                        popen=True)
 

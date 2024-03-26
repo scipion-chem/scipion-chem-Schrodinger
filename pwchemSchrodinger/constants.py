@@ -168,10 +168,10 @@ IFD_STAN = '''\
 IFD_EXTE = '''\
 {"stageType": "VDW Scaling"}
 {"stageType": "Predict flexibility"}
-{"stageType": "Initial docking", "dockingMethod": "Rigid dock (rigid)"}
+{"stageType": "Initial docking", "dockingMethod": "Rigid dock (rigid)", "selfDock": "False"}
 {"stageType": "Compile residues", "residuesCutoff": 5.0}
 {"stageType": "Residues refinement", "nMinPasses": 1}
-{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "dockingMethod": "Rigid dock (rigid)"}
+{"stageType": "Glide", "dockingPrecision": "Medium (SP)", "dockingMethod": "Rigid dock (rigid)", "selfDock": "True"}
 {"stageType": "Score poses", "scoreName": "r_psp_IFDScore", \
 "scoreTerms": "  TERM 1.000,r_psp_Prime_Energy,1\\n  TERM 9.057,r_i_glide_gscore,0\\n  TERM 1.428,r_i_glide_ecoul,0"}
 
