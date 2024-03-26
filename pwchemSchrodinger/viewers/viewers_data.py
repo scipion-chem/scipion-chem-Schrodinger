@@ -31,7 +31,7 @@ from pyworkflow.gui.browser import FileHandler
 import pyworkflow.utils as pwutils
 
 # Plugin imports
-from .. import Plugin
+from .. import Plugin, SCHRODINGER_DIC
 from ..objects import SchrodingerAtomStruct, SchrodingerBindingSites, SchrodingerSystem
 
 class SchrodingerDataViewer(pwviewer.Viewer):
@@ -67,7 +67,9 @@ class SchrodingerDataViewer(pwviewer.Viewer):
 class MaestroView(pwviewer.CommandView):
     """ View for calling an external command. """
     def __init__(self, inputFile, **kwargs):
-        pwviewer.CommandView.__init__(self, "%s %s &" % (Plugin.getHome('maestro'), inputFile),
+        doSGL = Plugin.getVar(SCHRODINGER_DIC['SGL'])
+        sglStr = '-SGL ' if doSGL else ''
+        pwviewer.CommandView.__init__(self, f"{Plugin.getHome('maestro')} {sglStr}{inputFile} &",
                                       env=Plugin.getEnviron(), **kwargs)
 
 class MaestroFileHandler(FileHandler):
