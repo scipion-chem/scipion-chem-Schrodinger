@@ -39,14 +39,20 @@ from .bibtex import _bibtexStr
 from .constants import *
 
 _logo = 'schrodinger_logo.png'
-SCHRODINGER_DIC = {'name': 'schrodinger', 'version': '2021-3', 'home': 'SCHRODINGER_HOME'}
+DEFAULT_VERSION = '2021-3'
+SCHRODINGER_DIC = {'name': 'schrodinger', 'version': 'SCHRODINGER_VERSION', 'home': 'SCHRODINGER_HOME',
+                   'SGL': 'MAESTRO_SGL'}
 
 class Plugin(pwem.Plugin):
     _homeVar = SCHRODINGER_DIC['home']
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(SCHRODINGER_DIC['home'], 'Schrodinger{}'.format(SCHRODINGER_DIC['version']))
+        cls._defineVar(SCHRODINGER_DIC['SGL'], False)
+        cls._defineVar(SCHRODINGER_DIC['version'], DEFAULT_VERSION)
+
+        schroVersion = cls.getVar(SCHRODINGER_DIC['version'])
+        cls._defineEmVar(SCHRODINGER_DIC['home'], f'Schrodinger{schroVersion}')
 
     @classmethod
     def getEnviron(cls, schrodingerFirst=True):
