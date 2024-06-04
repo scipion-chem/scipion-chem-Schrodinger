@@ -33,7 +33,7 @@ information such as name and number of residues.
 """
 
 # Imports
-from pwchem.wizards import SelectChainWizardQT, SelectResidueWizardQT, AddResidueWizard, SetResidueWizard
+from pwchem.wizards import SelectChainWizardQT, SelectResidueWizardQT, AddResidueWizard
 from ..protocols import ProtSchrodingerPrepWizard, ProtSchrodingerPrime, ProtSchrodingerIFD
 
 SelectChainWizardQT().addTarget(protocol=ProtSchrodingerPrepWizard,
@@ -81,12 +81,7 @@ AddResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
                              inputs=['selChain', 'selResidue'],
                              outputs=['residuesTrim'])
 
-SetResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
-                             targets=['residuesRegion'],
-                             inputs=['selChain', 'selResidue'],
-                             outputs=['residuesRegion'])
-
-SetResidueWizard().addTarget(protocol=ProtSchrodingerIFD,
-                             targets=['residuesHelix'],
-                             inputs=['selChain', 'selResidue'],
-                             outputs=['residuesHelix'])
+SelectResidueWizardQT().addTarget(protocol=ProtSchrodingerIFD,
+                                  targets=['residuesHelix'],
+                                  inputs=[{'fromPockets': ['inputAtomStruct', 'inputStructROIs']}, 'selChain'],
+                                  outputs=['residuesHelix'])

@@ -157,12 +157,9 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
                         'value.')
 
     # PRIME_HELIX and PRIME_LOOP stage parameters
-    group.addParam('residuesRegion', StringParam, default='',
-                   label='Residues to take into account: ', condition=f'stageType in [{PHELIX}, {PLOOP}]',
-                   help='Residues of mobile region that contains the helix or loop')
     group.addParam('residuesHelix', StringParam, default='',
                    label='Helix residues: ', condition=f'stageType in [{PHELIX}]',
-                   help='Residue of the helix')
+                   help='Residue of the helix. It must be a subsequence of the residue selection.')
     group.addParam('helixLoopCutoff', FloatParam, label=cutoffDistanceLabel,
                    default=5.0, condition=f'stageType in [{PHELIX}, {PLOOP}]',
                    help='HELIX: Distance cutoff for prediction of side chains close to helix.\n'
@@ -580,7 +577,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       sumStr += f': {msjDic["convergenceRMSD"]} convergence RMSD'
 
     elif sType in [self.getStageStr(PHELIX), self.getStageStr(PLOOP)]:
-      sumStr += f': up to {msjDic["helixLoopCutoff"]} Å from {msjDic["residuesRegion"]}'
+      sumStr += f': up to {msjDic["helixLoopCutoff"]} Å from {msjDic["selResidue"]}'
 
     elif sType in [self.getStageStr(PREF)]:
       sumStr += f': {msjDic["nMinPasses"]} min. passes'
@@ -636,7 +633,7 @@ class ProtSchrodingerIFD(ProtSchrodingerGlideDocking):
       idfStr += self.getBindingSiteStr(msjDic, pocket)
 
     elif sType in [self.getStageStr(PHELIX), self.getStageStr(PLOOP)]:
-      resIds = self.getResidueIdxs(msjDic["residuesRegion"])
+      resIds = self.getResidueIdxs(msjDic["selResidue"])
       idfStr += f'  START_RESIDUE {resIds[0]}\n  END_RESIDUE {resIds[-1]}\n' \
                 f'  DISTANCE_CUTOFF {msjDic["helixLoopCutoff"]}\n' \
                 f'  MAX_ENERGY_GAP {msjDic["maxEnergyGap"]}\n' \
