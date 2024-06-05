@@ -28,8 +28,13 @@ import os
 
 import pyworkflow.viewer as pwviewer
 import pyworkflow.protocol.params as params
+
+from pwchem.viewers import VmdViewPopen
+
 from ..protocols import ProtSchrodingerDesmondMD
 from .. import Plugin as schPlugin
+from ..objects import SchrodingerSystem
+from ..constants import TCL_MD_STR
 
 from .viewers_data import MaestroView
 
@@ -51,6 +56,10 @@ class DesmondSimulationViewer(pwviewer.ProtocolViewer):
                            'the "T" next to the Maestro object, in the left panel.\n '
                            'https://www.schrodinger.com/kb/485'
                       )
+        group.addParam('displayVMD', params.LabelParam,
+                       label='Open simulation in VMD: ',
+                       help='Display Simulation in VMD GUI.\n')
+
         group = form.addGroup('Launch Schrodinger Event Analysis')
         group.addParam('displayCompleteAnalysis', params.LabelParam,
                       label='Perform complete analysis in Maestro: ',
@@ -72,15 +81,29 @@ class DesmondSimulationViewer(pwviewer.ProtocolViewer):
         return {
           'displayMaestro': self._showMaestro,
           'displayCompleteAnalysis': self._showCompleteAnalysis,
-          'displayCustomAnalysis': self._showCustomAnalysis
+          'displayCustomAnalysis': self._showCustomAnalysis,
+          'displayVMD': self._showMdVMD
         }
 
     def _showMaestro(self, paramName=None):
-        system = self.protocol.outputSystem
+        system = self.getMDSystem()
         return [MaestroView(os.path.abspath(system.getFileName()), cwd=self.protocol._getPath())]
 
+    def _showMdVMD(self, paramName=None):
+      system = self.getMDSystem()
+
+      outTcl = self.protocol._getExtraPath('vmdSimulation.tcl')
+      cmsFile = system.getFileName()
+      clickMeFile = cmsFile.replace('.cms', '_trj/clickme.dtr')
+      with open(outTcl, 'w') as f:
+        f.write(TCL_MD_STR % (cmsFile, clickMeFile))
+      args = '-e {}'.format(outTcl)
+
+      return [VmdViewPopen(args)]
+
+
     def _showCompleteAnalysis(self, paramName=None):
-        system = self.protocol.outputSystem
+        system = self.getMDSystem()
         #Generates the event analysis file (eaf) with instructions
         eventScript = schPlugin.getHome('mmshare-v5.5/python/scripts/event_analysis.py')
         baseName = system.getBaseName()
@@ -109,7 +132,7 @@ class DesmondSimulationViewer(pwviewer.ProtocolViewer):
 
     def _showCustomAnalysis(self, paramName=None):
         #Run the analysis GUI
-        system = self.protocol.outputSystem
+        system = self.getMDSystem()
         inSys = os.path.abspath(system.getFileName())
         eventScript = schPlugin.getHome('mmshare-v5.5/python/scripts/event_analysis.py')
         args = 'gui ' + os.path.abspath(inSys)
@@ -117,4 +140,9 @@ class DesmondSimulationViewer(pwviewer.ProtocolViewer):
                                        popen=True)
 
 
+    def getMDSystem(self, objType=SchrodingerSystem):
+        if isinstance(self.protocol, objType):
+            return self.protocol
+        else:
+            return self.protocol.outputSystem
 

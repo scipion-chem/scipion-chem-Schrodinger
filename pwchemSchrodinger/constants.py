@@ -176,3 +176,19 @@ IFD_EXTE = '''\
 "scoreTerms": "  TERM 1.000,r_psp_Prime_Energy,1\\n  TERM 9.057,r_i_glide_gscore,0\\n  TERM 1.428,r_i_glide_ecoul,0"}
 
 '''
+
+TCL_MD_STR = '''mol addrep 0
+display resetview
+mol new {%s} type {mae} first 0 last -1 step 1 waitfor 1
+animate style Loop
+mol addfile {%s} type {dtr} first 0 last -1 step 1 waitfor 1 0   
+animate style Loop
+mol modstyle 0 0 NewCartoon 0.300000 10.000000 4.100000 0
+mol color Name
+mol representation NewCartoon 0.300000 10.000000 4.100000 0
+mol selection all
+mol material Opaque
+mol addrep 0
+mol modstyle 1 0 Licorice 0.300000 12.000000 12.000000
+mol modselect 1 0 chain X and not solvent
+'''
