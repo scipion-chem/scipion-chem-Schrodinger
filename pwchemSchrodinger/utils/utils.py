@@ -34,7 +34,7 @@ import pyworkflow.object as pwobj
 
 # Scipion chem imports
 from pwchem.objects import SmallMolecule
-from pwchem.utils import relabelAtomsMol2, runInParallel
+from pwchem.utils import relabelAtomsMol2, runInParallel, getBaseName
 
 
 # Plugin imports
@@ -43,6 +43,7 @@ from .. import Plugin as schrodingerPlugin
 
 structConvertProg = schrodingerPlugin.getHome('utilities/structconvert')
 maeSubsetProg = schrodingerPlugin.getHome('utilities/maesubset')
+jobControlProg = schrodingerPlugin.getHome('jobcontrol')
 
 def putMolFileTitle(fn, title='', ext='mol2'):
     auxFile = f"{fn}{random.randint(0, 100000)}.aux"
@@ -275,8 +276,23 @@ def buildSimulateStr(protocol, msjDic):
                                restrainArg, msjDic['velResamp'], msjDic['trajInterval'])
     return msjStr
 
+def getSchJobId(protocol):
+    jobId = None
+    jobListFile = os.path.abspath(protocol._getTmpPath('jobList.txt'))
+    if getJobName(protocol):
+        check_call(jobControlProg + ' -list {} | grep {} > {}'.
+                    format(getJobName(protocol), getJobName(protocol), jobListFile), shell=True)
+        with open(jobListFile) as f:
+            jobId = f.read().split('\n')[0].split()[0]
+    return jobId
+
 def getJobName(protocol):
     files = os.listdir(protocol._getTmpPath())
     for f in files:
         if f.endswith('.msj'):
             return f.replace('.msj', '')
+
+def setAborted(jobId, jobName):
+    if jobId:
+        print('Killing job: {} with jobName {}'.format(jobId, jobName))
+        check_call(jobControlProg + ' -kill {}'.format(jobId), shell=True)

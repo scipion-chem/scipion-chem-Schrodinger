@@ -40,7 +40,7 @@ from pwchem.utils import pdbqt2other, convertToSdf
 from .. import Plugin as schrodingerPlugin
 from ..constants import ADD_COUNTERION, SIZE_LIST, ANGLES, SIZE_SINGLE, ADD_SALT, SOLVENT, MSJ_SYSPREP
 from ..objects import SchrodingerAtomStruct, SchrodingerSystem
-from ..utils import getChargeFromMAE
+from ..utils import getChargeFromMAE, setAborted, getJobName, getSchJobId
 
 multisimProg = schrodingerPlugin.getHome('utilities/multisim')
 jobControlProg = schrodingerPlugin.getHome('jobcontrol')
@@ -320,7 +320,7 @@ class ProtSchrodingerDesmondSysPrep(EMProtocol):
 
     def setAborted(self):
         super().setAborted()
-        setAborted(self, jobControlProg)
+        setAborted(getSchJobId(self), getJobName(self))
 
     def getPdbFile(self):
       if self.inputFrom.get() == STRUCTURE:
